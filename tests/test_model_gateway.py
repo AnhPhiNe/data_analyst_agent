@@ -1,0 +1,291 @@
+"""Tests for provider-neutral structured model generation."""
+
+from __future__ import annotations
+
+from collections import deque
+from threading import Event
+from types import SimpleNamespace
+from typing import Any
+
+import pytest
+from pydantic import SecretStr
+
+from tabular_analytics_agent.model_gateway import (
+    FakeModelGateway,
+    GeminiModelGateway,
+    GeminiSettings,
+    GoalInterpretation,
+    ModelConfigurationError,
+    ModelOutputValidationError,
+    ModelProviderError,
+    ModelTask,
+    StructuredModelRequest,
+)
+
+
+def goal_request() -> StructuredModelRequest[GoalInterpretation]:
+    return StructuredModelRequest(
+        task=ModelTask.SEMANTIC_INTERPRETATION,
+        prompt="Summarize revenue",
+        response_schema=GoalInterpretation,
+        system_instruction="Interpret the user's analytical goal.",
+        prompt_template_version="goal-v1",
+    )
+
+
+def valid_goal() -> dict[str, object]:
+    return {
+        "goal_text": "Summarize revenue",
+        "goal_family": "summary",
+        "semantic_annotations": [],
+        "clarification_question": None,
+    }
+
+
+def test_fake_gateway_returns_validated_output_and_trace() -> None:
+    gateway = FakeModelGateway([valid_goal()])
+
+    response = gateway.generate_structured(goal_request())
+
+    assert response.output.goal_text == "Summarize revenue"
+    assert response.trace.model_id == "fake-model"
+    assert response.trace.prompt_template_version == "goal-v1"
+    assert response.trace.validation_repair_count == 0
+    assert len(gateway.requests) == 1
+
+
+def test_gateway_repairs_malformed_output_once() -> None:
+    gateway = FakeModelGateway([{"goal_text": "missing family"}, valid_goal()])
+
+    response = gateway.generate_structured(goal_request())
+
+    assert response.trace.validation_repair_count == 1
+    assert len(gateway.requests) == 2
+    assert "did not satisfy" in gateway.requests[1].prompt
+
+
+def test_gateway_rejects_output_after_single_repair() -> None:
+    gateway = FakeModelGateway([{}, {}])
+
+    with pytest.raises(ModelOutputValidationError, match="after one repair"):
+        gateway.generate_structured(goal_request())
+
+    assert len(gateway.requests) == 2
+
+
+def test_structured_request_rejects_invalid_inference_settings() -> None:
+    with pytest.raises(ValueError, match="prompt cannot be empty"):
+        StructuredModelRequest(
+            task=ModelTask.PLAN,
+            prompt=" ",
+            response_schema=GoalInterpretation,
+            system_instruction="Plan safely",
+        )
+    with pytest.raises(ValueError, match="temperature"):
+        StructuredModelRequest(
+            task=ModelTask.PLAN,
+            prompt="Plan",
+            response_schema=GoalInterpretation,
+            system_instruction="Plan safely",
+            temperature=3.0,
+        )
+    with pytest.raises(ValueError, match="max_output_tokens"):
+        StructuredModelRequest(
+            task=ModelTask.PLAN,
+            prompt="Plan",
+            response_schema=GoalInterpretation,
+            system_instruction="Plan safely",
+            max_output_tokens=0,
+        )
+    with pytest.raises(ValueError, match="timeout_seconds"):
+        StructuredModelRequest(
+            task=ModelTask.PLAN,
+            prompt="Plan",
+            response_schema=GoalInterpretation,
+            system_instruction="Plan safely",
+            timeout_seconds=0,
+        )
+
+
+def test_fake_gateway_reports_empty_queue() -> None:
+    gateway = FakeModelGateway([])
+
+    with pytest.raises(ModelProviderError, match="no queued output"):
+        gateway.generate_structured(goal_request())
+
+
+def test_settings_load_model_and_keep_key_secret() -> None:
+    settings = GeminiSettings.from_environment(
+        {"GEMINI_API_KEY": "secret-value", "TABULAR_AGENT_MODEL": "gemini-test"}
+    )
+
+    assert settings.api_key == SecretStr("secret-value")
+    assert settings.model_id == "gemini-test"
+    assert settings.model_call_timeout_seconds == 30.0
+    assert "secret-value" not in repr(settings)
+
+    with pytest.raises(ModelConfigurationError, match="GEMINI_API_KEY"):
+        GeminiSettings.from_environment({})
+    with pytest.raises(ModelConfigurationError, match="MODEL_TIMEOUT"):
+        GeminiSettings.from_environment(
+            {
+                "GEMINI_API_KEY": "secret-value",
+                "TABULAR_AGENT_MODEL_TIMEOUT_SECONDS": "invalid",
+            }
+        )
+
+
+class FakeChatModel:
+    def __init__(self, responses: list[object]) -> None:
+        self.responses = deque(responses)
+        self.calls: list[object] = []
+        self.structured_calls: list[tuple[object, str, bool]] = []
+        self.closed = False
+
+    def with_structured_output(
+        self, schema: object, *, method: str, include_raw: bool
+    ) -> FakeChatModel:
+        self.structured_calls.append((schema, method, include_raw))
+        return self
+
+    def invoke(self, input: object) -> Any:
+        self.calls.append(input)
+        response = self.responses.popleft()
+        if isinstance(response, Exception):
+            raise response
+        return response
+
+    def close(self) -> None:
+        self.closed = True
+
+
+class BlockingChatModel(FakeChatModel):
+    def __init__(self) -> None:
+        super().__init__([])
+        self.release = Event()
+
+    def invoke(self, input: object) -> Any:
+        self.calls.append(input)
+        self.release.wait()
+        return gemini_response(valid_goal())
+
+
+def gemini_response(payload: object) -> dict[str, object]:
+    raw = SimpleNamespace(
+        text="",
+        content="",
+        response_metadata={"model_name": "gemini-test-001"},
+        usage_metadata={"input_tokens": 12, "output_tokens": 8, "total_tokens": 20},
+    )
+    return {"raw": raw, "parsed": payload, "parsing_error": None}
+
+
+def test_gemini_adapter_retries_transient_failure_and_records_usage() -> None:
+    client = FakeChatModel([TimeoutError("temporary"), gemini_response(valid_goal())])
+    delays: list[float] = []
+    gateway = GeminiModelGateway(
+        GeminiSettings(api_key=SecretStr("secret"), model_id="gemini-test"),
+        client=client,
+        sleep=delays.append,
+    )
+
+    response = gateway.generate_structured(goal_request())
+    gateway.close()
+
+    assert response.output.goal_text == "Summarize revenue"
+    assert response.trace.model_id == "gemini-test-001"
+    assert response.trace.provider_retry_count == 1
+    assert response.trace.usage.total_tokens == 20
+    assert response.trace.temperature == 1.0
+    assert response.trace.max_output_tokens == 4096
+    assert delays == [0.25]
+    assert len(client.calls) == 2
+    assert client.structured_calls[0][1:] == ("json_schema", True)
+    assert client.closed
+
+
+def test_gemini_adapter_does_not_retry_permanent_failure_or_leak_message() -> None:
+    client = FakeChatModel([ValueError("secret-value should not escape")])
+    gateway = GeminiModelGateway(
+        GeminiSettings(api_key=SecretStr("secret-value"), model_id="gemini-test"),
+        client=client,
+        sleep=lambda _delay: None,
+    )
+
+    with pytest.raises(ModelProviderError) as caught:
+        gateway.generate_structured(goal_request())
+
+    assert "secret-value" not in str(caught.value)
+    assert len(client.calls) == 1
+
+
+class RateLimitError(RuntimeError):
+    status_code = 429
+
+
+def test_gemini_adapter_bounds_rate_limit_retries() -> None:
+    client = FakeChatModel([RateLimitError("private") for _ in range(3)])
+    delays: list[float] = []
+    gateway = GeminiModelGateway(
+        GeminiSettings(
+            api_key=SecretStr("secret"),
+            model_id="gemini-test",
+            max_api_retries=2,
+        ),
+        client=client,
+        sleep=delays.append,
+    )
+
+    with pytest.raises(ModelProviderError, match="status=429") as caught:
+        gateway.generate_structured(goal_request())
+
+    assert "private" not in str(caught.value)
+    assert len(client.calls) == 3
+    assert delays == [0.25, 0.5]
+
+
+def test_gemini_adapter_uses_raw_text_when_parsed_value_is_missing() -> None:
+    raw = SimpleNamespace(
+        text='{"goal_text":"Summarize revenue","goal_family":"summary",'
+        '"semantic_annotations":[],"clarification_question":null}',
+        content="",
+        response_metadata={},
+        usage_metadata={"input_tokens": "bad", "output_tokens": -2},
+    )
+    gateway = GeminiModelGateway(
+        GeminiSettings(api_key=SecretStr("secret"), model_id="gemini-test"),
+        client=FakeChatModel([{"raw": raw, "parsed": None}]),
+    )
+
+    response = gateway.generate_structured(goal_request())
+
+    assert response.output.goal_family.value == "summary"
+    assert response.trace.usage.total_tokens == 0
+
+
+def test_gemini_adapter_hard_times_out_a_blocked_provider_call() -> None:
+    client = BlockingChatModel()
+    gateway = GeminiModelGateway(
+        GeminiSettings(
+            api_key=SecretStr("secret"),
+            model_id="gemini-test",
+            model_call_timeout_seconds=0.02,
+        ),
+        client=client,
+    )
+    request = goal_request()
+    request = StructuredModelRequest(
+        task=request.task,
+        prompt=request.prompt,
+        response_schema=request.response_schema,
+        system_instruction=request.system_instruction,
+        timeout_seconds=0.02,
+    )
+
+    try:
+        with pytest.raises(ModelProviderError, match=r"configured 0\.0\d+-second timeout"):
+            gateway.generate_structured(request)
+    finally:
+        client.release.set()
+
+    assert len(client.calls) == 1

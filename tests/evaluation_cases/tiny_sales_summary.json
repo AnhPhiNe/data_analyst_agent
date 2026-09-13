@@ -1,7 +1,7 @@
 {
   "case_id": "tiny-sales-summary-v1",
   "dataset_path": "tests/fixtures/tiny_sales.csv",
-  "dataset_sha256": "c2e2a168a17504e059e2ca2566052ecc687acff988934db103b1273ea796a0d8",
+  "dataset_sha256": "cda4f9b4c6a72ac4b49a1897aab4924bb5e2a9badbb78d88a13025406537b710",
   "user_request": "Summarize revenue by region.",
   "goal_family": "summary",
   "required_calculations": [

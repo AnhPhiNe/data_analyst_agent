@@ -36,10 +36,11 @@ from tabular_analytics_agent.data.models import (
     DataCoreLimits,
     DatasetHandle,
     QueryColumn,
+    QueryInspection,
     QueryResult,
     UploadInspection,
 )
-from tabular_analytics_agent.data.sql_policy import validate_read_only_sql
+from tabular_analytics_agent.data.sql_policy import analyze_read_only_sql
 from tabular_analytics_agent.domain import (
     CategoryFrequency,
     DataProfile,
@@ -222,10 +223,32 @@ class TabularDataCore:
         finally:
             connection.close()
 
-    def query(self, handle: DatasetHandle, sql: str) -> QueryResult:
-        """Execute one validated read-only query against the session dataset."""
+    def inspect_query(self, handle: DatasetHandle, sql: str) -> QueryInspection:
+        """Validate one read-only query and expose its canonical field references."""
         self._verify_handle(handle)
-        normalized_sql = validate_read_only_sql(sql, allowed_table=handle.table_name)
+        analysis = analyze_read_only_sql(sql, allowed_table=handle.table_name)
+        return QueryInspection(
+            normalized_sql=analysis.normalized_sql,
+            referenced_columns=analysis.referenced_columns,
+            has_wildcard=analysis.has_wildcard,
+        )
+
+    def query(
+        self,
+        handle: DatasetHandle,
+        sql: str,
+        *,
+        timeout_seconds: float | None = None,
+    ) -> QueryResult:
+        """Execute one validated read-only query against the session dataset."""
+        inspection = self.inspect_query(handle, sql)
+        normalized_sql = inspection.normalized_sql
+        if timeout_seconds is not None and timeout_seconds <= 0:
+            raise ValueError("timeout_seconds must be positive")
+        effective_timeout = min(
+            timeout_seconds or self._limits.query_timeout_seconds,
+            self._limits.query_timeout_seconds,
+        )
         connection = self._connect(handle.working_database_path)
         executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="duckdb-query")
         started = time.perf_counter()
@@ -244,11 +267,11 @@ class TabularDataCore:
 
         future = executor.submit(execute)
         try:
-            raw_rows, columns = future.result(timeout=self._limits.query_timeout_seconds)
+            raw_rows, columns = future.result(timeout=effective_timeout)
         except FutureTimeoutError as exc:
             connection.interrupt()
             raise QueryTimeoutError(
-                f"Query exceeded {self._limits.query_timeout_seconds} seconds"
+                f"Query exceeded the effective {effective_timeout}-second timeout"
             ) from exc
         except duckdb.Error as exc:
             raise QueryExecutionError(str(exc)) from exc

@@ -221,7 +221,12 @@ def test_annotation_requires_user_confirmation() -> None:
 def test_plan_rejects_steps_over_budget() -> None:
     goal = AnalyticalGoal(text="Summarize revenue", family=GoalFamily.SUMMARY)
     steps = tuple(
-        PlanStep(step_id=str(index), description="Aggregate", expected_tool="sql")
+        PlanStep(
+            step_id=str(index),
+            description="Aggregate",
+            expected_tool="sql",
+            intended_output="Summary table",
+        )
         for index in range(13)
     )
 
@@ -235,8 +240,18 @@ def test_plan_requires_steps_with_unique_ids() -> None:
         AnalysisPlan(plan_id=uuid4(), goal=goal, steps=())
 
     duplicate_steps = (
-        PlanStep(step_id="same", description="Aggregate", expected_tool="sql"),
-        PlanStep(step_id="same", description="Visualize", expected_tool="chart"),
+        PlanStep(
+            step_id="same",
+            description="Aggregate",
+            expected_tool="sql",
+            intended_output="Summary table",
+        ),
+        PlanStep(
+            step_id="same",
+            description="Visualize",
+            expected_tool="chart",
+            intended_output="Chart",
+        ),
     )
     with pytest.raises(ValidationError, match="step IDs must be unique"):
         AnalysisPlan(plan_id=uuid4(), goal=goal, steps=duplicate_steps)
@@ -246,7 +261,14 @@ def test_valid_plan() -> None:
     plan = AnalysisPlan(
         plan_id=uuid4(),
         goal=AnalyticalGoal(text="Summarize revenue", family=GoalFamily.SUMMARY),
-        steps=(PlanStep(step_id="aggregate", description="Aggregate", expected_tool="sql"),),
+        steps=(
+            PlanStep(
+                step_id="aggregate",
+                description="Aggregate",
+                expected_tool="sql",
+                intended_output="Regional totals",
+            ),
+        ),
     )
 
     assert plan.version == 1

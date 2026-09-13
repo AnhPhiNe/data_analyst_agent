@@ -101,6 +101,30 @@ def test_query_supports_ctes_and_enforces_row_limit(tmp_path: Path) -> None:
     assert result.truncated
 
 
+def test_query_inspection_reports_canonical_fields_and_wildcards(tmp_path: Path) -> None:
+    core = TabularDataCore(tmp_path / "session")
+    handle = ingest_tiny_sales(core, tmp_path)
+
+    aggregate = core.inspect_query(
+        handle,
+        "select region, count(*) as rows from dataset group by region",
+    )
+    wildcard = core.inspect_query(handle, "SELECT * FROM dataset")
+
+    assert aggregate.normalized_sql.startswith("SELECT region, COUNT(*)")
+    assert aggregate.referenced_columns == ("region",)
+    assert not aggregate.has_wildcard
+    assert wildcard.has_wildcard
+
+
+def test_query_rejects_nonpositive_timeout(tmp_path: Path) -> None:
+    core = TabularDataCore(tmp_path / "session")
+    handle = ingest_tiny_sales(core, tmp_path)
+
+    with pytest.raises(ValueError, match="positive"):
+        core.query(handle, "SELECT region FROM dataset", timeout_seconds=0)
+
+
 @pytest.mark.parametrize(
     "sql",
     [
@@ -109,6 +133,9 @@ def test_query_supports_ctes_and_enforces_row_limit(tmp_path: Path) -> None:
         "DELETE FROM dataset",
         "SELECT * FROM another_table",
         "SELECT * FROM read_csv_auto('secrets.csv')",
+        "SELECT revenue, COLUMNS('email') FROM dataset",
+        "SELECT revenue, dataset FROM dataset",
+        "SELECT revenue, TO_JSON(dataset) FROM dataset",
     ],
 )
 def test_query_rejects_unsafe_sql(tmp_path: Path, sql: str) -> None:

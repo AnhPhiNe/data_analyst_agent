@@ -17,8 +17,18 @@ A rectangular, header-based table containing numeric, categorical, boolean, shor
 _Avoid_: Any data, arbitrary file
 
 **Source Dataset**:
-The immutable Source Dataset exactly as supplied by the user.
+The immutable, byte-for-byte copy of a Supported Dataset exactly as supplied by the user.
 _Avoid_: Working file, cleaned data
+
+**Model Gateway**:
+The provider-neutral boundary that requests validated structured model output and records model
+usage without exposing provider-specific objects to orchestration.
+_Avoid_: Gemini client, LLM singleton
+
+**Agent Run**:
+A checkpointed execution of an Analytical Goal within an Analysis Session; it may pause for user
+confirmation and resume from its last safe state.
+_Avoid_: Hidden chain of thought, background script
 
 **Working Dataset**:
 A session-scoped analytical view derived from the Source Dataset through recorded transformations.

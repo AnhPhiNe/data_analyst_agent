@@ -3,8 +3,8 @@
 A local-first, single-agent workspace for analyzing CSV and XLSX datasets through
 reproducible tools, deterministic verification, and user-curated dashboards.
 
-The project has completed **Milestone 2 — Deterministic data core**. Product and technical decisions are
-captured in [Spec.md](./Spec.md), while shared domain language lives in
+The project has implemented **Milestone 3 — Agent orchestration**. Product and technical decisions
+are captured in [Spec.md](./Spec.md), while shared domain language lives in
 [CONTEXT.md](./CONTEXT.md).
 
 ## Design principles
@@ -34,8 +34,9 @@ python -m mypy
 python -m pytest
 ```
 
-Do not add API keys to the repository. Copy `.env.example` to `.env` and supply local values
-only when model integration is introduced in Milestone 3.
+Do not add API keys to the repository. Use `.env.example` as a local configuration template and
+provide `GOOGLE_API_KEY` through the process environment or, later, Streamlit Secrets for live
+Gemini calls. Automated tests use `FakeModelGateway` and do not call an external model.
 
 ## Current layout
 
@@ -43,6 +44,8 @@ only when model integration is introduced in Milestone 3.
 src/tabular_analytics_agent/domain/      Domain contracts and invariants
 src/tabular_analytics_agent/data/        Secure ingestion, profiling, and read-only querying
 src/tabular_analytics_agent/evaluation/  Golden evaluation case contracts
+src/tabular_analytics_agent/model_gateway/ Provider-neutral structured LLM boundary
+src/tabular_analytics_agent/orchestration/ LangGraph workflow and SQLite checkpoints
 src/tabular_analytics_agent/verification/ Deterministic evidence gates
 tests/                                   Tests through public module interfaces
 tests/fixtures/                          Small deterministic datasets

@@ -53,6 +53,12 @@ class QueryColumn(DataModel):
     data_type: NonEmptyText
 
 
+class QueryInspection(DataModel):
+    normalized_sql: NonEmptyText
+    referenced_columns: tuple[str, ...]
+    has_wildcard: bool = False
+
+
 class QueryResult(DataModel):
     query_id: UUID
     dataset_id: UUID

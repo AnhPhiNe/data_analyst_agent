@@ -190,12 +190,15 @@ class PlanStep(DomainModel):
     description: NonEmptyText
     expected_tool: NonEmptyText
     required_fields: tuple[str, ...] = ()
+    intended_output: NonEmptyText
+    caveats: tuple[str, ...] = ()
     requires_approval: bool = False
 
 
 class ExecutionBudget(DomainModel):
     max_tool_actions: PositiveInt = 12
     max_repairs_per_action: NonNegativeInt = 2
+    model_call_timeout_seconds: PositiveInt = 30
     tool_timeout_seconds: PositiveInt = 30
     run_timeout_seconds: PositiveInt = 300
 

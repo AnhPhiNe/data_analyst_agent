@@ -15,6 +15,7 @@ from tabular_analytics_agent.data.models import (
     DataCoreLimits,
     DatasetHandle,
     QueryColumn,
+    QueryInspection,
     QueryResult,
     UploadInspection,
 )
@@ -26,6 +27,7 @@ __all__ = [
     "DatasetIntegrityError",
     "QueryColumn",
     "QueryExecutionError",
+    "QueryInspection",
     "QueryResult",
     "QueryTimeoutError",
     "SheetSelectionError",

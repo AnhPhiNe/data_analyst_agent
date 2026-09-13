@@ -46,14 +46,29 @@ checks deepen this same interface rather than relying on model confidence.
 
 ### Orchestration module
 
-This future module will expose operations that advance an Analysis Session. LangGraph will be
-the initial adapter at this seam, but its internal state representation must not leak into the
-domain contracts or Streamlit UI.
+`AgentOrchestrator` exposes `start`, `resume`, and `get_state` operations for an Analysis Session.
+Its explicit LangGraph transitions interpret the goal, optionally pause for Semantic Annotation
+confirmation, create a plan, pause for plan approval, request SQL, execute it, and apply the
+baseline Verification Gates for every approved step. It binds canonical SQL column references to
+the current plan step, rejects wildcard projections and repeated Tool Actions, enforces tool,
+repair, query-timeout, and active-run budgets, and stops safely on failed verification. Human
+approval wait time is checkpointed but excluded from the active-run budget. Applications can inject
+a validated `ExecutionBudget`; each query is capped by both its tool timeout and the remaining run
+budget. Model calls likewise have a transport-enforced timeout bounded by the remaining active-run
+budget.
+
+The default local checkpointer stores JSON-safe state in session-scoped SQLite. Dynamic LangGraph
+interrupts make approvals durable across application reloads. Checkpoint namespaces come only from
+the validated Analysis Session ID; Streamlit only renders the current state and sends approval
+decisions back through the public orchestration interface.
 
 ### Model seam
 
-The model seam becomes real in Milestone 3 with two adapters: Gemini for production use and a
-deterministic fake for tests. Provider-specific response objects do not cross the seam.
+`ModelGateway.generate_structured` accepts a provider-neutral request and a Pydantic response
+schema. Shared behavior validates every response and permits one schema-repair attempt. The
+production adapter uses LangChain's native JSON-schema integration for Gemini, with bounded
+exponential retry only for transient failures. The deterministic fake consumes queued outputs for
+tests. Provider response objects, credentials, and error bodies do not cross this seam.
 
 ### Delivery seam
 

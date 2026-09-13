@@ -13,6 +13,10 @@ authors = [{ name = "A Fee" }]
 dependencies = [
   "charset-normalizer>=3.4,<4",
   "duckdb>=1.4,<2",
+  "langchain-core>=1.6,<2",
+  "langchain-google-genai>=4.4,<5",
+  "langgraph>=1.1,<2",
+  "langgraph-checkpoint-sqlite>=3.1,<4",
   "openpyxl>=3.1,<4",
   "pandas>=2.3,<4",
   "pydantic>=2.12,<3",
@@ -49,6 +53,10 @@ fail_under = 90
 python_version = "3.12"
 strict = true
 files = ["src", "tests"]
+
+[[tool.mypy.overrides]]
+module = ["langchain_google_genai"]
+ignore_missing_imports = true
 
 [tool.ruff]
 target-version = "py312"
