@@ -1,0 +1,76 @@
+"""Contracts at the tabular data module interface."""
+
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Annotated
+from uuid import UUID
+
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+from tabular_analytics_agent.domain import DatasetIdentity
+
+PositiveInt = Annotated[int, Field(gt=0)]
+NonEmptyText = Annotated[str, Field(min_length=1)]
+
+
+class DataModel(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, str_strip_whitespace=True)
+
+
+class DataCoreLimits(DataModel):
+    max_file_bytes: PositiveInt = 100 * 1024 * 1024
+    max_xlsx_uncompressed_bytes: PositiveInt = 500 * 1024 * 1024
+    max_xlsx_compression_ratio: Annotated[float, Field(gt=1.0)] = 100.0
+    max_query_rows: PositiveInt = 10_000
+    query_timeout_seconds: PositiveInt = 30
+    duckdb_memory_limit_mb: PositiveInt = 512
+    profile_top_values: PositiveInt = 5
+
+
+class UploadInspection(DataModel):
+    original_filename: NonEmptyText
+    file_format: NonEmptyText
+    size_bytes: PositiveInt
+    sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
+    sheets: tuple[str, ...] = ()
+    encoding: str | None = None
+    delimiter: str | None = None
+    warnings: tuple[str, ...] = ()
+
+
+class DatasetHandle(DataModel):
+    dataset: DatasetIdentity
+    source_path: Path
+    working_database_path: Path
+    working_dataset_version: PositiveInt = 1
+    table_name: NonEmptyText = "dataset"
+    selected_sheet: str | None = None
+
+
+class QueryColumn(DataModel):
+    name: NonEmptyText
+    data_type: NonEmptyText
+
+
+class QueryResult(DataModel):
+    query_id: UUID
+    dataset_id: UUID
+    working_dataset_version: PositiveInt
+    sql: NonEmptyText
+    columns: tuple[QueryColumn, ...]
+    rows: tuple[tuple[str | int | float | bool | None, ...], ...]
+    row_count: int = Field(ge=0)
+    truncated: bool
+    duration_ms: int = Field(ge=0)
+
+    @model_validator(mode="after")
+    def validate_shape(self) -> QueryResult:
+        if self.row_count != len(self.rows):
+            raise ValueError("row_count must match the returned rows")
+        names = [column.name for column in self.columns]
+        if not names or len(names) != len(set(names)):
+            raise ValueError("query result columns must be present and unique")
+        if any(len(row) != len(self.columns) for row in self.rows):
+            raise ValueError("every result row must match the column schema")
+        return self

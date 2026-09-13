@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Environments and secrets
+.venv/
+.env
+.env.*
+!.env.example
+.streamlit/secrets.toml
+
+# Local application state and user data
+.data/
+.sessions/
+artifacts/
+*.duckdb
+*.duckdb.wal
+*.parquet
+
+# Editors and operating systems
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

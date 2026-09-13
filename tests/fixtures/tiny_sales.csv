@@ -1,0 +1,6 @@
+order_id,region,revenue,units
+1,North,100.0,2
+2,South,150.0,3
+3,North,200.0,4
+4,South,50.0,1
+5,North,50.0,1
