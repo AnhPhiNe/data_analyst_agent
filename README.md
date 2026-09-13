@@ -3,7 +3,7 @@
 A local-first, single-agent workspace for analyzing CSV and XLSX datasets through
 reproducible tools, deterministic verification, and user-curated dashboards.
 
-The project has implemented **Milestone 3 — Agent orchestration**. Product and technical decisions
+The project has implemented **Milestone 4 — Insights and statistics**. Product and technical decisions
 are captured in [Spec.md](./Spec.md), while shared domain language lives in
 [CONTEXT.md](./CONTEXT.md).
 
@@ -46,6 +46,7 @@ src/tabular_analytics_agent/data/        Secure ingestion, profiling, and read-o
 src/tabular_analytics_agent/evaluation/  Golden evaluation case contracts
 src/tabular_analytics_agent/model_gateway/ Provider-neutral structured LLM boundary
 src/tabular_analytics_agent/orchestration/ LangGraph workflow and SQLite checkpoints
+src/tabular_analytics_agent/statistics/    Deterministic statistics and bounded Tool Actions
 src/tabular_analytics_agent/verification/ Deterministic evidence gates
 tests/                                   Tests through public module interfaces
 tests/fixtures/                          Small deterministic datasets

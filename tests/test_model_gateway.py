@@ -10,17 +10,23 @@ from typing import Any
 import pytest
 from pydantic import SecretStr
 
+from tabular_analytics_agent.domain import InsightAssertion, InsightOperator
 from tabular_analytics_agent.model_gateway import (
     FakeModelGateway,
     GeminiModelGateway,
     GeminiSettings,
     GoalInterpretation,
+    InsightDraft,
     ModelConfigurationError,
     ModelOutputValidationError,
     ModelProviderError,
     ModelTask,
+    PlanDraft,
+    PlanStepDraft,
     StructuredModelRequest,
+    ToolRequestDraft,
 )
+from tabular_analytics_agent.statistics import StatisticalOperation, StatisticalRequest
 
 
 def goal_request() -> StructuredModelRequest[GoalInterpretation]:
@@ -40,6 +46,69 @@ def valid_goal() -> dict[str, object]:
         "semantic_annotations": [],
         "clarification_question": None,
     }
+
+
+def test_generation_schemas_reject_unbound_plan_tool_and_insight_contracts() -> None:
+    with pytest.raises(ValueError, match="require statistical_operation"):
+        PlanStepDraft(
+            step_id="one",
+            description="Compute a summary",
+            expected_tool="statistical_analysis",
+            required_fields=("value",),
+            intended_output="A summary",
+        )
+    with pytest.raises(ValueError, match="only statistical plan steps"):
+        PlanStepDraft(
+            step_id="one",
+            description="Compute a summary",
+            expected_tool="read_only_sql",
+            statistical_operation=StatisticalOperation.DESCRIPTIVE,
+            required_fields=("value",),
+            intended_output="A summary",
+        )
+    with pytest.raises(ValueError, match="at least one step"):
+        PlanDraft(steps=())
+
+    statistical_request = StatisticalRequest(
+        operation=StatisticalOperation.DESCRIPTIVE,
+        value_fields=("value",),
+    )
+    with pytest.raises(ValueError, match="requires only a SQL payload"):
+        ToolRequestDraft(tool_name="read_only_sql", purpose="Query", required_fields=("value",))
+    with pytest.raises(ValueError, match="requires only a statistical request"):
+        ToolRequestDraft(
+            tool_name="statistical_analysis",
+            purpose="Analyze",
+            sql="SELECT value FROM dataset",
+            statistical_request=statistical_request,
+            required_fields=("value",),
+        )
+    with pytest.raises(ValueError, match="must match required_fields"):
+        ToolRequestDraft(
+            tool_name="statistical_analysis",
+            purpose="Analyze",
+            statistical_request=statistical_request,
+            required_fields=("other",),
+        )
+
+    with pytest.raises(ValueError, match="require p_value"):
+        InsightDraft(
+            plan_step_id="one",
+            assertion=InsightAssertion(
+                operator=InsightOperator.STATISTICALLY_SIGNIFICANT,
+                left_metric="value.mean",
+            ),
+            evidence_metrics=("value.mean", "adjusted_alpha"),
+        )
+    with pytest.raises(ValueError, match="must be selected evidence"):
+        InsightDraft(
+            plan_step_id="one",
+            assertion=InsightAssertion(
+                operator=InsightOperator.STATISTICALLY_SIGNIFICANT,
+                left_metric="p_value",
+            ),
+            evidence_metrics=("p_value",),
+        )
 
 
 def test_fake_gateway_returns_validated_output_and_trace() -> None:

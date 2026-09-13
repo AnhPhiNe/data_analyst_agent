@@ -68,6 +68,23 @@ class VerificationStatus(StrEnum):
     FAILED = "failed"
 
 
+class InsightStatus(StrEnum):
+    VERIFIED = "verified"
+    STALE = "stale"
+    UNSUPPORTED = "unsupported"
+
+
+class InsightOperator(StrEnum):
+    REPORTS = "reports"
+    EQUALS = "equals"
+    GREATER_THAN = "greater_than"
+    LESS_THAN = "less_than"
+    POSITIVE = "positive"
+    NEGATIVE = "negative"
+    STATISTICALLY_SIGNIFICANT = "statistically_significant"
+    NOT_STATISTICALLY_SIGNIFICANT = "not_statistically_significant"
+
+
 class ArtifactStatus(StrEnum):
     CANDIDATE = "candidate"
     PINNED = "pinned"
@@ -189,10 +206,19 @@ class PlanStep(DomainModel):
     step_id: NonEmptyText
     description: NonEmptyText
     expected_tool: NonEmptyText
+    statistical_operation: str | None = None
     required_fields: tuple[str, ...] = ()
     intended_output: NonEmptyText
     caveats: tuple[str, ...] = ()
     requires_approval: bool = False
+
+    @model_validator(mode="after")
+    def statistical_operation_matches_tool(self) -> Self:
+        if self.expected_tool == "statistical_analysis" and not self.statistical_operation:
+            raise ValueError("statistical plan steps require statistical_operation")
+        if self.expected_tool != "statistical_analysis" and self.statistical_operation:
+            raise ValueError("only statistical plan steps may declare statistical_operation")
+        return self
 
 
 class ExecutionBudget(DomainModel):
@@ -275,13 +301,39 @@ class EvidenceValue(DomainModel):
     unit: str | None = None
 
 
+class InsightAssertion(DomainModel):
+    operator: InsightOperator
+    left_metric: NonEmptyText
+    right_metric: str | None = None
+
+    @model_validator(mode="after")
+    def operands_match_operator(self) -> Self:
+        comparison_operators = {
+            InsightOperator.EQUALS,
+            InsightOperator.GREATER_THAN,
+            InsightOperator.LESS_THAN,
+        }
+        if self.operator in comparison_operators and not self.right_metric:
+            raise ValueError("comparison insight assertions require right_metric")
+        if self.operator not in comparison_operators and self.right_metric:
+            raise ValueError("unary insight assertions cannot include right_metric")
+        if self.right_metric == self.left_metric:
+            raise ValueError("insight assertion metrics must be distinct")
+        return self
+
+
 class EvidenceTrail(DomainModel):
     trail_id: UUID
+    dataset_id: UUID
+    working_dataset_version: PositiveInt
+    semantic_annotation_fingerprint: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
     source_fields: tuple[str, ...]
     filters: tuple[str, ...] = ()
     source_row_count: NonNegativeInt
     result_row_count: NonNegativeInt
+    missing_data_handling: NonEmptyText
     tool_action_ids: tuple[UUID, ...]
+    tool_parameters: tuple[dict[str, Any], ...]
     values: tuple[EvidenceValue, ...]
     caveats: tuple[str, ...] = ()
 
@@ -291,6 +343,10 @@ class EvidenceTrail(DomainModel):
             raise ValueError("an evidence trail requires source fields")
         if not self.tool_action_ids:
             raise ValueError("an evidence trail requires a tool action")
+        if len(self.tool_parameters) != len(self.tool_action_ids) or any(
+            not parameters for parameters in self.tool_parameters
+        ):
+            raise ValueError("every evidence tool action requires exact parameters")
         if not self.values:
             raise ValueError("an evidence trail requires computed values")
         return self
@@ -298,14 +354,49 @@ class EvidenceTrail(DomainModel):
 
 class VerifiedInsight(DomainModel):
     insight_id: UUID
+    status: InsightStatus = InsightStatus.VERIFIED
     claim: NonEmptyText
     evidence: EvidenceTrail
     verification: VerificationResult
+    artifact_id: UUID | None = None
 
     @model_validator(mode="after")
     def require_passed_verification(self) -> Self:
+        if self.status is not InsightStatus.VERIFIED:
+            raise ValueError("a VerifiedInsight must have verified status")
         if self.verification.status is not VerificationStatus.PASSED:
             raise ValueError("a VerifiedInsight requires passed verification")
+        return self
+
+
+class UnsupportedClaim(DomainModel):
+    claim_id: UUID
+    status: InsightStatus = InsightStatus.UNSUPPORTED
+    claim: NonEmptyText
+    reason: NonEmptyText
+    verification: VerificationResult
+    evidence: EvidenceTrail | None = None
+
+    @model_validator(mode="after")
+    def require_failed_verification(self) -> Self:
+        if self.status is not InsightStatus.UNSUPPORTED:
+            raise ValueError("an UnsupportedClaim must have unsupported status")
+        if self.verification.status is not VerificationStatus.FAILED:
+            raise ValueError("an UnsupportedClaim requires failed verification")
+        return self
+
+
+class StaleInsight(DomainModel):
+    insight_id: UUID
+    status: InsightStatus = InsightStatus.STALE
+    claim: NonEmptyText
+    evidence: EvidenceTrail
+    reason: NonEmptyText
+
+    @model_validator(mode="after")
+    def require_stale_status(self) -> Self:
+        if self.status is not InsightStatus.STALE:
+            raise ValueError("a StaleInsight must have stale status")
         return self
 
 

@@ -44,6 +44,27 @@ The verification module accepts validated analytical records and returns determi
 schema grounding, and whether a query returned usable evidence. Future statistical and artifact
 checks deepen this same interface rather than relying on model confidence.
 
+Insight publication adds deterministic gates for successful Tool Actions, exact result binding,
+current dataset version, schema grounding, and structured assertions over exact evidence metrics.
+Final claim text is rendered deterministically, so unsupported numeric, directional, comparative,
+significance, or causal language cannot be introduced by the model. Publications that fail any gate
+remain `UnsupportedClaim` records. A stable hash
+of confirmed Semantic Annotations and the Working Dataset version allow previously verified results
+to be marked `StaleInsight` when their analytical context changes.
+
+### Statistical analysis module
+
+The statistical module exposes typed requests for descriptive statistics, correlation, confidence
+intervals, two-group and multi-group tests, chi-square, and simple linear or logistic regression.
+NumPy and SciPy perform every calculation. Results record sample sizes, complete/available-case
+missing-data handling, assumptions, p-values, Bonferroni-adjusted alpha, effect sizes, practical
+significance, warnings, and exact parameters.
+
+`StatisticalTool` binds this engine to one validated Working Dataset. It extracts only approved
+fields through the read-only data core, caps input using deterministic reservoir sampling with a
+recorded seed, and returns a verified, replayable Tool Action without exposing storage details to
+the statistical engine.
+
 ### Orchestration module
 
 `AgentOrchestrator` exposes `start`, `resume`, and `get_state` operations for an Analysis Session.
@@ -60,7 +81,12 @@ budget.
 The default local checkpointer stores JSON-safe state in session-scoped SQLite. Dynamic LangGraph
 interrupts make approvals durable across application reloads. Checkpoint namespaces come only from
 the validated Analysis Session ID; Streamlit only renders the current state and sends approval
-decisions back through the public orchestration interface.
+decisions back through the public orchestration interface. After approved Tool Actions pass
+verification, the graph requests structured insight drafts, sends only non-PII evidence values to
+the Model Gateway, and publishes each draft as a Verified Insight or Unsupported Claim. Model-bound
+evidence is capped at 200 values, statistical summaries are prioritized, and query results above 50
+rows are withheld until the agent produces a bounded aggregate. Statistical plan steps declare their
+operation up front; the orchestrator derives multiple-testing family size from the approved plan.
 
 ### Model seam
 

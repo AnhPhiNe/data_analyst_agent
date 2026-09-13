@@ -90,6 +90,11 @@ class TabularDataCore:
         self._session_directory = session_directory.resolve()
         self._limits = limits or DataCoreLimits()
 
+    @property
+    def limits(self) -> DataCoreLimits:
+        """Expose immutable resource limits to bounded analytical adapters."""
+        return self._limits
+
     def inspect(self, upload_path: Path) -> UploadInspection:
         """Validate an upload and return facts required before ingestion."""
         path = upload_path.resolve()

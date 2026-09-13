@@ -22,6 +22,8 @@ from tabular_analytics_agent.domain import (
     FieldKind,
     FieldProfile,
     GoalFamily,
+    InsightAssertion,
+    InsightOperator,
     NumericSummary,
     PlanStep,
     SemanticAnnotation,
@@ -90,10 +92,15 @@ def test_field_summaries_must_match_field_kind() -> None:
 def make_evidence() -> EvidenceTrail:
     return EvidenceTrail(
         trail_id=uuid4(),
+        dataset_id=make_dataset().dataset_id,
+        working_dataset_version=1,
+        semantic_annotation_fingerprint="0" * 64,
         source_fields=("region", "revenue"),
         source_row_count=5,
         result_row_count=2,
+        missing_data_handling="No missing values were present.",
         tool_action_ids=(uuid4(),),
+        tool_parameters=({"sql": "SELECT region, SUM(revenue) FROM dataset"},),
         values=(EvidenceValue(metric="total_revenue", value=550.0),),
     )
 
@@ -341,10 +348,15 @@ def test_evidence_trail_requires_reproducible_content(
     with pytest.raises(ValidationError, match=message):
         EvidenceTrail(
             trail_id=uuid4(),
+            dataset_id=make_dataset().dataset_id,
+            working_dataset_version=1,
+            semantic_annotation_fingerprint="0" * 64,
             source_fields=source_fields,
             source_row_count=1,
             result_row_count=1,
+            missing_data_handling="Complete-case analysis.",
             tool_action_ids=tool_action_ids,
+            tool_parameters=tuple({"operation": "test"} for _ in tool_action_ids),
             values=values,
         )
 
@@ -377,6 +389,26 @@ def test_verified_insight_accepts_passed_evidence() -> None:
     )
 
     assert insight.verification.status is VerificationStatus.PASSED
+
+
+def test_insight_assertion_requires_operator_specific_operands() -> None:
+    with pytest.raises(ValidationError, match="require right_metric"):
+        InsightAssertion(
+            operator=InsightOperator.GREATER_THAN,
+            left_metric="row[0].revenue",
+        )
+    with pytest.raises(ValidationError, match="cannot include right_metric"):
+        InsightAssertion(
+            operator=InsightOperator.REPORTS,
+            left_metric="row[0].revenue",
+            right_metric="row[1].revenue",
+        )
+    with pytest.raises(ValidationError, match="must be distinct"):
+        InsightAssertion(
+            operator=InsightOperator.EQUALS,
+            left_metric="row[0].revenue",
+            right_metric="row[0].revenue",
+        )
 
 
 def test_artifact_requires_timezone_aware_timestamp() -> None:

@@ -24,10 +24,10 @@ from tabular_analytics_agent.orchestration import (
 
 def write_sales(path: Path) -> Path:
     path.write_text(
-        "region,revenue,email\n"
-        "North,100,north@example.com\n"
-        "South,150,south@example.com\n"
-        "North,50,north@example.com\n",
+        "region,revenue,quantity,email\n"
+        "North,100,1,north@example.com\n"
+        "South,150,2,south@example.com\n"
+        "North,50,3,north@example.com\n",
         encoding="utf-8",
         newline="",
     )
@@ -98,6 +98,37 @@ def tool_output(
     }
 
 
+def insight_output(
+    *,
+    plan_step_id: str = "regional-totals",
+    operator: str = "equals",
+    left_metric: str = "row[0].revenue",
+    right_metric: str | None = "row[1].revenue",
+    evidence_metrics: list[str] | None = None,
+) -> dict[str, object]:
+    assertion = {
+        "operator": operator,
+        "left_metric": left_metric,
+        "right_metric": right_metric,
+    }
+    return {
+        "insights": [
+            {
+                "plan_step_id": plan_step_id,
+                "assertion": assertion,
+                "evidence_metrics": evidence_metrics
+                or [
+                    "row[0].region",
+                    "row[0].revenue",
+                    "row[1].region",
+                    "row[1].revenue",
+                ],
+                "caveats": ["Totals cover the supplied dataset."],
+            }
+        ]
+    }
+
+
 class ManualClock:
     def __init__(self) -> None:
         self.now = datetime(2026, 1, 1, tzinfo=UTC)
@@ -111,7 +142,7 @@ class ManualClock:
 
 def test_graph_pauses_for_plan_approval_then_executes_verified_query(tmp_path: Path) -> None:
     core, request = run_request(tmp_path)
-    gateway = FakeModelGateway([goal_output(), plan_output(), tool_output()])
+    gateway = FakeModelGateway([goal_output(), plan_output(), tool_output(), insight_output()])
     agent = AgentOrchestrator(gateway, core, checkpointer=InMemorySaver())
 
     paused = agent.start(request)
@@ -125,12 +156,15 @@ def test_graph_pauses_for_plan_approval_then_executes_verified_query(tmp_path: P
     assert completed["status"] == AgentRunStatus.COMPLETED
     assert completed["query_result"]["rows"] == [["North", 150], ["South", 150]]
     assert completed["tool_actions"][0]["verification_results"][0]["status"] == "passed"
-    assert len(completed["model_traces"]) == 3
+    assert len(completed["model_traces"]) == 4
+    assert completed["verified_insights"][0]["status"] == "verified"
 
 
 def test_graph_requires_semantic_confirmation_before_planning(tmp_path: Path) -> None:
     core, request = run_request(tmp_path)
-    gateway = FakeModelGateway([goal_output(with_semantics=True), plan_output(), tool_output()])
+    gateway = FakeModelGateway(
+        [goal_output(with_semantics=True), plan_output(), tool_output(), insight_output()]
+    )
     agent = AgentOrchestrator(gateway, core, checkpointer=InMemorySaver())
 
     semantic_pause = agent.start(request)
@@ -149,7 +183,9 @@ def test_semantic_hypothesis_can_be_declined_and_clarified_without_ending_run(
     tmp_path: Path,
 ) -> None:
     core, request = run_request(tmp_path)
-    gateway = FakeModelGateway([goal_output(with_semantics=True), plan_output(), tool_output()])
+    gateway = FakeModelGateway(
+        [goal_output(with_semantics=True), plan_output(), tool_output(), insight_output()]
+    )
     agent = AgentOrchestrator(gateway, core, checkpointer=InMemorySaver())
 
     agent.start(request)
@@ -199,7 +235,9 @@ def test_plan_can_be_revised_before_execution(tmp_path: Path) -> None:
     revised_step = revised_steps[0]
     assert isinstance(revised_step, dict)
     revised_step["caveats"] = ["Use the user-requested aggregation"]
-    gateway = FakeModelGateway([goal_output(), plan_output(), revised_plan, tool_output()])
+    gateway = FakeModelGateway(
+        [goal_output(), plan_output(), revised_plan, tool_output(), insight_output()]
+    )
     agent = AgentOrchestrator(gateway, core, checkpointer=InMemorySaver())
 
     agent.start(request)
@@ -225,6 +263,7 @@ def test_failed_sql_is_repaired_within_budget(tmp_path: Path) -> None:
                 "WHERE CAST(region AS INTEGER) > 0 GROUP BY region"
             ),
             tool_output(),
+            insight_output(),
         ]
     )
     agent = AgentOrchestrator(gateway, core, checkpointer=InMemorySaver())
@@ -252,7 +291,14 @@ def test_repeated_tool_action_is_rejected_without_reexecution(tmp_path: Path) ->
         purpose="Same action with changed metadata",
     )
     gateway = FakeModelGateway(
-        [goal_output(), plan_output(), first_bad_request, repeated_request, tool_output()]
+        [
+            goal_output(),
+            plan_output(),
+            first_bad_request,
+            repeated_request,
+            tool_output(),
+            insight_output(),
+        ]
     )
     agent = AgentOrchestrator(gateway, core, checkpointer=InMemorySaver())
 
@@ -322,6 +368,7 @@ def test_multi_step_plan_executes_every_approved_step(tmp_path: Path) -> None:
                 required_fields=["revenue"],
                 purpose="Return revenue values",
             ),
+            insight_output(),
         ]
     )
     agent = AgentOrchestrator(gateway, core, checkpointer=InMemorySaver())
@@ -336,7 +383,199 @@ def test_multi_step_plan_executes_every_approved_step(tmp_path: Path) -> None:
         "regional-totals",
         "revenue-values",
     ]
-    assert len(gateway.requests) == 4
+    assert len(gateway.requests) == 5
+
+
+def test_agent_executes_statistical_tool_and_publishes_verified_insight(
+    tmp_path: Path,
+) -> None:
+    core, request = run_request(tmp_path)
+    statistical_plan = {
+        "steps": [
+            {
+                "step_id": "revenue-summary",
+                "description": "Summarize the revenue distribution",
+                "expected_tool": "statistical_analysis",
+                "statistical_operation": "confidence_interval",
+                "required_fields": ["revenue"],
+                "intended_output": "Descriptive revenue statistics",
+                "caveats": [],
+                "requires_approval": False,
+            }
+        ]
+    }
+    statistical_request = {
+        "tool_name": "statistical_analysis",
+        "purpose": "Compute a confidence interval for mean revenue",
+        "sql": None,
+        "required_fields": ["revenue"],
+        "statistical_request": {
+            "operation": "confidence_interval",
+            "value_field": "revenue",
+        },
+    }
+    draft = insight_output(
+        plan_step_id="revenue-summary",
+        operator="reports",
+        left_metric="revenue.mean",
+        right_metric=None,
+        evidence_metrics=["revenue.mean"],
+    )
+    gateway = FakeModelGateway([goal_output(), statistical_plan, statistical_request, draft])
+    agent = AgentOrchestrator(gateway, core, checkpointer=InMemorySaver())
+
+    agent.start(request)
+    completed = agent.resume(request.session_id, True)
+
+    assert completed["status"] == AgentRunStatus.COMPLETED
+    assert completed["query_results"] == []
+    assert completed["statistical_result"]["operation"] == "confidence_interval"
+    assert completed["tool_actions"][0]["tool_name"] == "statistical_analysis"
+    assert completed["tool_actions"][0]["verification_results"][0]["status"] == "passed"
+    assert completed["verified_insights"][0]["claim"] == "Mean revenue is 100."
+    assert '"assumptions"' in gateway.requests[-1].prompt
+    assert '"normality"' in gateway.requests[-1].prompt
+
+
+def test_unsupported_statistical_data_fails_without_model_repair_retry(
+    tmp_path: Path,
+) -> None:
+    core, request = run_request(tmp_path)
+    statistical_plan = {
+        "steps": [
+            {
+                "step_id": "invalid-summary",
+                "description": "Attempt a numeric summary of a categorical field",
+                "expected_tool": "statistical_analysis",
+                "statistical_operation": "descriptive",
+                "required_fields": ["region"],
+                "intended_output": "A numeric regional summary",
+                "caveats": [],
+                "requires_approval": False,
+            }
+        ]
+    }
+    statistical_request = {
+        "tool_name": "statistical_analysis",
+        "purpose": "Compute descriptive region statistics",
+        "sql": None,
+        "required_fields": ["region"],
+        "statistical_request": {
+            "operation": "descriptive",
+            "value_fields": ["region"],
+        },
+    }
+    gateway = FakeModelGateway([goal_output(), statistical_plan, statistical_request])
+    agent = AgentOrchestrator(gateway, core, checkpointer=InMemorySaver())
+
+    agent.start(request)
+    failed = agent.resume(request.session_id, True)
+
+    assert failed["status"] == AgentRunStatus.FAILED
+    assert failed["tool_repair_count"] == 0
+    assert failed["tool_actions"][0]["status"] == "failed"
+    assert "Unsupported statistical request" in failed["error"]
+    assert len(gateway.requests) == 3
+
+
+def test_multiple_testing_count_is_derived_from_the_approved_plan(tmp_path: Path) -> None:
+    core, request = run_request(tmp_path)
+    statistical_plan = {
+        "steps": [
+            {
+                "step_id": "correlation",
+                "description": "Measure the revenue-quantity correlation",
+                "expected_tool": "statistical_analysis",
+                "statistical_operation": "correlation",
+                "required_fields": ["revenue", "quantity"],
+                "intended_output": "Correlation statistics",
+                "caveats": [],
+                "requires_approval": False,
+            },
+            {
+                "step_id": "linear-fit",
+                "description": "Fit a linear revenue-quantity model",
+                "expected_tool": "statistical_analysis",
+                "statistical_operation": "linear_regression",
+                "required_fields": ["revenue", "quantity"],
+                "intended_output": "Linear regression statistics",
+                "caveats": [],
+                "requires_approval": False,
+            },
+        ]
+    }
+    correlation_request = {
+        "tool_name": "statistical_analysis",
+        "purpose": "Measure correlation",
+        "sql": None,
+        "required_fields": ["revenue", "quantity"],
+        "statistical_request": {
+            "operation": "correlation",
+            "x_field": "revenue",
+            "y_field": "quantity",
+            "multiple_testing_count": 99,
+            "alpha": 0.99,
+        },
+    }
+    regression_request = {
+        "tool_name": "statistical_analysis",
+        "purpose": "Fit linear regression",
+        "sql": None,
+        "required_fields": ["revenue", "quantity"],
+        "statistical_request": {
+            "operation": "linear_regression",
+            "x_field": "revenue",
+            "y_field": "quantity",
+        },
+    }
+    gateway = FakeModelGateway(
+        [
+            goal_output(),
+            statistical_plan,
+            correlation_request,
+            regression_request,
+            {"insights": []},
+        ]
+    )
+    agent = AgentOrchestrator(gateway, core, checkpointer=InMemorySaver())
+
+    agent.start(request)
+    completed = agent.resume(request.session_id, True)
+
+    assert completed["status"] == AgentRunStatus.COMPLETED
+    assert len(completed["statistical_results"]) == 2
+    assert all(
+        result["adjusted_alpha"] == pytest.approx(0.025)
+        for result in completed["statistical_results"]
+    )
+    assert all(
+        action["inputs"]["request"]["multiple_testing_count"] == 2
+        for action in completed["tool_actions"]
+    )
+    assert all(
+        action["inputs"]["request"]["alpha"] == pytest.approx(0.05)
+        for action in completed["tool_actions"]
+    )
+
+
+def test_agent_records_unverifiable_draft_as_unsupported_claim(tmp_path: Path) -> None:
+    core, request = run_request(tmp_path)
+    bad_draft = insight_output(
+        operator="reports",
+        left_metric="row[9].revenue",
+        right_metric=None,
+        evidence_metrics=["row[9].revenue"],
+    )
+    gateway = FakeModelGateway([goal_output(), plan_output(), tool_output(), bad_draft])
+    agent = AgentOrchestrator(gateway, core, checkpointer=InMemorySaver())
+
+    agent.start(request)
+    completed = agent.resume(request.session_id, True)
+
+    assert completed["status"] == AgentRunStatus.COMPLETED
+    assert completed["verified_insights"] == []
+    assert completed["unsupported_claims"][0]["status"] == "unsupported"
+    assert "Missing deterministic evidence metrics" in completed["unsupported_claims"][0]["reason"]
 
 
 def test_tool_request_cannot_expand_beyond_approved_fields(tmp_path: Path) -> None:
@@ -347,6 +586,7 @@ def test_tool_request_cannot_expand_beyond_approved_fields(tmp_path: Path) -> No
             plan_output(),
             tool_output("SELECT email, region, revenue FROM dataset"),
             tool_output(),
+            insight_output(),
         ]
     )
     agent = AgentOrchestrator(gateway, core, checkpointer=InMemorySaver())
@@ -374,6 +614,7 @@ def test_dynamic_column_selector_cannot_bypass_approved_fields(tmp_path: Path) -
                 "SELECT revenue FROM dataset ORDER BY revenue",
                 required_fields=["revenue"],
             ),
+            insight_output(),
         ]
     )
     agent = AgentOrchestrator(gateway, core, checkpointer=InMemorySaver())
@@ -454,10 +695,147 @@ def test_prompt_wrappers_escape_untrusted_closing_tags(tmp_path: Path) -> None:
     assert r"\u003c/untrusted_dataset_metadata\u003e" in prompt
 
 
+def test_insight_synthesis_catalog_excludes_pii_values(tmp_path: Path) -> None:
+    core, request = run_request(tmp_path)
+    assert "email" in request.data_profile.pii_candidates
+    pii_plan = plan_output(required_fields=["email"])
+    steps = pii_plan["steps"]
+    assert isinstance(steps, list)
+    step = steps[0]
+    assert isinstance(step, dict)
+    step["description"] = "List email values"
+    step["intended_output"] = "Email value table"
+    gateway = FakeModelGateway(
+        [
+            goal_output(),
+            pii_plan,
+            tool_output(
+                "SELECT email FROM dataset ORDER BY email",
+                required_fields=["email"],
+            ),
+            {"insights": []},
+        ]
+    )
+    agent = AgentOrchestrator(gateway, core, checkpointer=InMemorySaver())
+
+    agent.start(request)
+    completed = agent.resume(request.session_id, True)
+    synthesis_prompt = gateway.requests[-1].prompt
+
+    assert completed["status"] == AgentRunStatus.COMPLETED
+    assert completed["verified_insights"] == []
+    assert "north@example.com" not in synthesis_prompt
+    assert "south@example.com" not in synthesis_prompt
+    assert "Verified Tool Action evidence catalog: []" in synthesis_prompt
+
+
+def test_insight_synthesis_omits_large_row_level_results(tmp_path: Path) -> None:
+    upload = tmp_path / "large.csv"
+    upload.write_text(
+        "label,value\n" + "".join(f"row-{index},{index}\n" for index in range(60)),
+        encoding="utf-8",
+        newline="",
+    )
+    core = TabularDataCore(tmp_path / "large-session")
+    handle = core.ingest(upload)
+    request = AgentRunRequest(
+        session_id="large-session",
+        user_request="List the rows",
+        dataset_handle=handle,
+        data_profile=core.profile(handle),
+    )
+    plan = {
+        "steps": [
+            {
+                "step_id": "list-rows",
+                "description": "List every row",
+                "expected_tool": "read_only_sql",
+                "required_fields": ["label", "value"],
+                "intended_output": "A row-level result",
+                "caveats": [],
+                "requires_approval": False,
+            }
+        ]
+    }
+    tool = tool_output(
+        "SELECT label, value FROM dataset ORDER BY value",
+        required_fields=["label", "value"],
+        purpose="List rows",
+    )
+    gateway = FakeModelGateway([goal_output(), plan, tool, {"insights": []}])
+    agent = AgentOrchestrator(gateway, core, checkpointer=InMemorySaver())
+
+    agent.start(request)
+    completed = agent.resume(request.session_id, True)
+    synthesis_prompt = gateway.requests[-1].prompt
+
+    assert completed["status"] == AgentRunStatus.COMPLETED
+    assert '"values": []' in synthesis_prompt
+    assert "more than 50 rows" in synthesis_prompt
+    assert "row-59" not in synthesis_prompt
+
+
+def test_insight_synthesis_bounds_large_assumption_catalogs(tmp_path: Path) -> None:
+    upload = tmp_path / "many-groups.csv"
+    upload.write_text(
+        "group,value\n"
+        + "".join(
+            f"group-{group_index},{group_index + offset}\n"
+            for group_index in range(60)
+            for offset in range(3)
+        ),
+        encoding="utf-8",
+        newline="",
+    )
+    core = TabularDataCore(tmp_path / "many-groups-session")
+    handle = core.ingest(upload)
+    request = AgentRunRequest(
+        session_id="many-groups-session",
+        user_request="Compare all groups",
+        dataset_handle=handle,
+        data_profile=core.profile(handle),
+    )
+    plan = {
+        "steps": [
+            {
+                "step_id": "group-anova",
+                "description": "Compare group means",
+                "expected_tool": "statistical_analysis",
+                "statistical_operation": "anova",
+                "required_fields": ["value", "group"],
+                "intended_output": "ANOVA result",
+                "caveats": [],
+                "requires_approval": False,
+            }
+        ]
+    }
+    tool = {
+        "tool_name": "statistical_analysis",
+        "purpose": "Run ANOVA",
+        "sql": None,
+        "required_fields": ["value", "group"],
+        "statistical_request": {
+            "operation": "anova",
+            "value_field": "value",
+            "group_field": "group",
+        },
+    }
+    gateway = FakeModelGateway([goal_output(), plan, tool, {"insights": []}])
+    agent = AgentOrchestrator(gateway, core, checkpointer=InMemorySaver())
+
+    agent.start(request)
+    completed = agent.resume(request.session_id, True)
+    synthesis_prompt = gateway.requests[-1].prompt
+
+    assert completed["status"] == AgentRunStatus.COMPLETED
+    assert '"assumptions_omitted_count": 11' in synthesis_prompt
+    assert len(synthesis_prompt) < 50_000
+
+
 def test_human_approval_wait_does_not_consume_active_run_budget(tmp_path: Path) -> None:
     core, request = run_request(tmp_path)
     clock = ManualClock()
-    gateway = FakeModelGateway([goal_output(), plan_output(), tool_output()])
+    gateway = FakeModelGateway([goal_output(), plan_output(), tool_output(), insight_output()])
     agent = AgentOrchestrator(
         gateway,
         core,
@@ -505,7 +883,7 @@ def test_plan_tool_timeout_is_forwarded_to_data_core(
         return original_query(handle, sql, timeout_seconds=timeout_seconds)
 
     monkeypatch.setattr(core, "query", spy_query)
-    gateway = FakeModelGateway([goal_output(), plan_output(), tool_output()])
+    gateway = FakeModelGateway([goal_output(), plan_output(), tool_output(), insight_output()])
     agent = AgentOrchestrator(
         gateway,
         core,
@@ -572,7 +950,7 @@ def test_sqlite_checkpoint_resumes_after_orchestrator_reload(tmp_path: Path) -> 
 
     with open_sqlite_checkpointer(checkpoint_path) as checkpointer:
         resumed_agent = AgentOrchestrator(
-            FakeModelGateway([tool_output()]),
+            FakeModelGateway([tool_output(), insight_output()]),
             core,
             checkpointer=checkpointer,
         )

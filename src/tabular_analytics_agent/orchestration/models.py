@@ -19,6 +19,7 @@ class AgentRunStatus(StrEnum):
     AWAITING_PLAN_APPROVAL = "awaiting_plan_approval"
     REQUESTING_TOOL = "requesting_tool"
     RETRYING_TOOL = "retrying_tool"
+    SYNTHESIZING = "synthesizing"
     COMPLETED = "completed"
     REJECTED = "rejected"
     FAILED = "failed"
@@ -71,9 +72,13 @@ class AgentState(TypedDict, total=False):
     tool_request: dict[str, Any]
     query_result: dict[str, Any]
     query_results: list[dict[str, Any]]
+    statistical_result: dict[str, Any]
+    statistical_results: list[dict[str, Any]]
     tool_actions: list[dict[str, Any]]
     attempted_action_signatures: list[str]
     tool_repair_count: int
     model_traces: list[dict[str, Any]]
+    verified_insights: list[dict[str, Any]]
+    unsupported_claims: list[dict[str, Any]]
     status: str
     error: str

@@ -1,0 +1,484 @@
+"""Deterministic publication gates for insight drafts and their Evidence Trails."""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import math
+import re
+from collections.abc import Iterable
+from uuid import uuid4
+
+from tabular_analytics_agent.data import QueryResult
+from tabular_analytics_agent.domain import (
+    ActionStatus,
+    DataProfile,
+    EvidenceTrail,
+    EvidenceValue,
+    InsightAssertion,
+    InsightOperator,
+    SemanticAnnotation,
+    StaleInsight,
+    ToolAction,
+    UnsupportedClaim,
+    VerificationCheck,
+    VerificationResult,
+    VerificationStatus,
+    VerifiedInsight,
+)
+from tabular_analytics_agent.statistics import AssumptionStatus, StatisticalResult
+
+InsightPublication = VerifiedInsight | UnsupportedClaim
+EvidenceResult = QueryResult | StatisticalResult
+
+
+def semantic_annotation_fingerprint(annotations: Iterable[SemanticAnnotation]) -> str:
+    """Return a stable fingerprint so semantic revisions invalidate dependent insights."""
+    normalized = sorted(
+        (annotation.model_dump(mode="json") for annotation in annotations),
+        key=lambda item: (str(item["field_name"]).casefold(), json.dumps(item, sort_keys=True)),
+    )
+    payload = json.dumps(normalized, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def available_evidence_values(result: EvidenceResult) -> tuple[EvidenceValue, ...]:
+    """Expose exact metric identifiers that an insight draft may reference."""
+    if isinstance(result, QueryResult):
+        return tuple(
+            EvidenceValue(metric=f"row[{row_index}].{column.name}", value=row[column_index])
+            for row_index, row in enumerate(result.rows)
+            for column_index, column in enumerate(result.columns)
+        )
+
+    values: dict[str, EvidenceValue] = {
+        estimate.metric: EvidenceValue(
+            metric=estimate.metric, value=estimate.value, unit=estimate.unit
+        )
+        for estimate in result.estimates
+    }
+    if result.statistic_name is not None and result.statistic is not None:
+        values[result.statistic_name] = EvidenceValue(
+            metric=result.statistic_name,
+            value=result.statistic,
+        )
+    if result.p_value is not None:
+        values["p_value"] = EvidenceValue(metric="p_value", value=result.p_value)
+    if result.adjusted_alpha is not None:
+        values["adjusted_alpha"] = EvidenceValue(
+            metric="adjusted_alpha", value=result.adjusted_alpha
+        )
+    if result.confidence_interval is not None:
+        values["confidence_interval.lower"] = EvidenceValue(
+            metric="confidence_interval.lower", value=result.confidence_interval.lower
+        )
+        values["confidence_interval.upper"] = EvidenceValue(
+            metric="confidence_interval.upper", value=result.confidence_interval.upper
+        )
+    if result.effect_size is not None:
+        values[result.effect_size.metric] = EvidenceValue(
+            metric=result.effect_size.metric,
+            value=result.effect_size.value,
+            unit=result.effect_size.unit,
+        )
+    return tuple(values.values())
+
+
+def publish_insight(
+    *,
+    assertion: InsightAssertion,
+    evidence_metrics: tuple[str, ...],
+    caveats: tuple[str, ...],
+    profile: DataProfile,
+    action: ToolAction,
+    result: EvidenceResult,
+    current_working_dataset_version: int,
+    semantic_annotations: tuple[SemanticAnnotation, ...] = (),
+) -> InsightPublication:
+    """Publish only claims grounded in current, exactly named deterministic evidence."""
+    available = {value.metric: value for value in available_evidence_values(result)}
+    missing_metrics = sorted(set(evidence_metrics) - set(available))
+    claim, assertion_supported, assertion_message = _evaluate_assertion(
+        assertion, available, result, selected_metrics=set(evidence_metrics)
+    )
+    source_fields = _source_fields(action, result)
+    profile_fields = {field.name for field in profile.fields}
+    unknown_fields = sorted(set(source_fields) - profile_fields)
+    action_verification_passed = bool(action.verification_results) and all(
+        item.status is VerificationStatus.PASSED for item in action.verification_results
+    )
+    result_matches_dataset = not isinstance(result, QueryResult) or (
+        result.dataset_id == profile.dataset.dataset_id
+    )
+    result_version = (
+        result.working_dataset_version
+        if isinstance(result, QueryResult)
+        else action.working_dataset_version
+    )
+    result_reference_matches = action.output_ref == _result_reference(result)
+    checks = (
+        VerificationCheck(
+            name="tool_action",
+            passed=action.status is ActionStatus.SUCCEEDED and action_verification_passed,
+            message=(
+                "Tool Action succeeded and passed its Verification Gates."
+                if action.status is ActionStatus.SUCCEEDED and action_verification_passed
+                else "Tool Action did not succeed with passed Verification Gates."
+            ),
+        ),
+        VerificationCheck(
+            name="result_binding",
+            passed=result_reference_matches,
+            message=(
+                "Tool Action output reference identifies this deterministic result."
+                if result_reference_matches
+                else "Tool Action output reference does not identify this deterministic result."
+            ),
+        ),
+        VerificationCheck(
+            name="dataset_identity",
+            passed=result_matches_dataset,
+            message=(
+                "Evidence belongs to the profiled Source Dataset."
+                if result_matches_dataset
+                else "Evidence belongs to a different Source Dataset."
+            ),
+        ),
+        VerificationCheck(
+            name="working_dataset_version",
+            passed=(
+                action.working_dataset_version == current_working_dataset_version
+                and result_version == current_working_dataset_version
+            ),
+            message=(
+                "Evidence uses the current Working Dataset version."
+                if action.working_dataset_version == current_working_dataset_version
+                and result_version == current_working_dataset_version
+                else "Evidence is stale relative to the current Working Dataset."
+            ),
+        ),
+        VerificationCheck(
+            name="schema_grounding",
+            passed=bool(source_fields) and not unknown_fields,
+            message=(
+                "All referenced fields exist in the Data Profile."
+                if source_fields and not unknown_fields
+                else (
+                    "Unknown or absent evidence fields: "
+                    f"{', '.join(unknown_fields) or 'none supplied'}."
+                )
+            ),
+        ),
+        VerificationCheck(
+            name="evidence_metrics",
+            passed=bool(evidence_metrics) and not missing_metrics,
+            message=(
+                "Every requested evidence metric matches deterministic output."
+                if evidence_metrics and not missing_metrics
+                else (
+                    "Missing deterministic evidence metrics: "
+                    f"{', '.join(missing_metrics) or 'none supplied'}."
+                )
+            ),
+        ),
+        VerificationCheck(
+            name="claim_scope",
+            passed=assertion_supported,
+            message=assertion_message,
+        ),
+    )
+    status = (
+        VerificationStatus.PASSED
+        if all(check.passed for check in checks)
+        else VerificationStatus.FAILED
+    )
+    verification = VerificationResult(status=status, checks=checks)
+    evidence = None
+    if evidence_metrics and not missing_metrics and source_fields:
+        evidence = EvidenceTrail(
+            trail_id=uuid4(),
+            dataset_id=profile.dataset.dataset_id,
+            working_dataset_version=action.working_dataset_version,
+            semantic_annotation_fingerprint=semantic_annotation_fingerprint(semantic_annotations),
+            source_fields=source_fields,
+            filters=_filters(action),
+            source_row_count=profile.row_count,
+            result_row_count=_result_row_count(result),
+            missing_data_handling=_missing_data_handling(result),
+            tool_action_ids=(action.action_id,),
+            tool_parameters=(action.inputs,),
+            values=tuple(available[metric] for metric in evidence_metrics),
+            caveats=tuple(dict.fromkeys((*_result_caveats(result), *caveats))),
+        )
+    if status is VerificationStatus.FAILED:
+        failed_messages = "; ".join(check.message for check in checks if not check.passed)
+        return UnsupportedClaim(
+            claim_id=uuid4(),
+            claim=claim,
+            reason=failed_messages,
+            verification=verification,
+            evidence=evidence,
+        )
+    if evidence is None:
+        raise AssertionError("passed publication requires complete evidence")
+    return VerifiedInsight(
+        insight_id=uuid4(),
+        claim=claim,
+        evidence=evidence,
+        verification=verification,
+    )
+
+
+def invalidate_stale_insight(
+    insight: VerifiedInsight,
+    *,
+    current_working_dataset_version: int,
+    semantic_annotations: tuple[SemanticAnnotation, ...] = (),
+) -> VerifiedInsight | StaleInsight:
+    """Keep a verified insight only while its dataset and semantics remain current."""
+    reasons: list[str] = []
+    if insight.evidence.working_dataset_version != current_working_dataset_version:
+        reasons.append("Working Dataset version changed")
+    if insight.evidence.semantic_annotation_fingerprint != semantic_annotation_fingerprint(
+        semantic_annotations
+    ):
+        reasons.append("Semantic Annotations changed")
+    if not reasons:
+        return insight
+    return StaleInsight(
+        insight_id=insight.insight_id,
+        claim=insight.claim,
+        evidence=insight.evidence,
+        reason="; ".join(reasons) + "; re-verification is required.",
+    )
+
+
+def _source_fields(action: ToolAction, result: EvidenceResult) -> tuple[str, ...]:
+    if isinstance(result, StatisticalResult):
+        return result.source_fields
+    raw = action.inputs.get("required_fields", ())
+    if not isinstance(raw, (list, tuple)):
+        return ()
+    return tuple(str(field) for field in raw)
+
+
+def _filters(action: ToolAction) -> tuple[str, ...]:
+    raw = action.inputs.get("filters", ())
+    if not isinstance(raw, (list, tuple)):
+        return ()
+    return tuple(str(value) for value in raw)
+
+
+def _result_row_count(result: EvidenceResult) -> int:
+    return result.row_count if isinstance(result, QueryResult) else result.sample_size
+
+
+def _missing_data_handling(result: EvidenceResult) -> str:
+    if isinstance(result, StatisticalResult):
+        return result.missing_data_handling
+    return "Missing values follow the recorded SQL query semantics."
+
+
+def _result_caveats(result: EvidenceResult) -> tuple[str, ...]:
+    if not isinstance(result, StatisticalResult):
+        return ()
+    assumption_caveats = tuple(
+        f"{check.name}: {check.message}"
+        for check in result.assumptions
+        if check.status is not AssumptionStatus.PASSED
+    )
+    return (*result.warnings, *assumption_caveats)
+
+
+def _result_reference(result: EvidenceResult) -> str:
+    if isinstance(result, QueryResult):
+        return f"query-result:{result.query_id}"
+    return f"statistical-result:{result.result_id}"
+
+
+def _evaluate_assertion(
+    assertion: InsightAssertion,
+    available: dict[str, EvidenceValue],
+    result: EvidenceResult,
+    *,
+    selected_metrics: set[str],
+) -> tuple[str, bool, str]:
+    left = available.get(assertion.left_metric)
+    right = available.get(assertion.right_metric or "")
+    fallback = (
+        f"{assertion.left_metric} {assertion.operator.value} {assertion.right_metric or ''}"
+    ).strip()
+    if left is None or (assertion.right_metric and right is None):
+        return fallback, False, "Insight assertion references unavailable deterministic evidence."
+
+    operator = assertion.operator
+    if operator is InsightOperator.REPORTS:
+        return (
+            f"{_display_metric(left.metric)} is {_format_evidence_value(left.value)}.",
+            True,
+            "Reported value comes directly from deterministic evidence.",
+        )
+    if operator in {
+        InsightOperator.EQUALS,
+        InsightOperator.GREATER_THAN,
+        InsightOperator.LESS_THAN,
+    }:
+        if right is None:
+            return fallback, False, "Comparison requires two deterministic evidence values."
+        supported = _comparison_holds(left.value, right.value, operator)
+        symbol = {
+            InsightOperator.EQUALS: "equals",
+            InsightOperator.GREATER_THAN: "is greater than",
+            InsightOperator.LESS_THAN: "is less than",
+        }[operator]
+        claim = (
+            f"{_display_metric(left.metric)} {symbol} "
+            f"{_lower_first(_display_metric(right.metric))} "
+            f"({_format_evidence_value(left.value)} versus "
+            f"{_format_evidence_value(right.value)})."
+        )
+        return (
+            claim,
+            supported,
+            (
+                "Structured comparison is confirmed by deterministic evidence."
+                if supported
+                else "Structured comparison contradicts deterministic evidence."
+            ),
+        )
+    if operator in {InsightOperator.POSITIVE, InsightOperator.NEGATIVE}:
+        numeric = _numeric_evidence(left.value)
+        supported = numeric is not None and (
+            numeric > 0 if operator is InsightOperator.POSITIVE else numeric < 0
+        )
+        direction = "positive" if operator is InsightOperator.POSITIVE else "negative"
+        return (
+            f"{_display_metric(left.metric)} is {direction} "
+            f"({_format_evidence_value(left.value)}).",
+            supported,
+            "Direction is confirmed by deterministic evidence."
+            if supported
+            else "Requested direction contradicts deterministic evidence.",
+        )
+    if operator in {
+        InsightOperator.STATISTICALLY_SIGNIFICANT,
+        InsightOperator.NOT_STATISTICALLY_SIGNIFICANT,
+    }:
+        adjusted_alpha = available.get("adjusted_alpha")
+        if (
+            not isinstance(result, StatisticalResult)
+            or left.metric != "p_value"
+            or adjusted_alpha is None
+            or "adjusted_alpha" not in selected_metrics
+        ):
+            return (
+                fallback,
+                False,
+                "Significance assertions require selected p-value and adjusted-alpha evidence.",
+            )
+        expected = operator is InsightOperator.STATISTICALLY_SIGNIFICANT
+        p_value = _numeric_evidence(left.value)
+        alpha = _numeric_evidence(adjusted_alpha.value)
+        supported = p_value is not None and alpha is not None and (p_value < alpha) is expected
+        qualifier = "statistically significant" if expected else "not statistically significant"
+        return (
+            f"The result is {qualifier} (p-value {_format_evidence_value(left.value)}, "
+            f"adjusted alpha {_format_evidence_value(adjusted_alpha.value)}).",
+            supported,
+            "Significance assertion matches the adjusted deterministic test result."
+            if supported
+            else "Significance assertion contradicts the adjusted deterministic test result.",
+        )
+    return fallback, False, "Unsupported insight assertion operator."
+
+
+def _comparison_holds(
+    left: str | int | float | bool | None,
+    right: str | int | float | bool | None,
+    operator: InsightOperator,
+) -> bool:
+    if operator is InsightOperator.EQUALS:
+        left_number, right_number = _numeric_evidence(left), _numeric_evidence(right)
+        if left_number is not None and right_number is not None:
+            return math.isclose(left_number, right_number, rel_tol=1e-9, abs_tol=1e-9)
+        return left == right
+    left_number, right_number = _numeric_evidence(left), _numeric_evidence(right)
+    if left_number is None or right_number is None:
+        return False
+    if operator is InsightOperator.GREATER_THAN:
+        return left_number > right_number
+    return left_number < right_number
+
+
+def _numeric_evidence(value: str | int | float | bool | None) -> float | None:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    return float(value)
+
+
+def _format_evidence_value(value: str | int | float | bool | None) -> str:
+    if isinstance(value, float):
+        return f"{value:.6g}"
+    return str(value)
+
+
+def _display_metric(metric: str) -> str:
+    metric_labels = {
+        "adjusted_alpha": "Adjusted alpha",
+        "anova_f": "ANOVA F statistic",
+        "chi_square": "Chi-square statistic",
+        "cohen_d": "Cohen's d",
+        "cramers_v": "Cramér's V",
+        "epsilon_squared": "Epsilon squared",
+        "eta_squared": "Eta squared",
+        "mann_whitney_u": "Mann-Whitney U statistic",
+        "odds_ratio": "Odds ratio",
+        "odds_ratio_log": "Log odds ratio",
+        "p_value": "P-value",
+        "pearson_r": "Pearson correlation",
+        "r_squared": "R-squared",
+        "rank_biserial": "Rank-biserial correlation",
+        "slope_t_test": "Slope t statistic",
+        "spearman_rho": "Spearman correlation",
+        "wald_z": "Wald z statistic",
+        "welch_t": "Welch t statistic",
+    }
+    if metric in metric_labels:
+        return metric_labels[metric]
+    row_match = re.fullmatch(r"row\[(\d+)]\.(.+)", metric)
+    if row_match:
+        row_number = int(row_match.group(1)) + 1
+        return f"{_humanize_identifier(row_match.group(2))} in result row {row_number}"
+    group_match = re.fullmatch(r"group\[([^]]+)]\.(mean|median)", metric)
+    if group_match:
+        statistic = group_match.group(2).capitalize()
+        return f"{statistic} for group {_display_group_identity(group_match.group(1))}"
+    field_metric_match = re.fullmatch(
+        r"(.+)\.(count|mean|standard_deviation|minimum|first_quartile|median|"
+        r"third_quartile|maximum|standard_error)",
+        metric,
+    )
+    if field_metric_match:
+        statistic = _humanize_identifier(field_metric_match.group(2))
+        field = _humanize_identifier(field_metric_match.group(1)).lower()
+        return f"{statistic} {field}"
+    return _humanize_identifier(metric)
+
+
+def _humanize_identifier(value: str) -> str:
+    return value.replace("_", " ").strip().capitalize()
+
+
+def _display_group_identity(value: str) -> str:
+    _, separator, encoded = value.partition(":")
+    if not separator:
+        return value
+    try:
+        decoded = json.loads(encoded)
+    except json.JSONDecodeError:
+        return value
+    return str(decoded)
+
+
+def _lower_first(value: str) -> str:
+    return value[:1].lower() + value[1:]
