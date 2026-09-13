@@ -65,6 +65,15 @@ fields through the read-only data core, caps input using deterministic reservoir
 recorded seed, and returns a verified, replayable Tool Action without exposing storage details to
 the statistical engine.
 
+### Visualization module
+
+`visualization` is a deterministic adapter from a structured `ChartIntent` and verified SQL
+`QueryResult` to JSON-safe Plotly specifications. It checks the exact Tool Action/result reference,
+Working Dataset version, result completeness, field existence and types, encoding shape, formatting
+allowlist, and basic readability limits before rendering. It never executes SQL, aggregates values,
+or accepts frontend code from the model. Milestone 5.1 supports KPI, table, histogram, bar, line, and
+scatter output; artifact lifecycle and dashboard composition remain separate application concerns.
+
 ### Orchestration module
 
 `AgentOrchestrator` exposes `start`, `resume`, and `get_state` operations for an Analysis Session.

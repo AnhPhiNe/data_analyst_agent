@@ -3,7 +3,7 @@
 A local-first, single-agent workspace for analyzing CSV and XLSX datasets through
 reproducible tools, deterministic verification, and user-curated dashboards.
 
-The project has implemented **Milestone 4 — Insights and statistics**. Product and technical decisions
+The project has implemented **Milestone 5.1 — Validated chart rendering**. Product and technical decisions
 are captured in [Spec.md](./Spec.md), while shared domain language lives in
 [CONTEXT.md](./CONTEXT.md).
 

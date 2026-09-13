@@ -20,6 +20,7 @@ dependencies = [
   "numpy>=2.3,<3",
   "openpyxl>=3.1,<4",
   "pandas>=2.3,<4",
+  "plotly>=6.3,<7",
   "pydantic>=2.12,<3",
   "scipy>=1.16,<2",
   "sqlglot>=27,<30",
@@ -58,7 +59,7 @@ strict = true
 files = ["src", "tests"]
 
 [[tool.mypy.overrides]]
-module = ["langchain_google_genai"]
+module = ["langchain_google_genai", "plotly.*"]
 ignore_missing_imports = true
 
 [tool.ruff]
