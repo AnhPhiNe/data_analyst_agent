@@ -72,7 +72,15 @@ the statistical engine.
 Working Dataset version, result completeness, field existence and types, encoding shape, formatting
 allowlist, and basic readability limits before rendering. It never executes SQL, aggregates values,
 or accepts frontend code from the model. Milestone 5.1 supports KPI, table, histogram, bar, line, and
-scatter output; artifact lifecycle and dashboard composition remain separate application concerns.
+scatter output.
+
+`ArtifactStore` owns the local Candidate/Pinned lifecycle. It records session-scoped metadata in
+SQLite and publishes immutable, versioned Plotly JSON specifications through an atomic file replace.
+Every artifact carries a typed Query Result reference and passed chart verification. Refinement is
+allowed only while an artifact is a candidate; pinning is an explicit user-controlled dashboard
+transition and never changes the referenced render version. Publication, pinning, and dashboard reads
+are grounded against the current Analysis Session dataset and Working Dataset version, so stale or
+cross-session results cannot surface as current dashboard content.
 
 ### Orchestration module
 

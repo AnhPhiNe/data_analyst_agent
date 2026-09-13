@@ -5,6 +5,7 @@ from __future__ import annotations
 from uuid import uuid4
 
 import pytest
+from pydantic import ValidationError
 
 from tabular_analytics_agent.data import QueryColumn, QueryResult
 from tabular_analytics_agent.domain import (
@@ -17,7 +18,9 @@ from tabular_analytics_agent.domain import (
     VerificationStatus,
 )
 from tabular_analytics_agent.visualization import (
+    ChartRenderResult,
     ChartValidationError,
+    make_query_result_reference,
     render_chart,
     validate_chart_intent,
 )
@@ -58,7 +61,7 @@ def intent(
     return ChartIntent(
         artifact_type=artifact_type,
         analytical_purpose="Explain the verified sales result",
-        source_result_ref=f"query-result:{result.query_id}",
+        source_result_ref=make_query_result_reference(result),
         x_field=x_field,
         y_fields=y_fields,
         color_field=color_field,
@@ -113,7 +116,7 @@ def test_supported_charts_render_json_safe_plotly_specs(
     )
 
     assert publication.verification.status is VerificationStatus.PASSED
-    assert publication.source_result_ref == f"query-result:{result.query_id}"
+    assert publication.source_result_ref == make_query_result_reference(result)
     assert publication.plotly_spec["data"][0]["type"] == expected_trace
     assert publication.plotly_spec["layout"]["title"]["text"] == "Sales result"
 
@@ -206,7 +209,13 @@ def test_invalid_intents_fail_before_plotly_rendering(
 def test_exact_result_binding_and_complete_rows_are_required() -> None:
     result = sales_result()
     candidate = intent(result, ArtifactType.BAR, x_field="region", y_fields=("revenue",))
-    mismatched = candidate.model_copy(update={"source_result_ref": "query-result:other"})
+    mismatched = candidate.model_copy(
+        update={
+            "source_result_ref": candidate.source_result_ref.model_copy(
+                update={"query_id": uuid4()}
+            )
+        }
+    )
     truncated = result.model_copy(update={"truncated": True})
 
     source_action = verified_action(result)
@@ -219,6 +228,35 @@ def test_exact_result_binding_and_complete_rows_are_required() -> None:
     ).passed
     assert completeness.status is VerificationStatus.FAILED
     assert not next(check for check in completeness.checks if check.name == "usable_result").passed
+
+
+def test_render_result_contract_requires_verified_matching_source() -> None:
+    result = sales_result()
+    publication = render_chart(
+        intent(result, ArtifactType.LINE, x_field="month", y_fields=("revenue",)),
+        result,
+        verified_action(result),
+    )
+    other_source = publication.source_result_ref.model_copy(update={"query_id": uuid4()})
+    with pytest.raises(ValidationError, match="same Query Result"):
+        ChartRenderResult(
+            intent=publication.intent,
+            source_result_ref=other_source,
+            plotly_spec=publication.plotly_spec,
+            verification=publication.verification,
+        )
+
+    failed = VerificationResult(
+        status=VerificationStatus.FAILED,
+        checks=(VerificationCheck(name="chart", passed=False, message="Chart failed."),),
+    )
+    with pytest.raises(ValidationError, match="requires passed verification"):
+        ChartRenderResult(
+            intent=publication.intent,
+            source_result_ref=publication.source_result_ref,
+            plotly_spec=publication.plotly_spec,
+            verification=failed,
+        )
 
 
 def test_renderer_never_performs_model_requested_aggregation() -> None:

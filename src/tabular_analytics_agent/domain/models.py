@@ -400,10 +400,23 @@ class StaleInsight(DomainModel):
         return self
 
 
+class QueryResultReference(DomainModel):
+    """Stable identity for the exact query result visualized by an artifact."""
+
+    query_id: UUID
+    dataset_id: UUID
+    working_dataset_version: PositiveInt
+
+    @property
+    def canonical_ref(self) -> str:
+        """Return the URI-shaped reference used by Tool Action output records."""
+        return f"query-result:{self.query_id}"
+
+
 class ChartIntent(DomainModel):
     artifact_type: ArtifactType
     analytical_purpose: NonEmptyText
-    source_result_ref: NonEmptyText
+    source_result_ref: QueryResultReference
     x_field: str | None = None
     y_fields: tuple[str, ...] = ()
     color_field: str | None = None
@@ -416,17 +429,27 @@ class ChartIntent(DomainModel):
 
 class AnalyticalArtifact(DomainModel):
     artifact_id: UUID
+    session_id: UUID
     status: ArtifactStatus = ArtifactStatus.CANDIDATE
     intent: ChartIntent
+    source_result_ref: QueryResultReference
     insight_ids: tuple[UUID, ...] = ()
     render_spec_ref: NonEmptyText
+    verification: VerificationResult
     created_at: datetime
+    updated_at: datetime
     version: PositiveInt = 1
 
     @model_validator(mode="after")
-    def require_aware_timestamp(self) -> Self:
-        if not self.created_at.tzinfo:
-            raise ValueError("created_at must be timezone-aware")
+    def validate_publication(self) -> Self:
+        if not self.created_at.tzinfo or not self.updated_at.tzinfo:
+            raise ValueError("artifact timestamps must be timezone-aware")
+        if self.updated_at < self.created_at:
+            raise ValueError("updated_at cannot be earlier than created_at")
+        if self.verification.status is not VerificationStatus.PASSED:
+            raise ValueError("an AnalyticalArtifact requires passed verification")
+        if self.source_result_ref != self.intent.source_result_ref:
+            raise ValueError("artifact and intent must reference the same Query Result")
         return self
 
 

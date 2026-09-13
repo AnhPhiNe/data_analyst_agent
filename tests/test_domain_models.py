@@ -26,6 +26,7 @@ from tabular_analytics_agent.domain import (
     InsightOperator,
     NumericSummary,
     PlanStep,
+    QueryResultReference,
     SemanticAnnotation,
     SessionStatus,
     TemporalSummary,
@@ -412,10 +413,15 @@ def test_insight_assertion_requires_operator_specific_operands() -> None:
 
 
 def test_artifact_requires_timezone_aware_timestamp() -> None:
+    source_result_ref = QueryResultReference(
+        query_id=uuid4(),
+        dataset_id=uuid4(),
+        working_dataset_version=1,
+    )
     intent = ChartIntent(
         artifact_type=ArtifactType.BAR,
         analytical_purpose="Compare regional revenue",
-        source_result_ref="results/revenue-by-region.parquet",
+        source_result_ref=source_result_ref,
         x_field="region",
         y_fields=("revenue",),
         title="Revenue by region",
@@ -423,23 +429,59 @@ def test_artifact_requires_timezone_aware_timestamp() -> None:
         formatting_intent={"currency": "USD"},
         validation_constraints=("y_fields must be numeric",),
     )
+    verification = VerificationResult(
+        status=VerificationStatus.PASSED,
+        checks=(VerificationCheck(name="chart", passed=True, message="Chart passed."),),
+    )
+    now = datetime.now(UTC)
     with pytest.raises(ValidationError, match="timezone-aware"):
         AnalyticalArtifact(
             artifact_id=uuid4(),
+            session_id=uuid4(),
             intent=intent,
+            source_result_ref=source_result_ref,
             render_spec_ref="artifacts/chart.json",
+            verification=verification,
             created_at=datetime.now(),
+            updated_at=datetime.now(),
         )
 
     artifact = AnalyticalArtifact(
         artifact_id=uuid4(),
+        session_id=uuid4(),
         intent=intent,
+        source_result_ref=source_result_ref,
         render_spec_ref="artifacts/chart.json",
-        created_at=datetime.now(UTC),
+        verification=verification,
+        created_at=now,
+        updated_at=now,
     )
     assert artifact.intent.artifact_type is ArtifactType.BAR
     assert artifact.intent.validation_constraints
     assert artifact.version == 1
+
+    with pytest.raises(ValidationError, match="earlier than created_at"):
+        AnalyticalArtifact.model_validate(
+            {
+                **artifact.model_dump(),
+                "updated_at": datetime(2020, 1, 1, tzinfo=UTC),
+            }
+        )
+
+    failed_verification = VerificationResult(
+        status=VerificationStatus.FAILED,
+        checks=(VerificationCheck(name="chart", passed=False, message="Chart failed."),),
+    )
+    with pytest.raises(ValidationError, match="requires passed verification"):
+        AnalyticalArtifact.model_validate(
+            {**artifact.model_dump(), "verification": failed_verification}
+        )
+
+    other_source = source_result_ref.model_copy(update={"query_id": uuid4()})
+    with pytest.raises(ValidationError, match="same Query Result"):
+        AnalyticalArtifact.model_validate(
+            {**artifact.model_dump(), "source_result_ref": other_source}
+        )
 
 
 def test_session_requires_source_before_working_dataset() -> None:

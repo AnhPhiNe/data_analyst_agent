@@ -13,6 +13,7 @@ from tabular_analytics_agent.domain import (
     ActionStatus,
     ArtifactType,
     ChartIntent,
+    QueryResultReference,
     ToolAction,
     VerificationCheck,
     VerificationResult,
@@ -52,13 +53,22 @@ _MAX_POINT_ROWS = 5_000
 _FORMATTING_KEYS = {"height", "number_format", "show_legend"}
 
 
+def make_query_result_reference(result: QueryResult) -> QueryResultReference:
+    """Create the typed identity used by Chart Intents and persisted artifacts."""
+    return QueryResultReference(
+        query_id=result.query_id,
+        dataset_id=result.dataset_id,
+        working_dataset_version=result.working_dataset_version,
+    )
+
+
 def validate_chart_intent(
     intent: ChartIntent,
     result: QueryResult,
     source_action: ToolAction,
 ) -> VerificationResult:
     """Check source identity, encodings, types, and MVP readability limits."""
-    expected_ref = f"query-result:{result.query_id}"
+    expected_ref = make_query_result_reference(result)
     column_types = {column.name: column.data_type for column in result.columns}
     referenced_fields = tuple(
         dict.fromkeys(
@@ -80,12 +90,12 @@ def validate_chart_intent(
             name="source_result_binding",
             passed=(
                 intent.source_result_ref == expected_ref
-                and source_action.output_ref == expected_ref
+                and source_action.output_ref == expected_ref.canonical_ref
             ),
             message=(
                 "Chart Intent and Tool Action reference the exact Query Result."
                 if intent.source_result_ref == expected_ref
-                and source_action.output_ref == expected_ref
+                and source_action.output_ref == expected_ref.canonical_ref
                 else "Chart Intent or Tool Action does not reference this Query Result."
             ),
         ),
