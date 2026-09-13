@@ -19,6 +19,8 @@ from tabular_analytics_agent.model_gateway.errors import (
 )
 from tabular_analytics_agent.model_gateway.models import RawModelResponse, StructuredModelRequest
 
+_MIN_GEMINI_TRANSPORT_TIMEOUT_SECONDS = 21.0
+
 
 class GeminiSettings(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, str_strip_whitespace=True)
@@ -27,7 +29,11 @@ class GeminiSettings(BaseModel):
     model_id: str = Field(default="gemini-3.5-flash", min_length=1)
     max_api_retries: int = Field(default=2, ge=0, le=5)
     retry_base_delay_seconds: float = Field(default=0.25, ge=0.0, le=10.0)
-    model_call_timeout_seconds: float = Field(default=30.0, gt=0.0, le=600.0)
+    model_call_timeout_seconds: float = Field(
+        default=30.0,
+        ge=_MIN_GEMINI_TRANSPORT_TIMEOUT_SECONDS,
+        le=600.0,
+    )
 
     @classmethod
     def from_environment(cls, environment: Mapping[str, str] | None = None) -> GeminiSettings:
@@ -47,7 +53,7 @@ class GeminiSettings(BaseModel):
             )
         except ValueError as exc:
             raise ModelConfigurationError(
-                "TABULAR_AGENT_MODEL_TIMEOUT_SECONDS must be a positive number up to 600"
+                "TABULAR_AGENT_MODEL_TIMEOUT_SECONDS must be between 21 and 600"
             ) from exc
 
 
@@ -97,6 +103,10 @@ class GeminiModelGateway(BaseModelGateway):
         self, request: StructuredModelRequest[ResponseT]
     ) -> RawModelResponse:
         call_timeout = min(request.timeout_seconds, self._settings.model_call_timeout_seconds)
+        if self._client is None and call_timeout < _MIN_GEMINI_TRANSPORT_TIMEOUT_SECONDS:
+            raise ModelProviderError(
+                "Gemini requires at least 21 seconds of remaining model-call budget"
+            )
         deadline = self._monotonic() + call_timeout
         retries = 0
         messages = [

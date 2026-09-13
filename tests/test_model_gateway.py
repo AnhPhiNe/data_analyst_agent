@@ -133,6 +133,13 @@ def test_settings_load_model_and_keep_key_secret() -> None:
                 "TABULAR_AGENT_MODEL_TIMEOUT_SECONDS": "invalid",
             }
         )
+    with pytest.raises(ModelConfigurationError, match="between 21 and 600"):
+        GeminiSettings.from_environment(
+            {
+                "GEMINI_API_KEY": "secret-value",
+                "TABULAR_AGENT_MODEL_TIMEOUT_SECONDS": "20",
+            }
+        )
 
 
 class FakeChatModel:
@@ -266,11 +273,7 @@ def test_gemini_adapter_uses_raw_text_when_parsed_value_is_missing() -> None:
 def test_gemini_adapter_hard_times_out_a_blocked_provider_call() -> None:
     client = BlockingChatModel()
     gateway = GeminiModelGateway(
-        GeminiSettings(
-            api_key=SecretStr("secret"),
-            model_id="gemini-test",
-            model_call_timeout_seconds=0.02,
-        ),
+        GeminiSettings(api_key=SecretStr("secret"), model_id="gemini-test"),
         client=client,
     )
     request = goal_request()
@@ -289,3 +292,20 @@ def test_gemini_adapter_hard_times_out_a_blocked_provider_call() -> None:
         client.release.set()
 
     assert len(client.calls) == 1
+
+
+def test_gemini_adapter_rejects_insufficient_transport_budget_before_network() -> None:
+    gateway = GeminiModelGateway(
+        GeminiSettings(api_key=SecretStr("secret"), model_id="gemini-test")
+    )
+    request = goal_request()
+    request = StructuredModelRequest(
+        task=request.task,
+        prompt=request.prompt,
+        response_schema=request.response_schema,
+        system_instruction=request.system_instruction,
+        timeout_seconds=20,
+    )
+
+    with pytest.raises(ModelProviderError, match="at least 21 seconds"):
+        gateway.generate_structured(request)

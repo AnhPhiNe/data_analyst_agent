@@ -56,7 +56,9 @@ Use `.env.example` as a template without committing real credentials. Provide `G
 through the process environment or a mapping such as Streamlit Secrets, and optionally override
 `TABULAR_AGENT_MODEL` and `TABULAR_AGENT_MODEL_TIMEOUT_SECONDS`; the defaults are
 `gemini-3.5-flash` and 30 seconds. The Gemini adapter uses LangChain native JSON-schema structured
-output. No automatic provider fallback is enabled.
+output. Gemini calls require at least 21 seconds of remaining transport budget and fail locally when
+less remains, avoiding a provider-side invalid-deadline request. No automatic provider fallback is
+enabled.
 
 Tests inject `FakeModelGateway` and either in-memory or SQLite checkpointers, so CI is deterministic
 and does not need credentials or network access.
