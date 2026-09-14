@@ -276,6 +276,29 @@ def test_query_claim_and_evidence_name_sql_filters() -> None:
     assert publication.evidence.filters == ("revenue >= 100",)
 
 
+def test_row_count_evidence_exists_only_for_complete_query_results() -> None:
+    profile, action, result = context()
+
+    publication = publish_insight(
+        assertion=InsightAssertion(
+            operator=InsightOperator.REPORTS, left_metric="result.row_count"
+        ),
+        evidence_metrics=("result.row_count",),
+        caveats=(),
+        profile=profile,
+        action=action,
+        result=result,
+        current_working_dataset_version=1,
+    )
+    truncated = result.model_copy(update={"truncated": True})
+
+    assert isinstance(publication, VerifiedInsight)
+    assert publication.claim == "Result row count is 2."
+    assert "result.row_count" not in {
+        value.metric for value in available_evidence_values(truncated)
+    }
+
+
 def test_missing_metric_and_stale_dataset_become_unsupported_claims() -> None:
     profile, action, result = context()
     publication = publish_insight(

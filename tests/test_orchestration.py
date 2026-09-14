@@ -947,7 +947,8 @@ def test_agent_records_unverifiable_draft_as_unsupported_claim(tmp_path: Path) -
     completed = agent.resume(request.session_id, True)
 
     assert completed["status"] == AgentRunStatus.COMPLETED
-    assert completed["verified_insights"] == []
+    # The result table still answers with its verified size when no drafted claim survives.
+    assert [item["claim"] for item in completed["verified_insights"]] == ["Result row count is 2."]
     assert completed["unsupported_claims"][0]["status"] == "unsupported"
     assert "Missing deterministic evidence metrics" in completed["unsupported_claims"][0]["reason"]
     # The unknown identifier is sent back once so the model can copy it exactly.
@@ -1254,12 +1255,18 @@ def test_insight_synthesis_omits_large_row_level_results(tmp_path: Path) -> None
 
     agent.start(request)
     completed = agent.resume(request.session_id, True)
-    synthesis_prompt = gateway.requests[-1].prompt
+    # The verified row-count claim leads to a chart proposal after synthesis.
+    synthesis_prompt = next(
+        item.prompt for item in gateway.requests if item.task.value == "insight_draft"
+    )
 
     assert completed["status"] == AgentRunStatus.COMPLETED
-    assert '"values": []' in synthesis_prompt
+    # Row cells stay out of the prompt, but the verified result size remains assertable.
+    assert '"metric": "result.row_count"' in synthesis_prompt
+    assert '"metric": "row[0].label"' not in synthesis_prompt
     assert "more than 50 rows" in synthesis_prompt
     assert "row-59" not in synthesis_prompt
+    assert [item["claim"] for item in completed["verified_insights"]] == ["Result row count is 60."]
 
 
 def test_insight_synthesis_bounds_large_assumption_catalogs(tmp_path: Path) -> None:

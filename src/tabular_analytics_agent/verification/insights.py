@@ -49,11 +49,15 @@ def semantic_annotation_fingerprint(annotations: Iterable[SemanticAnnotation]) -
 def available_evidence_values(result: EvidenceResult) -> tuple[EvidenceValue, ...]:
     """Expose exact metric identifiers that an insight draft may reference."""
     if isinstance(result, QueryResult):
-        return tuple(
+        cells = tuple(
             EvidenceValue(metric=f"row[{row_index}].{column.name}", value=row[column_index])
             for row_index, row in enumerate(result.rows)
             for column_index, column in enumerate(result.columns)
         )
+        if result.truncated:
+            # A truncated result only knows how many rows it returned, not how many matched.
+            return cells
+        return (*cells, EvidenceValue(metric="result.row_count", value=result.row_count))
 
     values: dict[str, EvidenceValue] = {
         estimate.metric: EvidenceValue(
@@ -461,6 +465,8 @@ def _format_evidence_value(value: str | int | float | bool | None) -> str:
 
 
 def _display_metric(metric: str, result: EvidenceResult) -> str:
+    if metric == "result.row_count":
+        return f"Result row count{_query_scope(result)}"
     if (
         metric == "p_value"
         and isinstance(result, StatisticalResult)

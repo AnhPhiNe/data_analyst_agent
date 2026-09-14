@@ -188,8 +188,11 @@ def render_session_manager(
                     reset_session_ui_state()
                 else:
                     _reset_session_controls()
+                deleted = summaries_by_id[selected_session_id]
                 st.session_state.session_notice = (
-                    "Session and its stored data were permanently deleted."
+                    f"Session {deleted.original_filename} ({str(selected_session_id)[:8]}) and "
+                    "its stored data were permanently deleted. Sessions with the same file name "
+                    "are separate uploads and remain until deleted."
                 )
                 st.rerun()
     else:
@@ -310,31 +313,41 @@ def render_approval(
             )
             and not proposals
         )
-        if unavailable:
+        # Without proposed annotations the agent is asking for a corrected question.
+        asks_for_question = not proposals
+        if asks_for_question:
+            choice = (
+                "accept that this metric cannot be answered from this dataset"
+                if unavailable
+                else "continue with the original question"
+            )
             st.markdown(
                 "**Choose one:** rewrite the question using the columns below and submit it, "
-                "or accept that this metric cannot be answered from this dataset."
+                f"or {choice}."
             )
             st.caption(
                 "Available columns: "
                 + ", ".join(field.name for field in workspace.data_profile.fields)
             )
         reason = st.text_input(
-            "Corrected question" if unavailable else "Correction if the proposal is wrong",
+            "Corrected question" if asks_for_question else "Correction if the proposal is wrong",
             placeholder=(
                 "Example: average salary per department"
-                if unavailable
+                if asks_for_question
                 else "Example: revenue means net revenue after returns"
             ),
             key="semantic-correction",
         )
         approve, reject = st.columns(2)
-        confirmation = (
-            "Accept that this metric is unavailable" if unavailable else "Confirm semantics"
-        )
+        if unavailable:
+            confirmation = "Accept that this metric is unavailable"
+        elif asks_for_question:
+            confirmation = "Continue with the original question"
+        else:
+            confirmation = "Confirm semantics"
         if approve.button(confirmation, type="primary", width="stretch"):
             resume_agent(application, workspace, {"approved": True})
-        submit_label = "Submit corrected question" if unavailable else "Reject and clarify"
+        submit_label = "Submit corrected question" if asks_for_question else "Reject and clarify"
         if reject.button(submit_label, width="stretch", disabled=not reason.strip()):
             resume_agent(
                 application,
@@ -590,20 +603,84 @@ def render_audit_tab(state: AgentState | None) -> None:
     if not state:
         st.info("Run an analysis to inspect its verification trail.")
         return
-    st.subheader("Tool and verification trail")
-    for action in state.get("tool_actions", []):
-        label = f"{action.get('tool_name', 'tool')} · {action.get('status', 'unknown')}"
-        with st.expander(label):
-            st.json(
-                {
-                    "action_id": action.get("action_id"),
-                    "working_dataset_version": action.get("working_dataset_version"),
-                    "output_ref": action.get("output_ref"),
-                    "duration_ms": action.get("duration_ms"),
-                    "verification_results": action.get("verification_results", []),
-                }
+    st.subheader("Tool actions")
+    actions = state.get("tool_actions", [])
+    if not actions:
+        st.caption("No Tool Action ran for this request.")
+    for index, action in enumerate(actions, start=1):
+        inputs = action.get("inputs", {})
+        status = action.get("status", "unknown")
+        label = f"{index}. {action.get('tool_name', 'tool')} · {status}"
+        with st.expander(label, expanded=status != "succeeded"):
+            fields = ", ".join(str(field) for field in inputs.get("required_fields", []))
+            st.caption(
+                f"Plan step {inputs.get('plan_step_id', '-')} · approved fields: "
+                f"{fields or 'none'} · retries: {action.get('retry_count', 0)} · "
+                f"duration: {action.get('duration_ms') or '-'} ms"
             )
-    st.subheader("Model call metadata")
+            if inputs.get("sql"):
+                st.code(inputs["sql"], language="sql")
+            if inputs.get("request"):
+                st.json(inputs["request"], expanded=False)
+            if action.get("error"):
+                st.error(action["error"])
+            checks = [
+                check
+                for verification in action.get("verification_results", [])
+                for check in verification.get("checks", [])
+            ]
+            if checks:
+                st.dataframe(
+                    pd.DataFrame(
+                        [
+                            {
+                                "check": check.get("name"),
+                                "passed": "yes" if check.get("passed") else "NO",
+                                "message": check.get("message"),
+                            }
+                            for check in checks
+                        ]
+                    ),
+                    hide_index=True,
+                    width="stretch",
+                )
+
+    st.subheader("Insight evidence")
+    insights = state.get("verified_insights", [])
+    for item in insights:
+        evidence = item.get("evidence", {})
+        with st.expander(str(item.get("claim", "Verified insight"))):
+            st.caption(
+                f"Fields: {', '.join(evidence.get('source_fields', []))} · filters: "
+                f"{'; '.join(evidence.get('filters', [])) or 'none'} · source rows: "
+                f"{evidence.get('source_row_count')} · result rows: "
+                f"{evidence.get('result_row_count')}"
+            )
+            values = evidence.get("values", [])
+            if values:
+                st.dataframe(
+                    pd.DataFrame(
+                        [
+                            {
+                                "metric": value.get("metric"),
+                                "value": str(value.get("value")),
+                                "unit": value.get("unit") or "",
+                            }
+                            for value in values
+                        ]
+                    ),
+                    hide_index=True,
+                    width="stretch",
+                )
+            st.caption(f"Missing data: {evidence.get('missing_data_handling', '-')}")
+    for item in state.get("unsupported_claims", []):
+        st.warning(
+            f"Rejected claim: {item.get('claim', '')} ({item.get('reason', 'no reason recorded')})"
+        )
+    if not insights and not state.get("unsupported_claims"):
+        st.caption("No insight was drafted for this request.")
+
+    st.subheader("Model calls")
     traces = state.get("model_traces", [])
     if traces:
         st.dataframe(
@@ -611,10 +688,12 @@ def render_audit_tab(state: AgentState | None) -> None:
                 [
                     {
                         "task": trace.get("task"),
+                        "prompt": trace.get("prompt_template_version"),
                         "model": trace.get("model_id"),
                         "latency_ms": trace.get("latency_ms"),
                         "tokens": trace.get("usage", {}).get("total_tokens"),
                         "repairs": trace.get("validation_repair_count"),
+                        "error": trace.get("error") or "",
                     }
                     for trace in traces
                 ]

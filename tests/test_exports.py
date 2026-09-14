@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import codecs
 import csv
 import io
 import json
@@ -178,7 +179,9 @@ def test_csv_preserves_unicode_quotes_none_and_newlines(tmp_path: Path) -> None:
         }
     )
 
-    decoded = export_query_result_csv(result).decode("utf-8")
+    payload = export_query_result_csv(result)
+    assert payload.startswith(codecs.BOM_UTF8)
+    decoded = payload.decode("utf-8-sig")
     rows = list(csv.reader(io.StringIO(decoded, newline="")))
 
     assert rows == [["label", "value"], ["Hà Nội,\ntrung tâm", ""]]
@@ -197,7 +200,7 @@ def test_csv_neutralizes_formula_strings_by_default_but_can_preserve_raw_text(
     )
 
     def read(payload: bytes) -> list[list[str]]:
-        return list(csv.reader(io.StringIO(payload.decode("utf-8"))))
+        return list(csv.reader(io.StringIO(payload.decode("utf-8-sig"))))
 
     safe = read(export_query_result_csv(result))
     raw = read(export_query_result_csv(result, neutralize_formula_injection=False))
@@ -423,5 +426,5 @@ def test_local_application_run_exports_its_verified_query_evidence(tmp_path: Pat
 
     assert payload["tool_actions"][0]["inputs"]["sql"] == payload["results"][0]["sql"]
     [csv_result] = evidence_query_results(request)
-    rows = list(csv.reader(io.StringIO(export_query_result_csv(csv_result).decode("utf-8"))))
+    rows = list(csv.reader(io.StringIO(export_query_result_csv(csv_result).decode("utf-8-sig"))))
     assert rows == [["total"], ["300"]]

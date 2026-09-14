@@ -121,6 +121,26 @@ def test_supported_charts_render_json_safe_plotly_specs(
     assert publication.plotly_spec["layout"]["title"]["text"] == "Sales result"
 
 
+def test_bar_uses_a_category_axis_and_kpi_shows_every_digit() -> None:
+    source = sales_result()
+    bar = render_chart(
+        intent(source, ArtifactType.BAR, x_field="quantity", y_fields=("revenue",)),
+        source,
+        verified_action(source),
+    )
+    single = source.model_copy(
+        update={"rows": (("2026-01-01", "North", 5372.0, 1),), "row_count": 1}
+    )
+    kpi = render_chart(
+        intent(single, ArtifactType.KPI, y_fields=("revenue",)),
+        single,
+        verified_action(single),
+    )
+
+    assert bar.plotly_spec["layout"]["xaxis"]["type"] == "category"
+    assert kpi.plotly_spec["data"][0]["number"]["valueformat"] == ",.12~g"
+
+
 def test_kpi_requires_one_row_and_renders_exact_value() -> None:
     source = sales_result()
     result = source.model_copy(

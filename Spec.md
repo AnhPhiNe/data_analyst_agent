@@ -216,14 +216,14 @@ Every Verified Insight contains:
 
 If required evidence is missing or validation fails, the conclusion is an Unsupported Claim and must not be displayed as a Verified Insight. A malformed insight draft becomes an Unsupported Claim without discarding the other drafts of the same run.
 
-Row-level values are described by their SQL `GROUP BY` keys (for example `year = 2024`); ungrouped results fall back to their text columns, and single-row results omit row positions. Claims about filtered query results name the SQL `WHERE`/`HAVING` conditions, which are also recorded as Evidence Trail filters, and statistics that relate two fields name both fields.
+Row-level values are described by their SQL `GROUP BY` keys (for example `year = 2024`); ungrouped results fall back to their text columns, and single-row results omit row positions. Claims about filtered query results name the SQL `WHERE`/`HAVING` conditions, which are also recorded as Evidence Trail filters, and statistics that relate two fields name both fields. When no drafted claim passes verification, each complete (untruncated), non-PII query result publishes its row count as a deterministic claim, because a row listing is answered by its table. Row listings may select `rowid + 1 AS row_number` to identify rows of the uploaded file.
 
 ### FR-11 — Charts and dashboard
 
 - The agent proposes a structured Chart Intent rather than frontend code.
 - A deterministic chart tool validates the intent and produces a Plotly-compatible specification.
 - Must-tier artifacts are KPI card, table, histogram, bar chart, line chart, and scatter plot. Box plot, heatmap, stacked bar chart, and missing-value chart are Should-tier.
-- A KPI shows exactly one value from a one-row result. A table renders every result column, so encodings supplied for a table are ignored.
+- A KPI shows exactly one value from a one-row result, with every significant digit rather than a rounded display. Bar charts use a categorical axis, so numeric keys such as months are not drawn as a continuous scale. A table renders every result column, so encodings supplied for a table are ignored.
 - Chart selection considers analytical goal, field types, cardinality, sample size, and readability.
 - Pie charts are not selected by default.
 - Candidate Artifacts appear separately from Pinned Artifacts.
@@ -245,7 +245,7 @@ The MVP exports, in priority order:
 
 PDF and generated notebooks are stretch goals.
 
-Exports include only results referenced by current Verified Insights, bound to the current session, dataset, Working Dataset version, and Semantic Annotations; evidence correctness remains the responsibility of the Verification Gates. JSON carries query schema, SQL, and counts plus full statistical results, but no result rows, model prompts, traces, or provider settings. CSV text cells and headers that could run as spreadsheet formulas are prefixed with an apostrophe.
+Exports include only results referenced by current Verified Insights, bound to the current session, dataset, Working Dataset version, and Semantic Annotations; evidence correctness remains the responsibility of the Verification Gates. JSON carries query schema, SQL, and counts plus full statistical results, but no result rows, model prompts, traces, or provider settings. CSV text cells and headers that could run as spreadsheet formulas are prefixed with an apostrophe. CSV files start with a UTF-8 byte-order mark so spreadsheet applications read Vietnamese and other non-ASCII text correctly.
 
 ## 8. Application Architecture
 
@@ -498,6 +498,8 @@ Every run records:
 
 Computations must be reproducible by preserving exact SQL or Tool Action parameters and fixed random seeds where sampling is used. A user should be able to rerun a saved Tool Action without another LLM call.
 
+The Audit view shows, for the current request, each Tool Action's exact SQL or statistical parameters, approved fields, verification checks, error, and retry count; each Verified Insight's fields, filters, row counts, and evidence values; rejected claims with their reasons; and model-call metadata including prompt-template versions and errors.
+
 LangSmith may be offered as an optional integration but is not an MVP runtime dependency.
 
 ## 17. Evaluation Specification
@@ -535,6 +537,7 @@ Grading version 2 binds expected query values to a metric (or an explicitly allo
 2. Error analysis: read failed runs and their traces, group failures by cause, and fix the most frequent cause first.
 3. Every new capability adds at least one case before it is considered done.
 4. The release stage expands to all four dataset tiers with at least 40 cases.
+5. Holdout cases and their datasets are committed before any live run and never edited afterward. A holdout whose exact question was tried manually during development moves to `tests/evaluation_cases_holdout_contaminated/` and is reported separately from clean holdouts.
 
 ### 17.4 MVP quality gates
 
@@ -698,6 +701,7 @@ Amendments from the first manual Streamlit acceptance session. A Vietnamese head
 - Claims name SQL filters and the two related fields of a statistic (FR-10).
 - SQL steps without required fields are replanned, insight drafts with unknown metric identifiers are regenerated once, and Verification Gate failures name the failed gate (Section 15).
 - Too few usable values for a statistical test become a typed `insufficient_sample` refusal instead of a failure, and evaluation credits it as a refusal (Sections 15 and 17.3).
+- Row listings publish a deterministic row-count claim when no drafted claim survives and may number source rows (FR-10); KPIs are not rounded and bar charts use categorical axes (FR-11); CSV exports carry a UTF-8 byte-order mark (FR-13); the Audit view contents are defined (Section 16); contaminated holdouts are reported separately (Section 17.3).
 
 ## 25. Implementation Contracts
 

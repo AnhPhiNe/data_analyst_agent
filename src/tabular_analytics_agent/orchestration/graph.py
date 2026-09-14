@@ -31,6 +31,8 @@ from tabular_analytics_agent.domain import (
     ChartIntent,
     DataProfile,
     ExecutionBudget,
+    InsightAssertion,
+    InsightOperator,
     PlanStatus,
     PlanStep,
     SemanticAnnotation,
@@ -227,7 +229,9 @@ def _tool_payload_guidance(step: PlanStep, handle: DatasetHandle) -> str:
         "step's required_fields are the only source columns allowed, including in filters and "
         "grouping. Give every calculated column a short ASCII snake_case alias, for example "
         "AVG(x) AS avg_x or COUNT(*) AS row_count; aliases are not source columns. For a row "
-        "count use COUNT(*) without adding an unapproved identifier column."
+        "count use COUNT(*) without adding an unapproved identifier column. To show which "
+        "uploaded rows match, select rowid + 1 AS row_number; rowid is the row's zero-based "
+        "position in the uploaded file, not a source column."
     )
 
 
@@ -627,7 +631,7 @@ def build_agent_graph(
                 else StatisticalToolRequestDraft
             ),
             system_instruction=_SYSTEM_INSTRUCTION,
-            prompt_template_version="tool-request-v6",
+            prompt_template_version="tool-request-v7",
             timeout_seconds=_model_call_timeout_seconds(state, plan.budget, clock()),
         )
         trace: ModelCallTrace | None = None
@@ -881,7 +885,7 @@ def build_agent_graph(
             ),
             response_schema=InsightDraftBatch,
             system_instruction=_SYSTEM_INSTRUCTION,
-            prompt_template_version="insight-v5",
+            prompt_template_version="insight-v6",
             max_output_tokens=2048,
             timeout_seconds=_model_call_timeout_seconds(state, plan.budget, clock()),
         )
@@ -952,6 +956,35 @@ def build_agent_graph(
                         profile=profile,
                         action=action,
                         result=_evidence_result_for_action(state, action),
+                        current_working_dataset_version=current_version,
+                        semantic_annotations=annotations,
+                    )
+                )
+            pii_fields = {field.casefold() for field in profile.pii_candidates}
+            has_verified_claim = any(isinstance(item, VerifiedInsight) for item in publications)
+            for action in () if has_verified_claim else tuple(actions.values()):
+                result = _evidence_result_for_action(state, action)
+                source_fields = {
+                    str(field).casefold() for field in action.inputs.get("required_fields", ())
+                }
+                if (
+                    not isinstance(result, QueryResult)
+                    or result.truncated
+                    or source_fields & pii_fields
+                ):
+                    continue
+                # When no drafted claim survives, a row listing is still answered by its table;
+                # state its verified size from evidence.
+                publications.append(
+                    publish_insight(
+                        assertion=InsightAssertion(
+                            operator=InsightOperator.REPORTS, left_metric="result.row_count"
+                        ),
+                        evidence_metrics=("result.row_count",),
+                        caveats=(),
+                        profile=profile,
+                        action=action,
+                        result=result,
                         current_working_dataset_version=current_version,
                         semantic_annotations=annotations,
                     )
@@ -1201,7 +1234,11 @@ def _insight_evidence_catalog(state: AgentState, profile: DataProfile) -> list[d
             omission_reason = (
                 "Evidence omitted because the bounded model-evidence budget was exhausted."
             )
-        values = [] if omission_reason else [value.model_dump(mode="json") for value in raw_values]
+        values = [
+            value.model_dump(mode="json")
+            for value in raw_values
+            if not omission_reason or value.metric == "result.row_count"
+        ]
         assumptions = (
             [
                 {

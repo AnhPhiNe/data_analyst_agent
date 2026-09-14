@@ -132,6 +132,8 @@ def test_analysis_approval_and_dashboard_pinning(
     assert state["status"] == "completed"
     assert "300" in state["verified_insights"][0]["claim"]
     assert len(gateway.requests) == 5
+    # The Audit tab shows the exact SQL that produced the verified result.
+    assert any("SELECT" in element.value for element in app.code)
     export_verified_insights_json(
         ExportRequest.from_state(
             session=app.session_state["workspace"].session,

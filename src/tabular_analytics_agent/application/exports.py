@@ -192,7 +192,8 @@ def export_query_result_csv(
     writer = csv.writer(output, lineterminator="\r\n")
     writer.writerow(cell(column.name) for column in result.columns)
     writer.writerows((cell(value) for value in row) for row in result.rows)
-    return output.getvalue().encode("utf-8")
+    # The byte-order mark lets spreadsheet applications detect UTF-8 (for example Vietnamese text).
+    return output.getvalue().encode("utf-8-sig")
 
 
 def _result_reference(result: EvidenceResult) -> str:

@@ -341,7 +341,8 @@ def _render_kpi(intent: ChartIntent, rows: list[dict[str, Any]]) -> go.Figure:
             mode="number",
             value=rows[0][field],
             title={"text": intent.labels.get(field, field)},
-            number={"valueformat": intent.formatting_intent.get("number_format", "")},
+            # Plotly's default indicator format rounds to three significant digits (5372 -> 5370).
+            number={"valueformat": intent.formatting_intent.get("number_format", ",.12~g")},
         )
     )
 
@@ -364,7 +365,10 @@ def _render_histogram(intent: ChartIntent, rows: list[dict[str, Any]]) -> go.Fig
 
 
 def _render_bar(intent: ChartIntent, rows: list[dict[str, Any]]) -> go.Figure:
-    return _render_xy(intent, rows, go.Bar)
+    figure = _render_xy(intent, rows, go.Bar)
+    # Bars label discrete groups; a numeric key such as month must not become a continuous axis.
+    figure.update_xaxes(type="category")
+    return figure
 
 
 def _render_line(intent: ChartIntent, rows: list[dict[str, Any]]) -> go.Figure:
