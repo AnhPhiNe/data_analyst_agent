@@ -1,0 +1,17 @@
+line,shift,temperature,defects,units_produced
+A,Day,20,3,500
+A,Night,21,4,480
+A,Day,19,2,510
+A,Night,22,5,470
+A,Day,20,3,505
+A,Night,21,4,490
+A,Day,20,3,500
+A,Night,21,4,485
+B,Day,26,7,450
+B,Night,27,8,440
+B,Day,25,6,460
+B,Night,28,9,430
+B,Day,26,7,455
+B,Night,27,8,445
+B,Day,26,7,450
+B,Night,25,6,465

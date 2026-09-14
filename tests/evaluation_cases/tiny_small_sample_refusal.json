@@ -1,0 +1,10 @@
+{
+  "case_id": "tiny-small-sample-refusal-v1",
+  "dataset_path": "tests/fixtures/tiny_sales.csv",
+  "dataset_sha256": "cda4f9b4c6a72ac4b49a1897aab4924bb5e2a9badbb78d88a13025406537b710",
+  "user_request": "Is the difference in revenue between North and South statistically significant?",
+  "goal_family": "comparison",
+  "expected_outcome": "refused",
+  "forbidden_claims": ["The result is statistically significant"],
+  "clarification_required": false
+}

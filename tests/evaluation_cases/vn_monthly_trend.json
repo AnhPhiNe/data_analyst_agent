@@ -1,0 +1,18 @@
+{
+  "case_id": "vn-monthly-trend-v1",
+  "dataset_path": "tests/fixtures/eval/doanh_thu_vn.csv",
+  "dataset_sha256": "400887efe66fde1c4a54d25ab7ae731873f88119e93b5a122e1c5f5b66ca40a8",
+  "user_request": "Tổng doanh thu theo từng tháng thay đổi như thế nào?",
+  "goal_family": "trend",
+  "required_calculations": [
+    {"metric": "month_1_revenue", "expected": 360, "absolute_tolerance": 0.000001},
+    {"metric": "month_2_revenue", "expected": 385, "absolute_tolerance": 0.000001},
+    {"metric": "month_3_revenue", "expected": 395, "absolute_tolerance": 0.000001},
+    {"metric": "month_4_revenue", "expected": 430, "absolute_tolerance": 0.000001}
+  ],
+  "allowed_fields": ["Tháng", "Doanh thu"],
+  "supported_conclusions": ["Tổng doanh thu tăng qua từng tháng."],
+  "forbidden_claims": ["cause"],
+  "valid_chart_types": ["line", "bar", "table"],
+  "clarification_required": false
+}

@@ -1,0 +1,14 @@
+{
+  "case_id": "quality-temperature-correlation-v1",
+  "dataset_path": "tests/fixtures/eval/quality_lines.csv",
+  "dataset_sha256": "57e0a0283c939e2547e9212d633b178186af72378d1466e7ad543eff4cf07627",
+  "user_request": "Nhiệt độ (temperature) có tương quan với số lỗi (defects) không?",
+  "goal_family": "relationship",
+  "required_calculations": [
+    {"metric": "pearson_r", "expected": 0.9893193800395275, "absolute_tolerance": 0.001}
+  ],
+  "allowed_fields": ["temperature", "defects"],
+  "supported_conclusions": ["Temperature and defects have a strong positive association that does not establish causation."],
+  "forbidden_claims": ["cause"],
+  "clarification_required": false
+}

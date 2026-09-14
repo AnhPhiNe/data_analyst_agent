@@ -20,13 +20,14 @@ from tabular_analytics_agent.model_gateway.errors import (
 from tabular_analytics_agent.model_gateway.models import RawModelResponse, StructuredModelRequest
 
 _MIN_GEMINI_TRANSPORT_TIMEOUT_SECONDS = 21.0
+DEFAULT_GEMINI_MODEL = "gemini-3.5-flash-lite"
 
 
 class GeminiSettings(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, str_strip_whitespace=True)
 
     api_key: SecretStr
-    model_id: str = Field(default="gemini-3.5-flash", min_length=1)
+    model_id: str = Field(default=DEFAULT_GEMINI_MODEL, min_length=1)
     max_api_retries: int = Field(default=2, ge=0, le=5)
     retry_base_delay_seconds: float = Field(default=0.25, ge=0.0, le=10.0)
     model_call_timeout_seconds: float = Field(
@@ -46,7 +47,7 @@ class GeminiSettings(BaseModel):
         try:
             return cls(
                 api_key=SecretStr(api_key),
-                model_id=values.get("TABULAR_AGENT_MODEL", "gemini-3.5-flash"),
+                model_id=values.get("TABULAR_AGENT_MODEL", DEFAULT_GEMINI_MODEL),
                 model_call_timeout_seconds=float(
                     values.get("TABULAR_AGENT_MODEL_TIMEOUT_SECONDS", "30")
                 ),

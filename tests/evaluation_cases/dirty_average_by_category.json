@@ -1,0 +1,17 @@
+{
+  "case_id": "dirty-average-by-category-v1",
+  "dataset_path": "tests/fixtures/eval/orders_dirty.csv",
+  "dataset_sha256": "4f5eeb09a111189b434282df856d43a34d1fc0d98f2cf8dcf3b7e0ddcb312214",
+  "user_request": "Giá trị amount trung bình của từng category là bao nhiêu?",
+  "goal_family": "summary",
+  "required_calculations": [
+    {"metric": "books_average_amount", "expected": 47.75, "absolute_tolerance": 0.000001},
+    {"metric": "electronics_average_amount", "expected": 283.5, "absolute_tolerance": 0.000001},
+    {"metric": "home_average_amount", "expected": 100.0, "absolute_tolerance": 0.000001}
+  ],
+  "allowed_fields": ["category", "amount"],
+  "supported_conclusions": ["Electronics có amount trung bình cao nhất."],
+  "forbidden_claims": ["1000000", "1,000,000"],
+  "valid_chart_types": ["bar", "table"],
+  "clarification_required": false
+}

@@ -12,7 +12,11 @@ from tabular_analytics_agent.model_gateway.errors import (
     ModelProviderError,
 )
 from tabular_analytics_agent.model_gateway.fake import FakeModelGateway
-from tabular_analytics_agent.model_gateway.gemini import GeminiModelGateway, GeminiSettings
+from tabular_analytics_agent.model_gateway.gemini import (
+    DEFAULT_GEMINI_MODEL,
+    GeminiModelGateway,
+    GeminiSettings,
+)
 from tabular_analytics_agent.model_gateway.models import (
     ModelCallTrace,
     ModelTask,
@@ -34,6 +38,7 @@ from tabular_analytics_agent.model_gateway.schemas import (
 )
 
 __all__ = [
+    "DEFAULT_GEMINI_MODEL",
     "BaseModelGateway",
     "ChartIntentDraft",
     "FakeModelGateway",

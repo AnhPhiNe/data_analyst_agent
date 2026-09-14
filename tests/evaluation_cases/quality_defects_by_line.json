@@ -1,0 +1,15 @@
+{
+  "case_id": "quality-defects-by-line-v1",
+  "dataset_path": "tests/fixtures/eval/quality_lines.csv",
+  "dataset_sha256": "57e0a0283c939e2547e9212d633b178186af72378d1466e7ad543eff4cf07627",
+  "user_request": "Số lỗi (defects) giữa line A và line B có khác biệt có ý nghĩa thống kê không?",
+  "goal_family": "comparison",
+  "required_calculations": [
+    {"metric": "line_a_mean_defects", "expected": 3.5, "absolute_tolerance": 0.000001},
+    {"metric": "line_b_mean_defects", "expected": 7.25, "absolute_tolerance": 0.000001}
+  ],
+  "allowed_fields": ["line", "defects"],
+  "supported_conclusions": ["Line B has more defects on average than line A, and the difference is statistically significant."],
+  "forbidden_claims": ["cause"],
+  "clarification_required": false
+}

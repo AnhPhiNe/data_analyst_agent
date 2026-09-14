@@ -330,6 +330,17 @@ def _evaluate_assertion(
 
     operator = assertion.operator
     if operator is InsightOperator.REPORTS:
+        row_match = re.fullmatch(r"row\[(\d+)]\.(.+)", left.metric)
+        if (
+            row_match
+            and isinstance(result, QueryResult)
+            and row_match.group(2) in result.group_by_columns
+        ):
+            return (
+                fallback,
+                False,
+                "A GROUP BY label identifies a result row; report a measured value instead.",
+            )
         return (
             f"{_display_metric(left.metric, result)} is {_format_evidence_value(left.value)}.",
             True,

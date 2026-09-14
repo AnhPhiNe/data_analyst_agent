@@ -1,0 +1,16 @@
+{
+  "case_id": "vn-revenue-by-region-v1",
+  "dataset_path": "tests/fixtures/eval/doanh_thu_vn.csv",
+  "dataset_sha256": "400887efe66fde1c4a54d25ab7ae731873f88119e93b5a122e1c5f5b66ca40a8",
+  "user_request": "Tổng doanh thu theo từng khu vực là bao nhiêu?",
+  "goal_family": "summary",
+  "required_calculations": [
+    {"metric": "bac_revenue", "expected": 515, "absolute_tolerance": 0.000001},
+    {"metric": "nam_revenue", "expected": 660, "absolute_tolerance": 0.000001},
+    {"metric": "trung_revenue", "expected": 395, "absolute_tolerance": 0.000001}
+  ],
+  "allowed_fields": ["Khu vực", "Doanh thu"],
+  "supported_conclusions": ["Nam có tổng doanh thu cao nhất."],
+  "valid_chart_types": ["bar", "table"],
+  "clarification_required": false
+}

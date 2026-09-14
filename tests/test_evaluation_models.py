@@ -8,7 +8,7 @@ import pytest
 from pydantic import ValidationError
 
 from tabular_analytics_agent.domain import ArtifactType, GoalFamily
-from tabular_analytics_agent.evaluation import GoldenCase
+from tabular_analytics_agent.evaluation import ExpectedOutcome, GoldenCase
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -23,17 +23,8 @@ def test_tiny_sales_case_is_valid_and_bound_to_fixture() -> None:
     assert hashlib.sha256(fixture_path.read_bytes()).hexdigest() == case.dataset_sha256
 
 
-@pytest.mark.parametrize(
-    "empty_field",
-    [
-        "required_calculations",
-        "allowed_fields",
-        "supported_conclusions",
-        "valid_chart_types",
-    ],
-)
-def test_golden_case_requires_gradable_expectations(empty_field: str) -> None:
-    payload: dict[str, object] = {
+def answered_case_payload() -> dict[str, object]:
+    return {
         "case_id": "invalid-case",
         "dataset_path": "tests/fixtures/tiny_sales.csv",
         "dataset_sha256": "a" * 64,
@@ -45,7 +36,33 @@ def test_golden_case_requires_gradable_expectations(empty_field: str) -> None:
         "valid_chart_types": [ArtifactType.TABLE],
         "clarification_required": False,
     }
+
+
+@pytest.mark.parametrize(
+    "empty_field",
+    [
+        "required_calculations",
+        "allowed_fields",
+        "supported_conclusions",
+    ],
+)
+def test_answered_golden_case_requires_gradable_expectations(empty_field: str) -> None:
+    payload = answered_case_payload()
     payload[empty_field] = []
 
     with pytest.raises(ValidationError):
         GoldenCase.model_validate(payload)
+
+
+def test_refusal_and_profile_cases_do_not_require_calculations() -> None:
+    for outcome in (ExpectedOutcome.REFUSED, ExpectedOutcome.PROFILE):
+        payload = {
+            **answered_case_payload(),
+            "expected_outcome": outcome,
+            "required_calculations": [],
+            "allowed_fields": [],
+            "supported_conclusions": [],
+            "valid_chart_types": [],
+        }
+
+        assert GoldenCase.model_validate(payload).expected_outcome is outcome

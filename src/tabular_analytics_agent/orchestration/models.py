@@ -110,3 +110,4 @@ class AgentState(TypedDict, total=False):
     artifact_error: str
     status: str
     error: str
+    error_kind: str

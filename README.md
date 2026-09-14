@@ -35,6 +35,15 @@ python -m mypy
 python -m pytest
 ```
 
+Run the live evaluation suite, which uses the Gemini API quota and paces requests:
+
+```powershell
+python -m tabular_analytics_agent.evaluation.runner --runs 3
+```
+
+Per-run results and a summary are written to `.eval/<timestamp>/`. Cases live in
+`tests/evaluation_cases/` and use synthetic fixtures from `tests/fixtures/`.
+
 Do not add API keys to the repository. Use `.env.example` as a local configuration template and
 provide `GOOGLE_API_KEY` through the process environment or, later, Streamlit Secrets for live
 Gemini calls. Automated tests use `FakeModelGateway` and do not call an external model.

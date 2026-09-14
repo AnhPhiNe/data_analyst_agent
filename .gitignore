@@ -17,6 +17,7 @@ htmlcov/
 
 # Local application state and user data
 .data/
+.eval/
 .sessions/
 artifacts/
 *.duckdb

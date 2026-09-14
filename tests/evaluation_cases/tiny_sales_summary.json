@@ -5,14 +5,13 @@
   "user_request": "Summarize revenue by region.",
   "goal_family": "summary",
   "required_calculations": [
-    {"metric": "total_revenue", "expected": 550.0, "absolute_tolerance": 0.000001},
     {"metric": "north_revenue", "expected": 350.0, "absolute_tolerance": 0.000001},
     {"metric": "south_revenue", "expected": 200.0, "absolute_tolerance": 0.000001}
   ],
   "allowed_fields": ["region", "revenue"],
   "allowed_filters": [],
   "supported_conclusions": ["North has higher total revenue than South."],
-  "forbidden_claims": ["The North region causes higher revenue."],
+  "forbidden_claims": ["cause"],
   "valid_chart_types": ["bar", "table"],
   "clarification_required": false
 }

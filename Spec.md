@@ -1,9 +1,9 @@
 # Tabular Analytics Agent — Product and Technical Specification
 
-**Status:** Approved
+**Status:** Approved — v1.1 targeted amendments (see Section 24)
 **Target:** Local-first MVP and AI Engineer portfolio project
 **Primary interface:** Streamlit
-**Last updated:** 2026-09-13
+**Last updated:** 2026-09-14
 
 ## 1. Product Summary
 
@@ -53,6 +53,12 @@ The MVP will not provide:
 - Automatic business decisions or operational actions.
 - Regulatory compliance certification such as GDPR or HIPAA compliance.
 
+### 4.1 MVP scope tiers
+
+- **Must:** secure CSV/XLSX ingestion; the Data Profile and profile answers; proposing and accepting Analytical Goals in English or Vietnamese; planning with read-only SQL and statistical Tool Actions; Verified Insights with Evidence Trails; Must-tier charts with Candidate and Pinned Artifacts; creating, resuming, and deleting sessions; CSV and JSON export; the evaluation runner and its quality gates.
+- **Should:** Working Dataset transformations (FR-07); Should-tier charts; HTML report export; Vietnamese user-interface text; a quota-aware model gateway.
+- **Could:** per-task model selection; additional provider adapters; PDF and notebook export.
+
 ## 5. Supported Dataset Contract
 
 A Supported Dataset is one logical rectangular table satisfying the following constraints:
@@ -72,16 +78,17 @@ The maximum size and execution limits must be configurable rather than hard-code
 2. The user uploads a CSV or XLSX Source Dataset.
 3. The application validates the file, stores it immutably, and computes its hash.
 4. The application creates a Data Profile and surfaces quality risks and possible PII.
-5. The agent asks for Semantic Annotations when ambiguity could materially change an answer.
-6. The application proposes three to five relevant Analytical Goals.
-7. The user selects a suggestion or provides a different goal.
-8. The agent displays a concise Analysis Plan.
-9. The application requests approval before a plan containing consequential data-cleaning decisions.
-10. The graph executes typed Tool Actions within configured budgets.
-11. Verification Gates check results and provenance.
-12. The agent presents Verified Insights, caveats, result tables, and Candidate Artifacts.
-13. The user may ask follow-up questions, revise an analytical assumption, or pin artifacts to the Dashboard.
-14. The user exports the analysis or deletes the entire session.
+5. The application proposes three to five relevant Analytical Goals.
+6. The user selects a suggestion or provides a different goal, in English or Vietnamese.
+7. Questions answerable from the Data Profile alone — column names, field types, row count, missing values, unique counts, quality warnings, and whole-column descriptive statistics — are answered directly from the profile without an Analysis Plan or Tool Actions.
+8. For other goals, the agent asks for Semantic Annotations when ambiguity could materially change the answer to that goal.
+9. The agent displays a concise Analysis Plan.
+10. The application pauses for approval only when a plan step requires review, including every consequential data-cleaning or transformation step; read-only plans run immediately and remain inspectable.
+11. The graph executes typed Tool Actions within configured budgets.
+12. Verification Gates check results and provenance.
+13. The agent presents Verified Insights, caveats, result tables, and Candidate Artifacts.
+14. The user may ask follow-up questions, revise an analytical assumption, or pin artifacts to the Dashboard.
+15. The user exports the analysis or deletes the entire session.
 
 ## 7. Functional Requirements
 
@@ -121,7 +128,8 @@ The Data Profile is factual evidence and must not be labeled as an insight.
 
 ### FR-04 — Semantic clarification
 
-- Detect field meanings, units, roles, or date semantics that are materially ambiguous.
+- Interpret the Analytical Goal first, then detect field meanings, units, roles, or date semantics that are materially ambiguous for that goal.
+- Default to no clarification; ask only when the ambiguity blocks a responsible answer.
 - Permit the agent to state a hypothesis but require user confirmation before relying on it.
 - Save confirmed meanings as Semantic Annotations for the current session.
 - Re-enter clarification if a later request exposes unresolved ambiguity.
@@ -139,20 +147,24 @@ The MVP supports these goal families:
 
 Driver Exploration may identify Statistical Associations but must not imply causation.
 
+Goals may be written in English or Vietnamese, and Supported Datasets may use Vietnamese headers and values.
+
 ### FR-06 — Analysis planning
 
 - Convert an Analytical Goal into a user-visible Analysis Plan.
 - A plan contains steps, expected Tool Actions, required fields, intended outputs, and known caveats.
 - Do not expose private chain-of-thought.
-- Request approval before destructive or semantically consequential transformations.
-- Permit the user to reject or revise a plan.
+- Answer questions fully covered by the Data Profile (Section 6, step 7) without creating a plan.
+- Pause for approval only when a step requires review; read-only plans run immediately and remain visible to the user.
+- Permit the user to reject or revise a plan that paused for approval.
 
-### FR-07 — Working Dataset transformations
+### FR-07 — Working Dataset transformations (Should tier)
 
 - Keep the Source Dataset immutable.
 - Apply analysis transformations only to a Working Dataset.
 - Automatically permit reversible normalization such as trimmed column names and explicit null representations.
 - Require confirmation before dropping rows, imputing values, resolving ambiguous types, removing duplicates, or treating outliers.
+- Transformation tools must require approval deterministically; a model-provided `requires_approval` flag is never the only safeguard.
 - Record every accepted transformation in the Evidence Trail.
 
 ### FR-08 — Analytical execution
@@ -189,7 +201,7 @@ Statistical tools must:
 
 Every Verified Insight contains:
 
-- A concise natural-language conclusion.
+- A concise natural-language conclusion rendered deterministically from a typed Insight Assertion (Section 25.2), never free-form model text.
 - Computed supporting values.
 - Referenced fields.
 - Filters and analysis scope.
@@ -199,13 +211,16 @@ Every Verified Insight contains:
 - Verification status.
 - An optional linked artifact.
 
-If required evidence is missing or validation fails, the conclusion is an Unsupported Claim and must not be displayed as a Verified Insight.
+If required evidence is missing or validation fails, the conclusion is an Unsupported Claim and must not be displayed as a Verified Insight. A malformed insight draft becomes an Unsupported Claim without discarding the other drafts of the same run.
+
+Row-level values are described by their SQL `GROUP BY` keys (for example `year = 2024`); ungrouped results fall back to their text columns, and single-row results omit row positions.
 
 ### FR-11 — Charts and dashboard
 
 - The agent proposes a structured Chart Intent rather than frontend code.
 - A deterministic chart tool validates the intent and produces a Plotly-compatible specification.
-- Supported initial artifacts are KPI card, table, histogram, box plot, bar chart, line chart, scatter plot, heatmap, stacked bar chart, and missing-value chart.
+- Must-tier artifacts are KPI card, table, histogram, bar chart, line chart, and scatter plot. Box plot, heatmap, stacked bar chart, and missing-value chart are Should-tier.
+- A KPI shows exactly one value from a one-row result. A table renders every result column, so encodings supplied for a table are ignored.
 - Chart selection considers analytical goal, field types, cardinality, sample size, and readability.
 - Pie charts are not selected by default.
 - Candidate Artifacts appear separately from Pinned Artifacts.
@@ -219,12 +234,11 @@ If required evidence is missing or validation fails, the conclusion is an Unsupp
 
 ### FR-13 — Export
 
-The MVP exports:
+The MVP exports, in priority order:
 
-- An interactive or self-contained HTML analytical report where feasible.
-- CSV files for result tables.
-- Machine-readable metadata for Verified Insights and Evidence Trails.
-- Reproducible SQL or typed Tool Action parameters.
+- Must: CSV files for result tables.
+- Must: machine-readable JSON metadata for Verified Insights and Evidence Trails, including reproducible SQL or typed Tool Action parameters.
+- Should: an interactive or self-contained HTML analytical report.
 
 PDF and generated notebooks are stretch goals.
 
@@ -360,8 +374,9 @@ The implementation should define versioned equivalents of these models:
 
 ### 11.1 MVP provider
 
-- Use `gemini-3.5-flash` through an API as the initial production model.
+- Use `gemini-3.5-flash-lite` through the Gemini API as the default model. `gemini-3.5-flash` was frequently overloaded during development, and the Flash-Lite free tier (15 requests per minute, 250,000 tokens per minute, and 500 requests per day when this revision was written) is sufficient for local use and small evaluation runs.
 - Configure the exact model identifier through environment-backed settings rather than scattering it through code.
+- A different model per task (for example, Flash-Lite for interpretation and Flash for planning) is permitted when evaluation shows a quality benefit.
 
 ### 11.2 Abstraction and testing
 
@@ -369,13 +384,16 @@ The implementation should define versioned equivalents of these models:
 - Provide a Gemini implementation.
 - Provide a deterministic `FakeModelGateway` for automated tests.
 - Do not implement automatic provider fallback in the MVP.
-- Permit later hosted benchmarks with Qwen3.8-27B and `gpt-oss-120b` without changing analytical tools or graph contracts.
+- Permit later hosted benchmarks with Qwen3.8-27B and `gpt-oss-120b` without changing analytical tools or graph contracts. Free tiers from Groq and Cohere were considered and deferred because their tokens-per-minute or monthly caps are tighter than Gemini Flash-Lite.
+- Model calls must respect provider quotas. Evaluation runs pace requests; a quota-aware gateway that honors `retry-after` is Should-tier.
 
 ### 11.3 Model-output rules
 
 - Use structured output for plans, tool requests, Chart Intents, and insight drafts.
 - Validate all model output before using it.
-- Allow one repair attempt for malformed structured output.
+- Allow one repair attempt for malformed structured output, passing validation messages back without echoing rejected input values.
+- Escape untrusted model output and dataset content before placing them inside prompt delimiters.
+- Record a trace for failed and retried model calls, including the error, as well as for successful calls.
 - Never accept model confidence as evidence of analytical correctness.
 
 ## 12. Storage Design
@@ -452,6 +470,9 @@ Limits must be configurable and visible in failure messages.
 - Mark failed runs clearly without converting partial output into Verified Insights.
 - Allow users to resume from a safe checkpoint.
 - Explain when the requested analysis cannot be supported because of missing fields, inadequate sample size, unresolved semantics, unsupported causal claims, or an exceeded budget.
+- Show users a plain-language failure message with a next step; keep technical details in a collapsed view and in the audit trail.
+- Classify terminal failures as provider errors (quota, overload, timeout) or analysis errors so that evaluation does not count provider outages as agent mistakes.
+- A new request in the same Analysis Session must not inherit errors or per-run results from an earlier request; confirmed Semantic Annotations persist.
 
 ## 16. Observability and Reproducibility
 
@@ -497,16 +518,27 @@ Each evaluation case includes:
 
 Numerical correctness is graded deterministically. Natural-language quality is evaluated through a documented rubric, not solely by an LLM judge.
 
-### 17.3 MVP quality gates
+Each case also declares its expected outcome: answered with Verified Insights, answered from the Data Profile, or refused safely. The evaluation runner (`python -m tabular_analytics_agent.evaluation.runner`) grades outcome, clarification behavior, computed values, values reported in Verified Insights, schema grounding against allowed fields, chart type, and forbidden claims, and it paces model calls to the provider quota.
 
-- Calculation accuracy: at least 95%.
-- Schema grounding: 100% of referenced fields exist.
-- Unsupported-claim rate: no more than 2%.
-- Tool execution success: at least 95%.
-- Chart validity: at least 95%.
+### 17.3 Evaluation process
+
+1. Smoke stage: at least 10 cases across at least 3 datasets, including Vietnamese headers, dirty data with prompt-injection text, and a refusal case, each run 3 times.
+2. Error analysis: read failed runs and their traces, group failures by cause, and fix the most frequent cause first.
+3. Every new capability adds at least one case before it is considered done.
+4. The release stage expands to all four dataset tiers with at least 40 cases.
+
+### 17.4 MVP quality gates
+
+Rates are computed per case run and exclude runs that failed because of provider errors, which are reported separately.
+
+- Calculation accuracy: at least 95% of expected values in answered cases appear in computed results.
+- Schema grounding: 100% of fields used by successful Tool Actions are allowed for the case.
+- Unsupported-claim rate: no more than 2% of Verified Insights contain a forbidden claim.
+- Tool execution success: at least 95% of runs that execute tools finish without exhausting the repair budget.
+- Chart validity: at least 95% of cases that expect a chart render one of the valid chart types.
 - Evidence completeness: 100% of Verified Insights have an Evidence Trail.
-- Clarification recall: at least 90% for materially ambiguous cases.
-- End-to-end task success: at least 85%.
+- Clarification recall: at least 90% for cases that require clarification; unnecessary clarification is reported.
+- End-to-end task success: at least 85% of runs pass every check.
 
 Latency and API cost are recorded and reported but are not hard release gates for the first MVP.
 
@@ -619,3 +651,51 @@ The repository should also contain sales and workforce case studies, an architec
 ## 23. Approval
 
 Implementation begins only after this specification is reviewed and its status is changed from `Draft for approval` to `Approved`.
+
+## 24. Revision History
+
+### v1.1 — 2026-09-14
+
+Targeted amendments based on live Gemini smoke runs. Decisions from v1.0 remain in force unless changed here.
+
+- Added MVP scope tiers (Section 4.1); Working Dataset transformations moved to the Should tier.
+- Journey: profile answers precede planning, clarification follows goal interpretation, and approval is required only for steps that need review (Section 6, FR-04, FR-06).
+- Vietnamese goals and datasets are Must-tier (FR-05).
+- Verified Insight text is rendered from typed assertions, and malformed drafts become Unsupported Claims (FR-10, Section 25.2).
+- Chart tiers and KPI/table encoding rules (FR-11); export priorities (FR-13).
+- Default model changed to `gemini-3.5-flash-lite`; model-output escaping and failed-call traces (Section 11).
+- Failure messaging, error classification, and per-request state isolation (Section 15).
+- Evaluation outcomes, runner, process, and gate denominators (Section 17).
+- Added the Tool Catalog, Insight Assertion contract, and Configuration reference (Section 25).
+
+Known gaps at v1.1: session listing, resume, and deletion in the UI; goal suggestions; export; Should-tier charts; extracting SQL filters into Evidence Trails; environment-configurable resource limits and execution budgets; and a quota-aware model gateway.
+
+## 25. Implementation Contracts
+
+### 25.1 Tool Catalog
+
+| Tool | Input | Output | Constraints |
+|---|---|---|---|
+| `read_only_sql` | One DuckDB `SELECT` or `WITH ... SELECT` over the single table named `dataset`; its source columns must equal the approved step's `required_fields` | `QueryResult`: columns, rows, row count, truncation flag, normalized SQL, and `GROUP BY` output columns | No wildcard projections, schema catalogs, external-access functions, or other tables |
+| `statistical_analysis` | The approved operation plus the parameters its rule requires (the operation rule table in `statistics.models`) | `StatisticalResult`: estimates, test statistic, p-value, adjusted alpha, effect size, assumption checks, and warnings | Runs on a deterministic reservoir sample of at most the configured query row limit |
+
+Questions fully covered by the Data Profile are answered without a tool (Section 6, step 7).
+
+### 25.2 Insight Assertion
+
+- The model selects a typed assertion instead of writing the claim: `reports`, `equals`, `greater_than`, `less_than`, `positive`, `negative`, `statistically_significant`, or `not_statistically_significant`.
+- Metrics are exact identifiers from the evidence catalog: `row[i].column` for query results, and names such as `pearson_r`, `p_value`, `adjusted_alpha`, or `group[...].mean` for statistical results.
+- Comparison operators require a right metric; the other operators must not have one. Significance assertions use `p_value` as the left metric and must also select `adjusted_alpha`.
+- The claim sentence is rendered deterministically and is published only when every Verification Gate passes.
+
+### 25.3 Configuration
+
+| Setting | Source | Default |
+|---|---|---|
+| Gemini API key | `GOOGLE_API_KEY` or `GEMINI_API_KEY` | None; required for live runs |
+| Model identifier | `TABULAR_AGENT_MODEL` | `gemini-3.5-flash-lite` |
+| Model call timeout | `TABULAR_AGENT_MODEL_TIMEOUT_SECONDS` | 30 seconds (minimum 21) |
+| Data directory | `TABULAR_AGENT_DATA_DIR` | `.data` |
+| Resource limits (`DataCoreLimits`) | Code defaults; not yet environment-configurable | 100 MB file, 10,000 query rows, 30-second query timeout, 512 MB DuckDB memory, 500 MB uncompressed XLSX, compression ratio 100, 5 profile top values |
+| Execution budget (`ExecutionBudget`) | Code defaults; not yet environment-configurable | 12 Tool Actions, 2 repairs per action, 30-second model and tool timeouts, 300-second active run time |
+| Evaluation pacing | Evaluation runner `--rpm` option | 15 requests per minute |

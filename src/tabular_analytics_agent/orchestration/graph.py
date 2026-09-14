@@ -161,6 +161,7 @@ class AgentOrchestrator:
             # A new request must not inherit per-run outputs or errors from an earlier request;
             # confirmed semantic annotations intentionally persist within the session.
             "error": "",
+            "error_kind": "",
             "clarification_question": "",
             "proposed_annotations": [],
             "query_result": {},
@@ -721,12 +722,15 @@ def build_agent_graph(
                 "less_than, or equals between the compared metrics; use reports only for a "
                 "single value. The reports, positive, negative, and significance operators take "
                 "a null right_metric. Create an assertion for every value or comparison the "
-                "analytical goal asks for, not only the first one. Include material caveats; "
-                "never infer causation from association."
+                "analytical goal asks for, not only the first one. Columns listed in "
+                "group_by_columns label result rows: assert on the measured values of each "
+                "group, never on the labels themselves. For a statistical comparison, also "
+                "report the estimate of each compared group. Include material caveats; never "
+                "infer causation from association."
             ),
             response_schema=InsightDraftBatch,
             system_instruction=_SYSTEM_INSTRUCTION,
-            prompt_template_version="insight-v3",
+            prompt_template_version="insight-v4",
             max_output_tokens=2048,
             timeout_seconds=_model_call_timeout_seconds(state, plan.budget, clock()),
         )
@@ -1034,6 +1038,9 @@ def _insight_evidence_catalog(state: AgentState, profile: DataProfile) -> list[d
         entry: dict[str, Any] = {
             "plan_step_id": _bounded_prompt_text(str(action.inputs.get("plan_step_id", ""))),
             "tool_name": action.tool_name,
+            "group_by_columns": (
+                list(result.group_by_columns) if isinstance(result, QueryResult) else []
+            ),
             "source_fields": [
                 _bounded_prompt_text(value) for value in source_fields[:_MAX_MODEL_SOURCE_FIELDS]
             ],
@@ -1289,6 +1296,7 @@ def _failed_state(state: AgentState, error: Exception, now: datetime) -> AgentSt
     return {
         "status": AgentRunStatus.FAILED.value,
         "error": _safe_error(error),
+        "error_kind": "provider" if isinstance(error, ModelProviderError) else "analysis",
         **_pause_execution_budget(state, now),
     }
 

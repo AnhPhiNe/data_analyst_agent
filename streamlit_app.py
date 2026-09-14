@@ -17,6 +17,7 @@ from tabular_analytics_agent.application import (
     StagedUpload,
 )
 from tabular_analytics_agent.model_gateway import (
+    DEFAULT_GEMINI_MODEL,
     GeminiModelGateway,
     GeminiSettings,
     ModelConfigurationError,
@@ -421,7 +422,7 @@ def render_upload(application: LocalAnalysisApplication) -> None:
 
 def main() -> None:
     data_root = os.getenv("TABULAR_AGENT_DATA_DIR", ".data")
-    model_id = os.getenv("TABULAR_AGENT_MODEL", "gemini-3.5-flash")
+    model_id = os.getenv("TABULAR_AGENT_MODEL", DEFAULT_GEMINI_MODEL)
     try:
         application = build_application(data_root, model_id)
     except ModelConfigurationError as exc:

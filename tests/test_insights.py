@@ -219,6 +219,24 @@ def test_single_row_claim_omits_row_position() -> None:
     assert publication.claim == "Avg revenue is 110."
 
 
+def test_reporting_a_group_by_label_is_unsupported() -> None:
+    profile, action, result = context()
+    grouped = result.model_copy(update={"group_by_columns": ("region",)})
+
+    publication = publish_insight(
+        assertion=InsightAssertion(operator=InsightOperator.REPORTS, left_metric="row[0].region"),
+        evidence_metrics=("row[0].region",),
+        caveats=(),
+        profile=profile,
+        action=action,
+        result=grouped,
+        current_working_dataset_version=1,
+    )
+
+    assert isinstance(publication, UnsupportedClaim)
+    assert "GROUP BY label" in publication.reason
+
+
 def test_missing_metric_and_stale_dataset_become_unsupported_claims() -> None:
     profile, action, result = context()
     publication = publish_insight(

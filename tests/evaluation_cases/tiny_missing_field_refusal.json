@@ -1,0 +1,10 @@
+{
+  "case_id": "tiny-missing-field-refusal-v1",
+  "dataset_path": "tests/fixtures/tiny_sales.csv",
+  "dataset_sha256": "cda4f9b4c6a72ac4b49a1897aab4924bb5e2a9badbb78d88a13025406537b710",
+  "user_request": "Lợi nhuận (profit) theo từng khu vực là bao nhiêu?",
+  "goal_family": "summary",
+  "expected_outcome": "refused",
+  "forbidden_claims": ["profit"],
+  "clarification_required": false
+}

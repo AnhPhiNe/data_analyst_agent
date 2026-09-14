@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from enum import StrEnum
 from typing import Annotated, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -13,6 +14,12 @@ NonEmptyText = Annotated[str, Field(min_length=1)]
 
 class EvaluationModel(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, str_strip_whitespace=True)
+
+
+class ExpectedOutcome(StrEnum):
+    ANSWERED = "answered"
+    PROFILE = "profile"
+    REFUSED = "refused"
 
 
 class ExpectedCalculation(EvaluationModel):
@@ -27,22 +34,23 @@ class GoldenCase(EvaluationModel):
     dataset_sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
     user_request: NonEmptyText
     goal_family: GoalFamily
-    required_calculations: tuple[ExpectedCalculation, ...]
-    allowed_fields: tuple[str, ...]
+    expected_outcome: ExpectedOutcome = ExpectedOutcome.ANSWERED
+    required_calculations: tuple[ExpectedCalculation, ...] = ()
+    allowed_fields: tuple[str, ...] = ()
     allowed_filters: tuple[str, ...] = ()
-    supported_conclusions: tuple[str, ...]
+    supported_conclusions: tuple[str, ...] = ()
     forbidden_claims: tuple[str, ...] = ()
-    valid_chart_types: tuple[ArtifactType, ...]
-    clarification_required: bool
+    valid_chart_types: tuple[ArtifactType, ...] = ()
+    clarification_required: bool = False
 
     @model_validator(mode="after")
     def require_gradable_expectations(self) -> Self:
+        if self.expected_outcome is not ExpectedOutcome.ANSWERED:
+            return self
         if not self.required_calculations:
-            raise ValueError("a golden case requires at least one calculation")
+            raise ValueError("an answered golden case requires at least one calculation")
         if not self.allowed_fields:
-            raise ValueError("a golden case requires allowed fields")
+            raise ValueError("an answered golden case requires allowed fields")
         if not self.supported_conclusions:
-            raise ValueError("a golden case requires supported conclusions")
-        if not self.valid_chart_types:
-            raise ValueError("a golden case requires at least one valid chart type")
+            raise ValueError("an answered golden case requires supported conclusions")
         return self
