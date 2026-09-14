@@ -35,8 +35,8 @@ These items are in integration review until the verification record below is com
 
 ## Release work still required
 
-- Implement the Must-tier goal-suggestion flow (Spec Section 6, step 5). As of Spec v1.2 no
-  suggestion code exists; the user must type every goal.
+- Goal suggestions (Spec Section 6, step 5) are implemented deterministically from the Data
+  Profile and offered before the first question; a manual Streamlit review remains.
 - Check every Must-tier workflow in Streamlit: upload, profile, clarification, approval, result,
   chart, pin/unpin, open another session, reopen after restart, export, and confirmed deletion.
 - Run live smoke evaluation with grading version 2 or later: at least 10 cases, 3 datasets,

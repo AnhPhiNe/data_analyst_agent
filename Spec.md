@@ -152,6 +152,8 @@ Driver Exploration may identify Statistical Associations but must not imply caus
 
 Goals may be written in English or Vietnamese, and Supported Datasets may use Vietnamese headers and values.
 
+After profiling, the application proposes three to five goals derived deterministically from the Data Profile's field kinds (comparison, relationship, trend, two-group significance, data quality, summary, and structure). Suggestions make no model call and never name possible PII or identifier-like fields. The user may select a suggestion or write a different goal.
+
 ### FR-06 — Analysis planning
 
 - Convert an Analytical Goal into a user-visible Analysis Plan.
@@ -711,6 +713,7 @@ Amendments from the first manual Streamlit acceptance session. A Vietnamese head
 - After holdout v3: SQL may read a subset of the approved fields, duplicate-row questions are answered from the Data Profile, and rejected API keys leave the rotation (Sections 6, 11.2, and 25.1).
 - Simplification: the automatic row-count claim and the goal-interpretation field repair were removed (field ids address the cause), SQL alias guidance was shortened, and a provider error during chart proposal is classified as a provider error (FR-10 and Section 15).
 - After holdout v4 (33/36): significance questions require a statistical analysis step, a failure class seen on two datasets (FR-06).
+- Goal suggestions: three to five deterministic goals from the Data Profile, offered before the first question (FR-05 and Section 6, step 5).
 
 ## 25. Implementation Contracts
 

@@ -24,6 +24,7 @@ from tabular_analytics_agent.application.exports import (
     export_query_result_csv,
     export_verified_insights_json,
 )
+from tabular_analytics_agent.application.suggestions import suggest_goals
 from tabular_analytics_agent.model_gateway import (
     DEFAULT_GEMINI_MODEL,
     GeminiModelGateway,
@@ -554,6 +555,13 @@ def render_analyze_tab(
             with st.expander("Technical details"):
                 st.code(state.get("error") or "No error detail was recorded.", language=None)
 
+    suggested_goal = None
+    if not state and not st.session_state.get("messages"):
+        st.caption("Suggested goals from the Data Profile (or ask your own question below)")
+        for index, goal in enumerate(suggest_goals(workspace.data_profile)):
+            if st.button(goal, key=f"suggested-goal-{index}"):
+                suggested_goal = goal
+
     waiting = bool(
         state
         and state.get("status")
@@ -562,10 +570,13 @@ def render_analyze_tab(
             AgentRunStatus.AWAITING_PLAN_APPROVAL,
         }
     )
-    prompt = st.chat_input(
-        "Ask a question about this dataset",
-        disabled=waiting,
-        key="analysis-question",
+    prompt = (
+        st.chat_input(
+            "Ask a question about this dataset",
+            disabled=waiting,
+            key="analysis-question",
+        )
+        or suggested_goal
     )
     if prompt:
         st.session_state.setdefault("messages", []).append({"role": "user", "content": prompt})

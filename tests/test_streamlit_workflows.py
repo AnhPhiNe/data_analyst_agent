@@ -99,6 +99,22 @@ def test_profile_shows_numeric_statistics_without_approval_or_model_calls(
     assert not gateway.requests
 
 
+def test_suggested_goal_starts_analysis_like_a_typed_question(
+    ui_workspace: tuple[AppTest, AnalysisWorkspace, LocalAnalysisApplication, FakeModelGateway],
+) -> None:
+    app, _, _, gateway = ui_workspace
+    app.run()
+    goal = "What is the average revenue for each region?"
+    assert not gateway.requests
+
+    next(button for button in app.button if button.label == goal).click().run()
+
+    assert not app.exception
+    assert app.session_state["messages"][0]["content"] == goal
+    assert app.session_state["agent_state"]["user_request"] == goal
+    assert not any(button.label == goal for button in app.button)
+
+
 def test_staged_upload_opens_profile_workspace_without_model_calls(
     ui_workspace: tuple[AppTest, AnalysisWorkspace, LocalAnalysisApplication, FakeModelGateway],
 ) -> None:
