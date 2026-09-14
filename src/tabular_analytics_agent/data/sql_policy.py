@@ -33,6 +33,7 @@ class SQLAnalysis:
     normalized_sql: str
     referenced_columns: tuple[str, ...]
     has_wildcard: bool
+    group_by_columns: tuple[str, ...] = ()
 
 
 def validate_read_only_sql(sql: str, *, allowed_table: str) -> str:
@@ -126,6 +127,7 @@ def analyze_read_only_sql(sql: str, *, allowed_table: str) -> SQLAnalysis:
             isinstance(star.parent, (exp.Select, exp.Column))
             for star in statement.find_all(exp.Star)
         ),
+        group_by_columns=_group_by_output_columns(statement),
     )
 
 
@@ -150,3 +152,33 @@ def _output_alias_references(statement: exp.Query) -> set[int]:
             and column.name.casefold() in output_aliases
         )
     return references
+
+
+def _group_by_output_columns(statement: exp.Query) -> tuple[str, ...]:
+    """Return the output column names that are GROUP BY keys of the outer SELECT.
+
+    Handles grouping by column, expression, output alias, ordinal position, and GROUP BY ALL.
+    """
+    group = statement.args.get("group")
+    if not isinstance(statement, exp.Select) or not isinstance(group, exp.Group):
+        return ()
+    projections = statement.expressions
+    keys: list[exp.Expression] = []
+    if group.args.get("all"):
+        keys = [projection for projection in projections if not projection.find(exp.AggFunc)]
+    for key in group.expressions:
+        if isinstance(key, exp.Literal) and key.is_int:
+            position = int(key.name) - 1
+            keys.extend(projections[position : position + 1] if position >= 0 else ())
+            continue
+        keys.extend(
+            projection
+            for projection in projections
+            if projection.unalias() == key
+            or (
+                isinstance(key, exp.Column)
+                and not key.table
+                and key.name.casefold() == projection.alias_or_name.casefold()
+            )
+        )
+    return tuple(dict.fromkeys(item.alias_or_name for item in keys if item.alias_or_name))

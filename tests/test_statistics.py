@@ -302,7 +302,7 @@ def test_request_and_result_contracts_reject_incomplete_inputs() -> None:
             operation=StatisticalOperation.DESCRIPTIVE,
             value_fields=("value", "value"),
         )
-    with pytest.raises(ValidationError, match="requires positive_class"):
+    with pytest.raises(ValidationError, match="requires: positive_class"):
         StatisticalRequest(
             operation=StatisticalOperation.LOGISTIC_REGRESSION,
             x_field="x",

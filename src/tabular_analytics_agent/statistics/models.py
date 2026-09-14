@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from enum import StrEnum
 from typing import Annotated, Any, Self
 from uuid import UUID
@@ -40,6 +41,79 @@ class AlternativeHypothesis(StrEnum):
     TWO_SIDED = "two-sided"
     LESS = "less"
     GREATER = "greater"
+
+
+@dataclass(frozen=True, slots=True)
+class _OperationRule:
+    """Parameter contract for one operation, shared by request validation and model prompts."""
+
+    required: tuple[str, ...]
+    note: str
+    two_groups: bool = False
+    one_sided: bool = False
+
+
+_TWO_GROUP_NOTE = (
+    "value_field is the numeric measure and group_field defines exactly two groups; "
+    "group_order lists those two group values exactly as they appear in the data."
+)
+_MULTI_GROUP_NOTE = "value_field is the numeric measure and group_field defines two or more groups."
+_OPERATION_RULES: dict[StatisticalOperation, _OperationRule] = {
+    StatisticalOperation.DESCRIPTIVE: _OperationRule(
+        ("value_fields",), "value_fields lists the numeric fields to summarize."
+    ),
+    StatisticalOperation.CONFIDENCE_INTERVAL: _OperationRule(
+        ("value_field",), "value_field is the single numeric field."
+    ),
+    StatisticalOperation.T_TEST: _OperationRule(
+        ("value_field", "group_field", "group_order"),
+        _TWO_GROUP_NOTE,
+        two_groups=True,
+        one_sided=True,
+    ),
+    StatisticalOperation.MANN_WHITNEY: _OperationRule(
+        ("value_field", "group_field", "group_order"),
+        _TWO_GROUP_NOTE,
+        two_groups=True,
+        one_sided=True,
+    ),
+    StatisticalOperation.ANOVA: _OperationRule(("value_field", "group_field"), _MULTI_GROUP_NOTE),
+    StatisticalOperation.KRUSKAL_WALLIS: _OperationRule(
+        ("value_field", "group_field"), _MULTI_GROUP_NOTE
+    ),
+    StatisticalOperation.CORRELATION: _OperationRule(
+        ("x_field", "y_field"),
+        "x_field and y_field are the two numeric fields.",
+        one_sided=True,
+    ),
+    StatisticalOperation.CHI_SQUARE: _OperationRule(
+        ("x_field", "y_field"), "x_field and y_field are the two categorical fields."
+    ),
+    StatisticalOperation.LINEAR_REGRESSION: _OperationRule(
+        ("x_field", "y_field"),
+        "x_field is the numeric predictor and y_field is the numeric outcome.",
+        one_sided=True,
+    ),
+    StatisticalOperation.LOGISTIC_REGRESSION: _OperationRule(
+        ("x_field", "y_field", "positive_class"),
+        "x_field is the numeric predictor, y_field is the binary outcome, and positive_class "
+        "is the outcome value counted as the event.",
+    ),
+}
+
+
+def parameter_guide(operation: StatisticalOperation) -> str:
+    """Describe the exact parameters a model must supply for one statistical operation."""
+    rule = _OPERATION_RULES[operation]
+    alternative = (
+        "alternative stays two-sided unless the approved step explicitly requires a one-sided test."
+        if rule.one_sided
+        else "alternative must stay two-sided."
+    )
+    return (
+        f"{operation.value} requires: {', '.join(rule.required)}. {rule.note} "
+        f"{alternative} Leave every other parameter null, empty, or at its default."
+    )
 
 
 class AssumptionStatus(StrEnum):
@@ -89,19 +163,15 @@ class StatisticalRequest(StatisticsModel):
 
     @model_validator(mode="after")
     def fields_match_operation(self) -> Self:
-        missing = [name for name in _REQUIRED_FIELDS[self.operation] if not getattr(self, name)]
+        rule = _OPERATION_RULES[self.operation]
+        missing = [name for name in rule.required if getattr(self, name) in (None, (), "")]
         if missing:
             raise ValueError(f"{self.operation.value} requires: {', '.join(missing)}")
         if self.operation is StatisticalOperation.DESCRIPTIVE and len(
             set(self.value_fields)
         ) != len(self.value_fields):
             raise ValueError("descriptive fields must be unique")
-        if (
-            self.operation is StatisticalOperation.LOGISTIC_REGRESSION
-            and self.positive_class is None
-        ):
-            raise ValueError("logistic_regression requires positive_class")
-        if self.operation in _TWO_GROUP_OPERATIONS:
+        if rule.two_groups:
             if len(self.group_order) != 2:
                 raise ValueError(f"{self.operation.value} requires two ordered group identities")
             left, right = self.group_order
@@ -109,10 +179,7 @@ class StatisticalRequest(StatisticsModel):
                 raise ValueError("ordered group identities must be distinct")
         elif self.group_order:
             raise ValueError("group_order applies only to two-group tests")
-        if (
-            self.alternative is not AlternativeHypothesis.TWO_SIDED
-            and self.operation not in _ONE_SIDED_OPERATIONS
-        ):
+        if self.alternative is not AlternativeHypothesis.TWO_SIDED and not rule.one_sided:
             raise ValueError(f"{self.operation.value} supports only a two-sided alternative")
         return self
 
@@ -164,68 +231,3 @@ class StatisticalResult(StatisticsModel):
         if not self.estimates:
             raise ValueError("statistical results require computed estimates")
         return self
-
-
-_REQUIRED_FIELDS: dict[StatisticalOperation, tuple[str, ...]] = {
-    StatisticalOperation.DESCRIPTIVE: ("value_fields",),
-    StatisticalOperation.CONFIDENCE_INTERVAL: ("value_field",),
-    StatisticalOperation.T_TEST: ("value_field", "group_field"),
-    StatisticalOperation.MANN_WHITNEY: ("value_field", "group_field"),
-    StatisticalOperation.ANOVA: ("value_field", "group_field"),
-    StatisticalOperation.KRUSKAL_WALLIS: ("value_field", "group_field"),
-    StatisticalOperation.CORRELATION: ("x_field", "y_field"),
-    StatisticalOperation.CHI_SQUARE: ("x_field", "y_field"),
-    StatisticalOperation.LINEAR_REGRESSION: ("x_field", "y_field"),
-    StatisticalOperation.LOGISTIC_REGRESSION: ("x_field", "y_field"),
-}
-_ADDITIONAL_REQUIRED_PARAMETERS: dict[StatisticalOperation, tuple[str, ...]] = {
-    StatisticalOperation.T_TEST: ("group_order",),
-    StatisticalOperation.MANN_WHITNEY: ("group_order",),
-    StatisticalOperation.LOGISTIC_REGRESSION: ("positive_class",),
-}
-_TWO_GROUP_OPERATIONS = {StatisticalOperation.T_TEST, StatisticalOperation.MANN_WHITNEY}
-_ONE_SIDED_OPERATIONS = {
-    StatisticalOperation.CORRELATION,
-    StatisticalOperation.T_TEST,
-    StatisticalOperation.MANN_WHITNEY,
-    StatisticalOperation.LINEAR_REGRESSION,
-}
-_TWO_GROUP_NOTE = (
-    "value_field is the numeric measure and group_field defines exactly two groups; "
-    "group_order lists those two group values exactly as they appear in the data."
-)
-_MULTI_GROUP_NOTE = "value_field is the numeric measure and group_field defines two or more groups."
-_PARAMETER_NOTES: dict[StatisticalOperation, str] = {
-    StatisticalOperation.DESCRIPTIVE: "value_fields lists the numeric fields to summarize.",
-    StatisticalOperation.CONFIDENCE_INTERVAL: "value_field is the single numeric field.",
-    StatisticalOperation.T_TEST: _TWO_GROUP_NOTE,
-    StatisticalOperation.MANN_WHITNEY: _TWO_GROUP_NOTE,
-    StatisticalOperation.ANOVA: _MULTI_GROUP_NOTE,
-    StatisticalOperation.KRUSKAL_WALLIS: _MULTI_GROUP_NOTE,
-    StatisticalOperation.CORRELATION: "x_field and y_field are the two numeric fields.",
-    StatisticalOperation.CHI_SQUARE: "x_field and y_field are the two categorical fields.",
-    StatisticalOperation.LINEAR_REGRESSION: (
-        "x_field is the numeric predictor and y_field is the numeric outcome."
-    ),
-    StatisticalOperation.LOGISTIC_REGRESSION: (
-        "x_field is the numeric predictor, y_field is the binary outcome, and positive_class "
-        "is the outcome value counted as the event."
-    ),
-}
-
-
-def parameter_guide(operation: StatisticalOperation) -> str:
-    """Describe the exact parameters a model must supply for one statistical operation."""
-    required = (
-        *_REQUIRED_FIELDS[operation],
-        *_ADDITIONAL_REQUIRED_PARAMETERS.get(operation, ()),
-    )
-    alternative = (
-        "alternative stays two-sided unless the approved step explicitly requires a one-sided test."
-        if operation in _ONE_SIDED_OPERATIONS
-        else "alternative must stay two-sided."
-    )
-    return (
-        f"{operation.value} requires: {', '.join(required)}. {_PARAMETER_NOTES[operation]} "
-        f"{alternative} Leave every other parameter null, empty, or at its default."
-    )

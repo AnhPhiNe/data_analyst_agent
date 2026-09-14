@@ -63,7 +63,6 @@ def model_outputs() -> list[dict[str, object]]:
         {
             "artifact_type": "bar",
             "analytical_purpose": "Compare regional totals",
-            "source_result_ref": "latest_verified_query",
             "x_field": "region",
             "y_fields": ["revenue"],
             "color_field": None,

@@ -243,6 +243,7 @@ class TabularDataCore:
             normalized_sql=analysis.normalized_sql,
             referenced_columns=analysis.referenced_columns,
             has_wildcard=analysis.has_wildcard,
+            group_by_columns=analysis.group_by_columns,
         )
 
     def query(
@@ -305,6 +306,11 @@ class TabularDataCore:
             row_count=len(rows),
             truncated=truncated,
             duration_ms=duration_ms,
+            group_by_columns=tuple(
+                name
+                for name in inspection.group_by_columns
+                if any(column.name == name for column in columns)
+            ),
         )
 
     def _inspect_xlsx(self, path: Path) -> tuple[str, ...]:

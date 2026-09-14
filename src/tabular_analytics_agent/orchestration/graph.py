@@ -52,6 +52,7 @@ from tabular_analytics_agent.model_gateway import (
     SQLToolRequestDraft,
     StatisticalToolRequestDraft,
     StructuredModelRequest,
+    validation_error_detail,
 )
 from tabular_analytics_agent.orchestration.models import (
     AgentRunRequest,
@@ -220,12 +221,6 @@ def _draft_claim_text(draft: InsightDraft) -> str:
     assertion = draft.assertion
     right = assertion.right_metric or ""
     return f"{assertion.left_metric} {assertion.operator.value} {right}".strip()
-
-
-def _validation_message(error: ValueError) -> str:
-    if isinstance(error, ValidationError):
-        return "; ".join(str(item["msg"]) for item in error.errors(include_url=False))
-    return str(error) or type(error).__name__
 
 
 def build_agent_graph(
@@ -749,7 +744,7 @@ def build_agent_graph(
                     publications.append(
                         reject_insight_draft(
                             claim=_draft_claim_text(draft),
-                            reason=_validation_message(exc),
+                            reason=validation_error_detail(exc),
                         )
                     )
                     continue
@@ -825,12 +820,12 @@ def build_agent_graph(
                 "Propose one readable chart using only these supported artifact types: "
                 "kpi, table, histogram, bar, line, scatter. Choose based on the analytical goal, "
                 "field types, cardinality, and row count. Use only exact result column names in "
-                "encodings and labels. Set source_result_ref to 'latest_verified_query'. Set "
-                "aggregation to null because aggregation already happened in verified SQL."
+                "encodings and labels. Set aggregation to null because aggregation already "
+                "happened in verified SQL."
             ),
             response_schema=ChartIntentDraft,
             system_instruction=_SYSTEM_INSTRUCTION,
-            prompt_template_version="chart-intent-v2",
+            prompt_template_version="chart-intent-v3",
             max_output_tokens=1024,
             timeout_seconds=_model_call_timeout_seconds(state, plan.budget, clock()),
         )
@@ -841,8 +836,6 @@ def build_agent_graph(
             if _run_budget_exceeded(state, plan.budget, clock()):
                 return _failed_state(state, _budget_error(plan.budget), clock())
             draft = response.output
-            if draft.source_result_ref != "latest_verified_query":
-                raise ValueError("Chart Intent selected an unrecognized Query Result reference")
             intent = ChartIntent(
                 artifact_type=ArtifactType(draft.artifact_type),
                 analytical_purpose=draft.analytical_purpose,
@@ -1242,7 +1235,6 @@ def _chart_source_for_verified_insight(state: AgentState) -> tuple[QueryResult, 
 def _chart_result_metadata(result: QueryResult, profile: DataProfile) -> dict[str, Any]:
     profile_fields = {field.name: field for field in profile.fields}
     return {
-        "source_result_ref": "latest_verified_query",
         "row_count": result.row_count,
         "truncated": result.truncated,
         "columns": [

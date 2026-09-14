@@ -72,8 +72,10 @@ class BaseModelGateway(ABC):
             trace = _call_trace(request, responses, started, repair_count=repair_count)
             return StructuredModelResponse(output=output, trace=trace)
 
-        detail = _safe_validation_detail(last_error)
-        message = f"Model output failed schema validation after one repair: {detail}"
+        message = (
+            "Model output failed schema validation after one repair: "
+            f"{validation_error_detail(last_error)}"
+        )
         raise ModelOutputValidationError(
             message,
             trace=_call_trace(
@@ -90,6 +92,20 @@ class BaseModelGateway(ABC):
         self, request: StructuredModelRequest[ResponseT]
     ) -> RawModelResponse:
         """Return one raw provider response; subclasses own transport retries."""
+
+
+def validation_error_detail(error: Exception | None) -> str:
+    """Summarize a validation failure without echoing the rejected input values."""
+    if isinstance(error, ValidationError):
+        return "; ".join(
+            f"{'.'.join(str(part) for part in item['loc'])}: {item['msg']}"
+            if item["loc"]
+            else item["msg"]
+            for item in error.errors(include_input=False, include_url=False)
+        )
+    if error is None:
+        return "unknown validation failure"
+    return str(error) or type(error).__name__
 
 
 def _call_trace[ResponseT: BaseModel](
@@ -130,25 +146,14 @@ def _validate_payload[ResponseT: BaseModel](schema: type[ResponseT], payload: ob
 def _repair_prompt(original_prompt: str, payload: object, error: Exception) -> str:
     rendered = (
         json.dumps(payload, default=str, ensure_ascii=True)
-        .replace("<", r"<")
-        .replace(">", r">")
-        .replace("&", r"&")
+        .replace("<", "\\u003c")
+        .replace(">", "\\u003e")
+        .replace("&", "\\u0026")
     )[:8_000]
     return (
         f"{original_prompt}\n\n"
         "Your previous response did not satisfy the supplied response schema. "
         "Return a corrected structured response without changing the analytical intent.\n"
-        f"Validation issue: {_safe_validation_detail(error)}\n"
+        f"Validation issue: {validation_error_detail(error)}\n"
         f"Previous response (untrusted): <model_output>{rendered}</model_output>"
     )
-
-
-def _safe_validation_detail(error: Exception | None) -> str:
-    if isinstance(error, ValidationError):
-        return "; ".join(
-            f"{'.'.join(str(part) for part in item['loc'])}: {item['msg']}"
-            for item in error.errors(include_input=False, include_url=False)
-        )
-    if error is None:
-        return "unknown validation failure"
-    return type(error).__name__

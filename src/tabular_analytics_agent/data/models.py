@@ -57,6 +57,7 @@ class QueryInspection(DataModel):
     normalized_sql: NonEmptyText
     referenced_columns: tuple[str, ...]
     has_wildcard: bool = False
+    group_by_columns: tuple[str, ...] = ()
 
 
 class QueryResult(DataModel):
@@ -69,6 +70,7 @@ class QueryResult(DataModel):
     row_count: int = Field(ge=0)
     truncated: bool
     duration_ms: int = Field(ge=0)
+    group_by_columns: tuple[str, ...] = ()
 
     @model_validator(mode="after")
     def validate_shape(self) -> QueryResult:

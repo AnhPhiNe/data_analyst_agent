@@ -159,7 +159,6 @@ class ChartIntentDraft(GenerationSchema):
         description="One of: kpi, table, histogram, bar, line, scatter",
     )
     analytical_purpose: str = Field(min_length=1)
-    source_result_ref: str = Field(min_length=1)
     x_field: str | None = Field(
         default=None,
         description="Exact result column name for the x axis, or null; never a placeholder",

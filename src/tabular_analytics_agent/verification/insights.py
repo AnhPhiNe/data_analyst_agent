@@ -491,15 +491,19 @@ def _humanize_identifier(value: str) -> str:
 
 
 def _row_context(result: EvidenceResult, row_index: int, metric_column: str) -> str:
-    """Describe a result row by its text dimensions, for example ``region = North``."""
+    """Describe a result row by its GROUP BY keys, for example ``year = 2024``.
+
+    Ungrouped results fall back to their text columns.
+    """
     if not isinstance(result, QueryResult) or row_index >= len(result.rows):
         return ""
-    labels = [
-        f"{column.name} = {value}"
-        for column, value in zip(result.columns, result.rows[row_index], strict=True)
-        if column.name != metric_column and isinstance(value, str)
-    ]
-    return ", ".join(labels[:3])
+    row = dict(zip((column.name for column in result.columns), result.rows[row_index], strict=True))
+    keys = result.group_by_columns or tuple(
+        name for name, value in row.items() if isinstance(value, str)
+    )
+    return ", ".join(
+        f"{name} = {row[name]}" for name in keys if name != metric_column and name in row
+    )
 
 
 def _lower_first(value: str) -> str:

@@ -1,6 +1,10 @@
 """Structured model boundary and provider adapters."""
 
-from tabular_analytics_agent.model_gateway.base import BaseModelGateway, ModelGateway
+from tabular_analytics_agent.model_gateway.base import (
+    BaseModelGateway,
+    ModelGateway,
+    validation_error_detail,
+)
 from tabular_analytics_agent.model_gateway.errors import (
     ModelConfigurationError,
     ModelGatewayError,
@@ -54,4 +58,5 @@ __all__ = [
     "StatisticalToolRequestDraft",
     "StructuredModelRequest",
     "StructuredModelResponse",
+    "validation_error_detail",
 ]

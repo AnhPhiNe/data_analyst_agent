@@ -128,7 +128,6 @@ def chart_output() -> dict[str, object]:
     return {
         "artifact_type": "bar",
         "analytical_purpose": "Compare verified regional revenue totals",
-        "source_result_ref": "latest_verified_query",
         "x_field": "region",
         "y_fields": ["revenue"],
         "color_field": None,

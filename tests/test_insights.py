@@ -137,6 +137,52 @@ def test_query_claim_is_published_with_complete_reproducible_evidence() -> None:
     assert publication.verification.status is VerificationStatus.PASSED
 
 
+def test_row_claim_uses_numeric_group_by_keys_as_context() -> None:
+    profile, action, _ = context()
+    year_field = profile.fields[0].model_copy(update={"name": "year", "kind": FieldKind.NUMERIC})
+    year_profile = profile.model_copy(update={"fields": (year_field, profile.fields[1])})
+    result = QueryResult(
+        query_id=uuid4(),
+        dataset_id=profile.dataset.dataset_id,
+        working_dataset_version=1,
+        sql="SELECT year, SUM(revenue) AS revenue FROM dataset GROUP BY year",
+        columns=(
+            QueryColumn(name="year", data_type="BIGINT"),
+            QueryColumn(name="revenue", data_type="DOUBLE"),
+        ),
+        rows=((2024, 100.0), (2025, 150.0)),
+        row_count=2,
+        truncated=False,
+        duration_ms=1,
+        group_by_columns=("year",),
+    )
+    year_action = action.model_copy(
+        update={
+            "inputs": {**action.inputs, "required_fields": ["year", "revenue"]},
+            "output_ref": f"query-result:{result.query_id}",
+        }
+    )
+
+    publication = publish_insight(
+        assertion=InsightAssertion(
+            operator=InsightOperator.GREATER_THAN,
+            left_metric="row[1].revenue",
+            right_metric="row[0].revenue",
+        ),
+        evidence_metrics=("row[0].revenue", "row[1].revenue"),
+        caveats=(),
+        profile=year_profile,
+        action=year_action,
+        result=result,
+        current_working_dataset_version=1,
+    )
+
+    assert isinstance(publication, VerifiedInsight)
+    assert publication.claim == (
+        "Revenue for year = 2025 is greater than revenue for year = 2024 (150 versus 100)."
+    )
+
+
 def test_missing_metric_and_stale_dataset_become_unsupported_claims() -> None:
     profile, action, result = context()
     publication = publish_insight(

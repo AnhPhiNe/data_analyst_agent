@@ -117,6 +117,23 @@ def test_query_inspection_reports_canonical_fields_and_wildcards(tmp_path: Path)
     assert wildcard.has_wildcard
 
 
+def test_query_result_reports_group_by_output_columns(tmp_path: Path) -> None:
+    core = TabularDataCore(tmp_path / "session")
+    handle = ingest_tiny_sales(core, tmp_path)
+
+    by_ordinal = core.query(
+        handle, "SELECT order_id, SUM(revenue) AS total FROM dataset GROUP BY 1"
+    )
+    by_alias = core.query(handle, "SELECT region AS area, COUNT(*) AS n FROM dataset GROUP BY area")
+    by_all = core.query(handle, "SELECT region, order_id, COUNT(*) AS n FROM dataset GROUP BY ALL")
+    ungrouped = core.query(handle, "SELECT region, revenue FROM dataset")
+
+    assert by_ordinal.group_by_columns == ("order_id",)
+    assert by_alias.group_by_columns == ("area",)
+    assert by_all.group_by_columns == ("region", "order_id")
+    assert ungrouped.group_by_columns == ()
+
+
 def test_query_inspection_does_not_treat_ordered_output_alias_as_source_field(
     tmp_path: Path,
 ) -> None:
