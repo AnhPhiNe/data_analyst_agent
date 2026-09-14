@@ -7,6 +7,7 @@ from tabular_analytics_agent.orchestration.models import (
     AgentRunStatus,
     AgentState,
     ApprovalDecision,
+    RefusalCode,
 )
 
 __all__ = [
@@ -15,6 +16,7 @@ __all__ = [
     "AgentRunStatus",
     "AgentState",
     "ApprovalDecision",
+    "RefusalCode",
     "build_agent_graph",
     "open_sqlite_checkpointer",
 ]

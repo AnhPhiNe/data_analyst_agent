@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from enum import StrEnum
 from typing import Any, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -26,9 +27,69 @@ class SemanticAnnotationDraft(GenerationSchema):
     role: str | None = None
 
 
+class RequestedMetricStatus(StrEnum):
+    """How a requested measure is grounded in the current dataset."""
+
+    DIRECT = "direct"
+    DERIVED = "derived"
+    UNAVAILABLE = "unavailable"
+
+
+class RequestedMetricMapping(GenerationSchema):
+    """Ground one user-requested metric without asserting language equivalence."""
+
+    requested_label: str = Field(min_length=1)
+    status: RequestedMetricStatus
+    source_fields: tuple[str, ...] = Field(
+        default=(),
+        description="Exact dataset field names used by the direct or derived metric.",
+    )
+    derivation: str | None = Field(
+        default=None,
+        min_length=1,
+        description="An explicit reproducible derivation required for derived metrics.",
+    )
+    reason: str | None = Field(
+        default=None,
+        min_length=1,
+        description="Why an unavailable metric cannot be supported without substitution.",
+    )
+
+    @model_validator(mode="after")
+    def fields_match_status(self) -> Self:
+        if any(not field.strip() for field in self.source_fields):
+            raise ValueError("metric mapping source_fields must contain non-empty field names")
+        if len({field.casefold() for field in self.source_fields}) != len(self.source_fields):
+            raise ValueError("metric mapping source_fields must be unique")
+        if self.status is RequestedMetricStatus.DIRECT:
+            if not self.source_fields:
+                raise ValueError("direct metric mappings require source_fields")
+            if self.derivation is not None:
+                raise ValueError("direct metric mappings cannot declare a derivation")
+            if self.reason is not None:
+                raise ValueError("only unavailable metric mappings may declare a reason")
+        elif self.status is RequestedMetricStatus.DERIVED:
+            if not self.source_fields:
+                raise ValueError("derived metric mappings require source_fields")
+            if self.derivation is None:
+                raise ValueError("derived metric mappings require an explicit derivation")
+            if self.reason is not None:
+                raise ValueError("only unavailable metric mappings may declare a reason")
+        elif self.source_fields or self.derivation is not None:
+            raise ValueError("unavailable metric mappings cannot reference source fields")
+        return self
+
+
 class GoalInterpretation(GenerationSchema):
     goal_text: str = Field(min_length=1)
     goal_family: GoalFamily
+    requested_metric_mappings: tuple[RequestedMetricMapping, ...] = Field(
+        description=(
+            "Map every metric explicitly requested by the user to exact source fields. Natural-"
+            "language equivalence remains semantically uncertain; do not treat a synonym as a "
+            "deterministic proof."
+        ),
+    )
     semantic_annotations: tuple[SemanticAnnotationDraft, ...] = Field(
         default=(),
         description=(
@@ -54,6 +115,9 @@ class GoalInterpretation(GenerationSchema):
     def clarification_matches_annotations(self) -> Self:
         if self.semantic_annotations and not self.clarification_question:
             raise ValueError("semantic annotation proposals require a clarification question")
+        labels = [mapping.requested_label.casefold() for mapping in self.requested_metric_mappings]
+        if len(labels) != len(set(labels)):
+            raise ValueError("requested metric mapping labels must be unique")
         return self
 
 

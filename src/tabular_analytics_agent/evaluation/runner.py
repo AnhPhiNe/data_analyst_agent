@@ -26,7 +26,7 @@ from tabular_analytics_agent.evaluation.models import (
     GoldenCase,
 )
 from tabular_analytics_agent.model_gateway import GeminiModelGateway, GeminiSettings
-from tabular_analytics_agent.orchestration import AgentRunStatus, AgentState
+from tabular_analytics_agent.orchestration import AgentRunStatus, AgentState, RefusalCode
 
 _MAX_PLAN_APPROVALS = 3
 Scalar = str | int | float | bool | None
@@ -282,6 +282,8 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 def _actual_outcome(state: AgentState) -> str:
     status = state.get("status")
+    if _is_typed_refusal(state):
+        return ExpectedOutcome.REFUSED.value
     if status == AgentRunStatus.AWAITING_SEMANTIC_REVIEW.value:
         return ExpectedOutcome.CLARIFICATION.value
     if (
@@ -293,8 +295,25 @@ def _actual_outcome(state: AgentState) -> str:
     if status == AgentRunStatus.COMPLETED.value and state.get("verified_insights"):
         return ExpectedOutcome.ANSWERED.value
     # Neither FAILED nor rejected insight drafts establish a responsible refusal.
-    # The product does not yet persist a typed refusal outcome/reason.
     return ExpectedOutcome.FAILED.value
+
+
+def _is_typed_refusal(state: AgentState) -> bool:
+    """Recognize only the explicit unavailable-metric refusal contract."""
+    if state.get("status") != AgentRunStatus.REFUSED.value:
+        return False
+    if state.get("answered_from_profile") or state.get("verified_insights"):
+        return False
+    if state.get("refusal_code") != RefusalCode.UNAVAILABLE_METRIC.value:
+        return False
+    reason = state.get("refusal_reason")
+    if not isinstance(reason, str) or not reason.strip():
+        return False
+    mappings = state.get("requested_metric_mappings")
+    return isinstance(mappings, (list, tuple)) and any(
+        isinstance(mapping, Mapping) and mapping.get("status") == "unavailable"
+        for mapping in mappings
+    )
 
 
 def _answer_checks(case: GoldenCase, state: AgentState) -> list[CheckResult]:

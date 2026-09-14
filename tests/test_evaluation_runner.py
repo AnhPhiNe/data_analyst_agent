@@ -31,6 +31,7 @@ def goal_output(**overrides: object) -> dict[str, object]:
     return {
         "goal_text": "Summarize revenue by region",
         "goal_family": "summary",
+        "requested_metric_mappings": [],
         "semantic_annotations": [],
         "clarification_question": None,
         **overrides,

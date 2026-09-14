@@ -49,6 +49,8 @@ from tabular_analytics_agent.model_gateway import (
     ModelProviderError,
     ModelTask,
     PlanDraft,
+    RequestedMetricMapping,
+    RequestedMetricStatus,
     SemanticAnnotationDraft,
     SQLToolRequestDraft,
     StatisticalToolRequestDraft,
@@ -61,6 +63,7 @@ from tabular_analytics_agent.orchestration.models import (
     AgentState,
     ApprovalDecision,
     BoundToolRequest,
+    RefusalCode,
 )
 from tabular_analytics_agent.statistics import (
     StatisticalAnalysisError,
@@ -160,6 +163,9 @@ class AgentOrchestrator:
             "unsupported_claims": [],
             "chart_renders": [],
             "artifact_error": "",
+            "requested_metric_mappings": [],
+            "refusal_code": "",
+            "refusal_reason": "",
             # A new request must not inherit per-run outputs or errors from an earlier request;
             # confirmed semantic annotations intentionally persist within the session.
             "error": "",
@@ -248,6 +254,8 @@ def build_agent_graph(
                 f"{_json_for_prompt(state['user_request'])}"
                 "</untrusted_user_request>\n"
                 f"{_profile_prompt(profile)}\n"
+                "Confirmed semantic annotations: "
+                f"{_json_for_prompt(state.get('semantic_annotations', []))}\n"
                 "Interpret the analytical goal using the original field names exactly as supplied. "
                 "Default to an empty semantic_annotations list. Never infer or assign a business "
                 "definition, unit, currency, geography, or domain meaning from a column name, file "
@@ -256,35 +264,67 @@ def build_agent_graph(
                 "Create a semantic annotation only when a genuine ambiguity directly changes the "
                 "required calculation and blocks a responsible answer; otherwise continue and let "
                 "the later plan record the uncertainty as a caveat. Ask only for information "
-                "needed by this request. If the request names a measure or field that does not "
-                "exist in the dataset, never substitute another field for it; instead return a "
-                "clarification_question naming the missing measure and the closest available "
-                "fields. If semantic_annotations is non-empty, clarification_question must be a "
-                "non-empty question asking the user to choose or confirm the exact blocking "
-                "interpretation. In all other cases return null clarification_question. Set "
+                "needed by this request. If semantic_annotations is non-empty, "
+                "clarification_question must be a non-empty question asking the user to choose or "
+                "confirm the exact blocking interpretation. Set "
                 "answer_from_profile to true only when the request can be answered entirely from "
                 "the Data Profile: column names, field kinds, row count, missing values, unique "
                 "counts, warnings, or whole-column descriptive statistics (count, mean, standard "
                 "deviation, minimum, quartiles, median, maximum), for example 'which columns are "
                 "there', 'mean of each column', or 'which columns have missing values'. Use false "
                 "for filtered, grouped, or derived calculations such as 'average revenue by "
-                "region'."
+                "region'. "
+                "For every metric the user explicitly requests, add one requested_metric_mappings "
+                "entry with the user's original requested_label and a status: direct when "
+                "source_fields are the exact fields that measure it, derived when source_fields "
+                "list every field used and derivation states a reproducible formula, or "
+                "unavailable when no field measures it (empty source_fields, optional reason). "
+                "Never map a requested metric to a field that measures something else, even when "
+                "it is the closest available field. When a metric is unavailable or ambiguous and "
+                "the user could resolve it, also return a clarification_question naming that "
+                "metric and the closest available fields. Use an unavailable mapping without a "
+                "clarification question only for an explicitly unsupported capability. Dimensions "
+                "such as region, month, or category are not metrics and need no mapping. Return "
+                "null clarification_question in all other cases."
             ),
             response_schema=GoalInterpretation,
             system_instruction=_SYSTEM_INSTRUCTION,
-            prompt_template_version="semantic-v6",
+            prompt_template_version="semantic-v8",
             timeout_seconds=_model_call_timeout_seconds(state, budget, clock()),
         )
+        trace: ModelCallTrace | None = None
         try:
             response = model_gateway.generate_structured(request)
+            trace = response.trace
         except ModelGatewayError as exc:
             return _with_failure_trace(_failed_state(state, exc, clock()), state, exc)
         if _run_budget_exceeded(state, budget, clock()):
             return _failed_state(state, _budget_error(budget), clock())
-        interpretation = response.output
-        if interpretation.semantic_annotations or interpretation.clarification_question:
+        try:
+            interpretation = response.output
+            metric_mappings = _canonicalize_requested_metric_mappings(
+                profile, interpretation.requested_metric_mappings
+            )
+        except (ValidationError, ValueError) as exc:
+            return _with_failure_trace(_failed_state(state, exc, clock()), state, exc, trace)
+
+        unavailable_metric = any(
+            mapping.status is RequestedMetricStatus.UNAVAILABLE for mapping in metric_mappings
+        )
+        derived_metric_requested = any(
+            mapping.status is RequestedMetricStatus.DERIVED for mapping in metric_mappings
+        )
+        clarification_question = (
+            _unavailable_metric_clarification_question(metric_mappings)
+            if unavailable_metric
+            else interpretation.clarification_question or ""
+        )
+        clarification_requested = bool(
+            interpretation.semantic_annotations or clarification_question
+        )
+        if clarification_requested:
             status = AgentRunStatus.AWAITING_SEMANTIC_REVIEW.value
-        elif interpretation.answer_from_profile:
+        elif interpretation.answer_from_profile and not derived_metric_requested:
             # Structural questions are answered from the deterministic Data Profile, not tools.
             status = AgentRunStatus.COMPLETED.value
         else:
@@ -294,13 +334,18 @@ def build_agent_graph(
                 "text": interpretation.goal_text,
                 "family": interpretation.goal_family.value,
             },
+            "requested_metric_mappings": [item.model_dump(mode="json") for item in metric_mappings],
             "proposed_annotations": [
                 item.model_dump(mode="json") for item in interpretation.semantic_annotations
             ],
-            "clarification_question": interpretation.clarification_question or "",
+            "clarification_question": clarification_question,
             "answered_from_profile": status == AgentRunStatus.COMPLETED,
             "model_traces": _append_trace(state, response.trace.model_dump(mode="json")),
             "status": status,
+            "refusal_code": "",
+            "refusal_reason": "",
+            "error": "",
+            "error_kind": "",
         }
         if status != AgentRunStatus.PLANNING:
             update.update(_pause_execution_budget(state, clock()))
@@ -319,6 +364,24 @@ def build_agent_graph(
         try:
             decision = ApprovalDecision.model_validate(decision_payload)
             if not decision.approved:
+                corrected_request = decision.corrected_request or decision.revision_request
+                if corrected_request:
+                    # A corrected analytical request must go through interpretation again so an
+                    # earlier unavailable/substitute mapping cannot leak into the new plan.
+                    return {
+                        "user_request": corrected_request,
+                        "goal": {},
+                        "requested_metric_mappings": [],
+                        "status": AgentRunStatus.INTERPRETING.value,
+                        "proposed_annotations": [],
+                        "clarification_question": "",
+                        "answered_from_profile": False,
+                        "refusal_code": "",
+                        "refusal_reason": "",
+                        "error": "",
+                        "error_kind": "",
+                        **_resume_execution_budget(clock()),
+                    }
                 return {
                     "status": AgentRunStatus.AWAITING_SEMANTIC_REVIEW.value,
                     "proposed_annotations": [],
@@ -352,6 +415,34 @@ def build_agent_graph(
                 ).model_dump(mode="json")
                 for item, field_name in zip(selected, annotation_fields, strict=True)
             ]
+            metric_mappings = _canonicalize_requested_metric_mappings(
+                profile, state.get("requested_metric_mappings", [])
+            )
+            refusal_reason = _unavailable_metric_refusal_reason(
+                metric_mappings,
+                has_clarification=False,
+            )
+            if refusal_reason:
+                if selected:
+                    # Confirmed annotations may resolve the meaning, but the model must
+                    # reinterpret the request before the mapping can become direct or derived.
+                    return {
+                        "semantic_annotations": annotations,
+                        "requested_metric_mappings": [],
+                        "status": AgentRunStatus.INTERPRETING.value,
+                        "proposed_annotations": [],
+                        "clarification_question": "",
+                        "answered_from_profile": False,
+                        "refusal_code": "",
+                        "refusal_reason": "",
+                        "error": "",
+                        "error_kind": "",
+                        **_resume_execution_budget(clock()),
+                    }
+                return {
+                    "semantic_annotations": annotations,
+                    **_typed_refusal_state(state, refusal_reason, clock()),
+                }
         except (ValidationError, ValueError) as exc:
             return _failed_state(state, exc, clock())
         return {
@@ -371,6 +462,8 @@ def build_agent_graph(
                 "Confirmed annotations: "
                 f"{_json_for_prompt(state.get('semantic_annotations', []))}\n"
                 f"{_profile_prompt(profile)}\n"
+                "Requested metric mappings: "
+                f"{_json_for_prompt(state.get('requested_metric_mappings', []))}\n"
                 "Requested plan revision: "
                 f"{_json_for_prompt(state.get('error', 'none'))}\n"
                 "Create the shortest reproducible plan. Every calculation step must use one "
@@ -381,7 +474,10 @@ def build_agent_graph(
                 "catalogs such as information_schema are unavailable. Set requires_approval to "
                 "true only for a step the user should review before it runs; ordinary read-only "
                 "calculations use false. Never let a different field stand in for a requested "
-                "measure that the dataset does not contain."
+                "measure that the dataset does not contain. Every direct or derived requested "
+                "metric mapping must have all of its source_fields in the required_fields of its "
+                "calculation step. Additional required_fields are allowed for dimensions such as "
+                "region, month, or category; do not treat those dimensions as substitutions."
             ),
             response_schema=PlanDraft,
             system_instruction=_SYSTEM_INSTRUCTION,
@@ -393,26 +489,31 @@ def build_agent_graph(
             response = model_gateway.generate_structured(request)
             trace = response.trace
             goal = AnalyticalGoal.model_validate(state["goal"])
+            metric_mappings = _canonicalize_requested_metric_mappings(
+                profile, state.get("requested_metric_mappings", [])
+            )
+            canonical_steps = tuple(
+                PlanStep(
+                    step_id=step.step_id,
+                    description=step.description,
+                    expected_tool=step.expected_tool,
+                    statistical_operation=(
+                        step.statistical_operation.value
+                        if step.statistical_operation is not None
+                        else None
+                    ),
+                    required_fields=_canonicalize_profile_fields(profile, step.required_fields),
+                    intended_output=step.intended_output,
+                    caveats=step.caveats,
+                    requires_approval=step.requires_approval,
+                )
+                for step in response.output.steps
+            )
+            _validate_plan_metric_grounding(canonical_steps, metric_mappings)
             plan = AnalysisPlan(
                 plan_id=uuid4(),
                 goal=goal,
-                steps=tuple(
-                    PlanStep(
-                        step_id=step.step_id,
-                        description=step.description,
-                        expected_tool=step.expected_tool,
-                        statistical_operation=(
-                            step.statistical_operation.value
-                            if step.statistical_operation is not None
-                            else None
-                        ),
-                        required_fields=_canonicalize_profile_fields(profile, step.required_fields),
-                        intended_output=step.intended_output,
-                        caveats=step.caveats,
-                        requires_approval=step.requires_approval,
-                    )
-                    for step in response.output.steps
-                ),
+                steps=canonical_steps,
                 budget=budget,
                 status=PlanStatus.PROPOSED,
             )
@@ -952,7 +1053,12 @@ def build_agent_graph(
     builder.add_conditional_edges(
         "review_semantics",
         _route_after_review,
-        {"review": "review_semantics", "plan": "create_plan", "end": END},
+        {
+            "interpret": "interpret_request",
+            "review": "review_semantics",
+            "plan": "create_plan",
+            "end": END,
+        },
     )
     builder.add_conditional_edges(
         "create_plan",
@@ -1171,6 +1277,88 @@ def _canonicalize_profile_fields(profile: DataProfile, fields: tuple[str, ...]) 
     return tuple(canonical)
 
 
+def _canonicalize_requested_metric_mappings(
+    profile: DataProfile,
+    mappings: object,
+) -> tuple[RequestedMetricMapping, ...]:
+    """Validate mapping source fields, while tolerating legacy state without mappings."""
+    if mappings is None:
+        return ()
+    if not isinstance(mappings, (list, tuple)):
+        raise ValueError("requested_metric_mappings must be a list")
+    parsed = tuple(RequestedMetricMapping.model_validate(item) for item in mappings)
+    return tuple(
+        mapping.model_copy(
+            update={
+                "source_fields": _canonicalize_profile_fields(profile, mapping.source_fields),
+            }
+        )
+        for mapping in parsed
+    )
+
+
+def _unavailable_metric_clarification_question(
+    mappings: tuple[RequestedMetricMapping, ...],
+) -> str:
+    labels = [
+        mapping.requested_label
+        for mapping in mappings
+        if mapping.status is RequestedMetricStatus.UNAVAILABLE
+    ]
+    if not labels:
+        return ""
+    joined = ", ".join(labels)
+    return (
+        f"The requested metric {joined} is unavailable from the dataset. "
+        "Would you like to correct the request or confirm that it cannot be answered?"
+    )
+
+
+def _unavailable_metric_refusal_reason(
+    mappings: tuple[RequestedMetricMapping, ...],
+    *,
+    has_clarification: bool,
+) -> str | None:
+    """Return a refusal reason only after an unavailable mapping is explicitly accepted."""
+    if has_clarification:
+        return None
+    unavailable = [
+        mapping for mapping in mappings if mapping.status is RequestedMetricStatus.UNAVAILABLE
+    ]
+    if not unavailable:
+        return None
+    reasons = [mapping.reason for mapping in unavailable if mapping.reason]
+    if reasons:
+        return " ".join(reasons)
+    labels = ", ".join(mapping.requested_label for mapping in unavailable)
+    return f"Requested metric {labels} is unavailable without a safe derivation from this dataset."
+
+
+def _validate_plan_metric_grounding(
+    steps: tuple[PlanStep, ...],
+    mappings: tuple[RequestedMetricMapping, ...],
+) -> None:
+    """Require mapped metric inputs without rejecting legitimate grouping dimensions."""
+    for mapping in mappings:
+        if mapping.status is RequestedMetricStatus.UNAVAILABLE:
+            raise ValueError(
+                f"Cannot plan for unavailable requested metric: {mapping.requested_label}"
+            )
+        source_fields = {_field_key(field) for field in mapping.source_fields}
+        if not source_fields:
+            raise ValueError(
+                f"Requested metric mapping has no source fields: {mapping.requested_label}"
+            )
+        if not any(
+            source_fields <= {_field_key(field) for field in step.required_fields} for step in steps
+        ):
+            fields = ", ".join(mapping.source_fields)
+            raise ValueError(
+                f"Plan steps omit source fields for requested metric "
+                f"{mapping.requested_label}: {fields}"
+            )
+
+
 def _current_plan_step(state: AgentState, plan: AnalysisPlan) -> PlanStep:
     step_index = state.get("current_step_index", 0)
     if step_index < 0 or step_index >= len(plan.steps):
@@ -1340,6 +1528,20 @@ def _failed_state(state: AgentState, error: Exception, now: datetime) -> AgentSt
     }
 
 
+def _typed_refusal_state(state: AgentState, reason: str, now: datetime) -> AgentState:
+    """Persist the one supported refusal category without reclassifying ordinary failures."""
+    if not reason.strip():
+        raise ValueError("typed refusal requires a non-empty reason")
+    return {
+        "status": AgentRunStatus.REFUSED.value,
+        "error": "",
+        "error_kind": "unsupported_request",
+        "refusal_code": RefusalCode.UNAVAILABLE_METRIC.value,
+        "refusal_reason": reason,
+        **_pause_execution_budget(state, now),
+    }
+
+
 def _retry_or_fail(state: AgentState, error: Exception, now: datetime) -> AgentState:
     repairs = state.get("tool_repair_count", 0) + 1
     plan = AnalysisPlan.model_validate(state["plan"])
@@ -1454,7 +1656,9 @@ def _route_after_interpretation(state: AgentState) -> Literal["review", "plan", 
     return "end"
 
 
-def _route_after_review(state: AgentState) -> Literal["review", "plan", "end"]:
+def _route_after_review(state: AgentState) -> Literal["interpret", "review", "plan", "end"]:
+    if state["status"] == AgentRunStatus.INTERPRETING:
+        return "interpret"
     if state["status"] == AgentRunStatus.AWAITING_SEMANTIC_REVIEW:
         return "review"
     return "plan" if state["status"] == AgentRunStatus.PLANNING else "end"

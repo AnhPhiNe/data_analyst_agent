@@ -63,6 +63,7 @@ def goal_output(*, with_semantics: bool = False) -> dict[str, object]:
     return {
         "goal_text": "Compare total revenue by region",
         "goal_family": "comparison",
+        "requested_metric_mappings": [],
         "semantic_annotations": annotations,
         "clarification_question": clarification,
     }

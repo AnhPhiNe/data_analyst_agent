@@ -23,8 +23,15 @@ class AgentRunStatus(StrEnum):
     SYNTHESIZING = "synthesizing"
     PROPOSING_ARTIFACT = "proposing_artifact"
     COMPLETED = "completed"
+    REFUSED = "refused"
     REJECTED = "rejected"
     FAILED = "failed"
+
+
+class RefusalCode(StrEnum):
+    """Typed reasons for a request that cannot be supported safely."""
+
+    UNAVAILABLE_METRIC = "unavailable_metric"
 
 
 class OrchestrationModel(BaseModel):
@@ -71,11 +78,12 @@ class ApprovalDecision(OrchestrationModel):
     approved: bool
     reason: str | None = None
     revision_request: str | None = None
+    corrected_request: str | None = Field(default=None, min_length=1)
     annotations: tuple[SemanticAnnotationDraft, ...] | None = None
 
     @model_validator(mode="after")
     def decision_is_consistent(self) -> Self:
-        if self.approved and self.revision_request:
+        if self.approved and (self.revision_request or self.corrected_request):
             raise ValueError("an approved decision cannot request a revision")
         return self
 
@@ -90,6 +98,7 @@ class AgentState(TypedDict, total=False):
     data_profile: dict[str, Any]
     answered_from_profile: bool
     goal: dict[str, Any]
+    requested_metric_mappings: list[dict[str, Any]]
     clarification_question: str
     proposed_annotations: list[dict[str, Any]]
     semantic_annotations: list[dict[str, Any]]
@@ -112,3 +121,5 @@ class AgentState(TypedDict, total=False):
     status: str
     error: str
     error_kind: str
+    refusal_code: str
+    refusal_reason: str

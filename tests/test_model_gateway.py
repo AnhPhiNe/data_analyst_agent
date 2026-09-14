@@ -44,6 +44,7 @@ def valid_goal() -> dict[str, object]:
     return {
         "goal_text": "Summarize revenue",
         "goal_family": "summary",
+        "requested_metric_mappings": [],
         "semantic_annotations": [],
         "clarification_question": None,
     }
@@ -368,7 +369,7 @@ def test_gemini_adapter_bounds_rate_limit_retries() -> None:
 def test_gemini_adapter_uses_raw_text_when_parsed_value_is_missing() -> None:
     raw = SimpleNamespace(
         text='{"goal_text":"Summarize revenue","goal_family":"summary",'
-        '"semantic_annotations":[],"clarification_question":null}',
+        '"requested_metric_mappings":[],"semantic_annotations":[],"clarification_question":null}',
         content="",
         response_metadata={},
         usage_metadata={"input_tokens": "bad", "output_tokens": -2},
