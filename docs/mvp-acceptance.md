@@ -116,3 +116,12 @@ the outstanding Must-tier flows and reliability gates.
   resuming a session after a simulated crash during tool execution. 339 tests passed (2 skipped),
   branch-inclusive coverage 90.66%, Ruff, formatting, and mypy passed. No live model run was
   needed because no prompt changed.
+- Spec v1.4 work (2026-09-15): `TABULAR_AGENT_SEND_SAMPLE_VALUES=false` withholds frequent field
+  values; with the default, profile prompts are byte-identical to the previous commit on four
+  fixtures. Holdout v5 (12 cases on unseen coffee-chain and clinic datasets) was committed before
+  any live run. Preparing it exposed a profiling defect on two datasets: Vietnamese ISO date
+  columns were profiled as text and flagged as possible PII because ISO dates matched the phone
+  heuristic; both are fixed before the run. The deterministic Data Overview was added. 353 tests
+  passed (2 skipped), branch-inclusive coverage 90.76%, Ruff, formatting, and mypy passed. Known
+  overview limit: in tables under 20 rows an integer id column is not flagged as identifier-like,
+  so it can appear as a numeric chart.
