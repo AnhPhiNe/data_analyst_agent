@@ -35,6 +35,7 @@ from tabular_analytics_agent.domain import (
     VerificationResult,
     VerificationStatus,
     VerifiedInsight,
+    fingerprint_semantic_annotations,
 )
 
 
@@ -417,6 +418,7 @@ def test_artifact_requires_timezone_aware_timestamp() -> None:
         query_id=uuid4(),
         dataset_id=uuid4(),
         working_dataset_version=1,
+        semantic_annotation_fingerprint=fingerprint_semantic_annotations(()),
     )
     intent = ChartIntent(
         artifact_type=ArtifactType.BAR,

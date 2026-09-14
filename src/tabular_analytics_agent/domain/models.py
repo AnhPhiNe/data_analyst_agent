@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 from datetime import datetime
 from enum import StrEnum
 from typing import Annotated, Any, Self
@@ -406,11 +408,24 @@ class QueryResultReference(DomainModel):
     query_id: UUID
     dataset_id: UUID
     working_dataset_version: PositiveInt
+    semantic_annotation_fingerprint: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
 
     @property
     def canonical_ref(self) -> str:
         """Return the URI-shaped reference used by Tool Action output records."""
         return f"query-result:{self.query_id}"
+
+
+def fingerprint_semantic_annotations(
+    annotations: tuple[SemanticAnnotation, ...],
+) -> str:
+    """Hash confirmed semantic context independent of annotation input order."""
+    canonical = sorted(
+        (annotation.model_dump(mode="json") for annotation in annotations),
+        key=lambda item: str(item["field_name"]),
+    )
+    serialized = json.dumps(canonical, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
 
 
 class ChartIntent(DomainModel):

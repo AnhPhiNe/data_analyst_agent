@@ -35,6 +35,7 @@ from tabular_analytics_agent.domain.models import (
     VerificationResult,
     VerificationStatus,
     VerifiedInsight,
+    fingerprint_semantic_annotations,
 )
 
 __all__ = [
@@ -72,4 +73,5 @@ __all__ = [
     "VerificationResult",
     "VerificationStatus",
     "VerifiedInsight",
+    "fingerprint_semantic_annotations",
 ]

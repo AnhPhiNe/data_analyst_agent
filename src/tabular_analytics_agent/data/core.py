@@ -229,9 +229,16 @@ class TabularDataCore:
             connection.close()
 
     def inspect_query(self, handle: DatasetHandle, sql: str) -> QueryInspection:
-        """Validate one read-only query and expose its canonical field references."""
+        """Validate and bind one read-only query against this Working Dataset."""
         self._verify_handle(handle)
         analysis = analyze_read_only_sql(sql, allowed_table=handle.table_name)
+        connection = self._connect(handle.working_database_path)
+        try:
+            connection.execute(f"EXPLAIN {analysis.normalized_sql}")
+        except duckdb.Error as exc:
+            raise QueryExecutionError(str(exc)) from exc
+        finally:
+            connection.close()
         return QueryInspection(
             normalized_sql=analysis.normalized_sql,
             referenced_columns=analysis.referenced_columns,

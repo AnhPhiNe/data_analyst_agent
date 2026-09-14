@@ -41,11 +41,42 @@ Pinned artifacts cannot be silently refined. The user must unpin them first, so 
 content changes only through an explicit lifecycle action. Failed or unverified renders are rejected
 before any artifact metadata or JSON specification is published. Publication and pinning also require
 the typed source dataset and Working Dataset version to match the current `AnalysisSession`; candidate
-and Dashboard lists omit artifacts that became stale after the session advanced.
+and Dashboard lists omit artifacts that became stale after the session advanced or its confirmed
+Semantic Annotations changed.
+
+## M5.3 — Streamlit end-to-end workspace
+
+Status: implementation in progress; not yet accepted or committed as a completed milestone.
+Live testing has reached plan approval without unnecessary semantic questions. A later tool request
+was rejected because the model had to echo approved source fields, and a diagnostic run encountered
+provider rate limiting. The model boundary now returns only SQL or statistical parameters; the
+orchestrator binds the approved tool, source-field allowlist, statistical operation, and fixed
+inference policy. SQL references and statistical parameter fields are still checked against that
+approved allowlist, while output aliases remain separate from source columns. Provider failures stop
+after gateway retries instead of entering the SQL repair loop. A successful live run through verified
+insights, chart publication, and pinning, plus the milestone review, remains required.
+
+The replaceable `application` module now coordinates safe browser uploads, ingestion and profiling,
+durable Analysis Session metadata, SQLite LangGraph checkpoints, agent start/resume operations, and
+idempotent candidate publication. The Streamlit adapter calls only these public services and domain
+contracts; analytical logic remains outside the UI.
+
+The local interface provides:
+
+- CSV/XLSX upload and a profile summary with data-quality and likely-PII warnings.
+- Conversational analytical requests with explicit Semantic Annotation and plan approval pauses.
+- Verified Insights, unsupported claims, result tables, and bounded model/tool audit metadata.
+- Deterministically rendered Candidate Artifacts and user-controlled pin/unpin Dashboard composition.
+- Session-scoped checkpoint and artifact recovery across application reruns.
+
+Chart proposals use a structured `ChartIntent` model call containing schema metadata but no raw cell
+values. The orchestrator binds the proposal to the exact query result referenced by a Verified
+Insight, then the existing deterministic renderer performs all source, type, completeness, and
+readability checks. A bad chart proposal is non-fatal and does not discard a completed verified
+analysis.
 
 ## Remaining slices
 
-- M5.3: Streamlit upload, conversation, approval, insight, chart, and dashboard flow.
 - M5.4: CSV, JSON metadata, and self-contained HTML exports.
 
 Heatmap, stacked bar, box plot, and missing-value chart rendering remain outside M5.1 and will be
@@ -56,8 +87,7 @@ added only when required by the dashboard vertical slice.
 The following P2 design improvements are intentionally deferred until another chart type or caller
 demonstrates the need: consolidate per-chart validation into registered policies and remove the
 remaining small source-binding predicate duplication. A typed Render Spec reference can replace the
-store-generated relative path when export introduces multiple artifact locations. Semantic-annotation
-freshness will join the source reference when M5.3 connects artifacts to live session annotations.
+store-generated relative path when export introduces multiple artifact locations.
 These items do not affect current correctness and are not release blockers. Goal-aware validation of
 `analytical_purpose` is deferred to the chart-recommendation orchestration step, where the approved
 analytical goal is available.

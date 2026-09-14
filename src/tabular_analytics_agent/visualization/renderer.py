@@ -14,10 +14,12 @@ from tabular_analytics_agent.domain import (
     ArtifactType,
     ChartIntent,
     QueryResultReference,
+    SemanticAnnotation,
     ToolAction,
     VerificationCheck,
     VerificationResult,
     VerificationStatus,
+    fingerprint_semantic_annotations,
 )
 from tabular_analytics_agent.visualization.errors import ChartValidationError
 from tabular_analytics_agent.visualization.models import ChartRenderResult
@@ -53,12 +55,16 @@ _MAX_POINT_ROWS = 5_000
 _FORMATTING_KEYS = {"height", "number_format", "show_legend"}
 
 
-def make_query_result_reference(result: QueryResult) -> QueryResultReference:
+def make_query_result_reference(
+    result: QueryResult,
+    semantic_annotations: tuple[SemanticAnnotation, ...] = (),
+) -> QueryResultReference:
     """Create the typed identity used by Chart Intents and persisted artifacts."""
     return QueryResultReference(
         query_id=result.query_id,
         dataset_id=result.dataset_id,
         working_dataset_version=result.working_dataset_version,
+        semantic_annotation_fingerprint=fingerprint_semantic_annotations(semantic_annotations),
     )
 
 

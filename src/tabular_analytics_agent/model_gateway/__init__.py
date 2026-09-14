@@ -24,7 +24,8 @@ from tabular_analytics_agent.model_gateway.schemas import (
     PlanDraft,
     PlanStepDraft,
     SemanticAnnotationDraft,
-    ToolRequestDraft,
+    SQLToolRequestDraft,
+    StatisticalToolRequestDraft,
 )
 
 __all__ = [
@@ -46,8 +47,9 @@ __all__ = [
     "ModelUsage",
     "PlanDraft",
     "PlanStepDraft",
+    "SQLToolRequestDraft",
     "SemanticAnnotationDraft",
+    "StatisticalToolRequestDraft",
     "StructuredModelRequest",
     "StructuredModelResponse",
-    "ToolRequestDraft",
 ]

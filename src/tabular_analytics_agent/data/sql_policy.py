@@ -106,8 +106,15 @@ def analyze_read_only_sql(sql: str, *, allowed_table: str) -> SQLAnalysis:
         if name.startswith("read_") or name in _DENIED_FUNCTIONS:
             raise UnsafeQueryError(f"External-access function is forbidden: {name}")
 
+    output_alias_references = _output_alias_references(statement)
     referenced_columns = tuple(
-        sorted({column.name for column in statement.find_all(exp.Column) if column.name})
+        sorted(
+            {
+                column.name
+                for column in statement.find_all(exp.Column)
+                if column.name and id(column) not in output_alias_references
+            }
+        )
     )
     return SQLAnalysis(
         normalized_sql=statement.sql(dialect="duckdb"),
@@ -117,3 +124,26 @@ def analyze_read_only_sql(sql: str, *, allowed_table: str) -> SQLAnalysis:
             for star in statement.find_all(exp.Star)
         ),
     )
+
+
+def _output_alias_references(statement: exp.Query) -> set[int]:
+    """Return ORDER BY columns that DuckDB resolves to SELECT output aliases."""
+    references: set[int] = set()
+    for select in statement.find_all(exp.Select):
+        output_aliases = {
+            projection.alias_or_name.casefold()
+            for projection in select.expressions
+            if isinstance(projection, exp.Alias) and projection.alias_or_name
+        }
+        order = select.args.get("order")
+        if not output_aliases or not isinstance(order, exp.Order):
+            continue
+        references.update(
+            id(column)
+            for column in order.find_all(exp.Column)
+            if column.find_ancestor(exp.Select) is select
+            and not column.table
+            and column.name
+            and column.name.casefold() in output_aliases
+        )
+    return references

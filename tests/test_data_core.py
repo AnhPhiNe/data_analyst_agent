@@ -117,6 +117,28 @@ def test_query_inspection_reports_canonical_fields_and_wildcards(tmp_path: Path)
     assert wildcard.has_wildcard
 
 
+def test_query_inspection_does_not_treat_ordered_output_alias_as_source_field(
+    tmp_path: Path,
+) -> None:
+    core = TabularDataCore(tmp_path / "session")
+    handle = ingest_tiny_sales(core, tmp_path)
+
+    inspection = core.inspect_query(
+        handle,
+        "SELECT revenue AS region FROM dataset ORDER BY region",
+    )
+
+    assert inspection.referenced_columns == ("revenue",)
+
+
+def test_query_inspection_rejects_columns_not_in_dataset_schema(tmp_path: Path) -> None:
+    core = TabularDataCore(tmp_path / "session")
+    handle = ingest_tiny_sales(core, tmp_path)
+
+    with pytest.raises(QueryExecutionError, match="unknown_metric"):
+        core.inspect_query(handle, "SELECT region, unknown_metric FROM dataset")
+
+
 def test_query_rejects_nonpositive_timeout(tmp_path: Path) -> None:
     core = TabularDataCore(tmp_path / "session")
     handle = ingest_tiny_sales(core, tmp_path)

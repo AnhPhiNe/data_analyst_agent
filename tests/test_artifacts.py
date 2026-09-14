@@ -16,6 +16,7 @@ from tabular_analytics_agent.domain import (
     ArtifactStatus,
     ArtifactType,
     ChartIntent,
+    SemanticAnnotation,
     SessionStatus,
     ToolAction,
     VerificationCheck,
@@ -203,18 +204,34 @@ def test_publication_and_dashboard_require_current_session_source(tmp_path: Path
     session = make_session(rendered)
     stale_session = session.model_copy(update={"working_dataset_version": 2})
     wrong_dataset_session = session.model_copy(update={"source_dataset_id": uuid4()})
+    reinterpreted_session = session.model_copy(
+        update={
+            "semantic_annotations": (
+                SemanticAnnotation(
+                    field_name="revenue",
+                    meaning="Net revenue after refunds",
+                    unit="USD",
+                    role="measure",
+                    confirmed_by_user=True,
+                ),
+            )
+        }
+    )
 
-    for invalid_session in (stale_session, wrong_dataset_session):
+    for invalid_session in (stale_session, wrong_dataset_session, reinterpreted_session):
         with pytest.raises(ArtifactTransitionError, match="stale or does not belong"):
             store.create_candidate(invalid_session, rendered)
 
     candidate = store.create_candidate(session, rendered)
     with pytest.raises(ArtifactTransitionError, match="stale or does not belong"):
         store.pin(stale_session, candidate.artifact_id)
+    with pytest.raises(ArtifactTransitionError, match="stale or does not belong"):
+        store.pin(reinterpreted_session, candidate.artifact_id)
 
     pinned = store.pin(session, candidate.artifact_id)
     assert store.list_dashboard(session) == (pinned,)
     assert store.list_dashboard(stale_session) == ()
+    assert store.list_dashboard(reinterpreted_session) == ()
 
 
 def test_unverified_render_is_never_published(tmp_path: Path) -> None:

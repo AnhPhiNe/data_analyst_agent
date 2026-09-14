@@ -7,7 +7,7 @@ from typing import Any, Literal, Self
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from tabular_analytics_agent.domain import GoalFamily, InsightAssertion, InsightOperator
-from tabular_analytics_agent.statistics import StatisticalOperation, StatisticalRequest
+from tabular_analytics_agent.statistics import AlternativeHypothesis, StatisticalOperation
 
 
 class GenerationSchema(BaseModel):
@@ -24,8 +24,17 @@ class SemanticAnnotationDraft(GenerationSchema):
 class GoalInterpretation(GenerationSchema):
     goal_text: str = Field(min_length=1)
     goal_family: GoalFamily
-    semantic_annotations: tuple[SemanticAnnotationDraft, ...] = ()
-    clarification_question: str | None = None
+    semantic_annotations: tuple[SemanticAnnotationDraft, ...] = Field(
+        default=(),
+        description=(
+            "Blocking semantic hypotheses only; return an empty list by default and never infer "
+            "business definitions or units from names"
+        ),
+    )
+    clarification_question: str | None = Field(
+        default=None,
+        description=("Required only when semantic_annotations is non-empty; otherwise return null"),
+    )
 
     @model_validator(mode="after")
     def clarification_matches_annotations(self) -> Self:
@@ -68,25 +77,23 @@ class PlanDraft(GenerationSchema):
         return self
 
 
-class ToolRequestDraft(GenerationSchema):
-    tool_name: Literal["read_only_sql", "statistical_analysis"]
-    purpose: str = Field(min_length=1)
-    sql: str | None = None
-    statistical_request: StatisticalRequest | None = None
-    required_fields: tuple[str, ...] = ()
+class SQLToolRequestDraft(GenerationSchema):
+    sql: str = Field(
+        min_length=1,
+        description="One read-only SQL query for the already-approved plan step",
+    )
 
-    @model_validator(mode="after")
-    def payload_matches_tool(self) -> Self:
-        if self.tool_name == "read_only_sql":
-            if not self.sql or self.statistical_request is not None:
-                raise ValueError("read_only_sql requires only a SQL payload")
-        elif self.statistical_request is None or self.sql is not None:
-            raise ValueError("statistical_analysis requires only a statistical request")
-        if self.statistical_request is not None and set(self.required_fields) != set(
-            self.statistical_request.source_fields
-        ):
-            raise ValueError("statistical request fields must match required_fields")
-        return self
+
+class StatisticalToolRequestDraft(GenerationSchema):
+    value_fields: tuple[str, ...] = ()
+    value_field: str | None = None
+    group_field: str | None = None
+    x_field: str | None = None
+    y_field: str | None = None
+    group_order: tuple[str | int | float | bool, ...] = ()
+    confidence_level: float = Field(default=0.95, gt=0.0, lt=1.0)
+    alternative: AlternativeHypothesis = AlternativeHypothesis.TWO_SIDED
+    positive_class: str | int | float | bool | None = None
 
 
 class InsightDraft(GenerationSchema):

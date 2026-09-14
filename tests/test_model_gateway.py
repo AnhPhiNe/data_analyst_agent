@@ -8,7 +8,7 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
-from pydantic import SecretStr
+from pydantic import SecretStr, ValidationError
 
 from tabular_analytics_agent.domain import InsightAssertion, InsightOperator
 from tabular_analytics_agent.model_gateway import (
@@ -23,10 +23,11 @@ from tabular_analytics_agent.model_gateway import (
     ModelTask,
     PlanDraft,
     PlanStepDraft,
+    SQLToolRequestDraft,
+    StatisticalToolRequestDraft,
     StructuredModelRequest,
-    ToolRequestDraft,
 )
-from tabular_analytics_agent.statistics import StatisticalOperation, StatisticalRequest
+from tabular_analytics_agent.statistics import StatisticalOperation
 
 
 def goal_request() -> StructuredModelRequest[GoalInterpretation]:
@@ -69,26 +70,35 @@ def test_generation_schemas_reject_unbound_plan_tool_and_insight_contracts() -> 
     with pytest.raises(ValueError, match="at least one step"):
         PlanDraft(steps=())
 
-    statistical_request = StatisticalRequest(
-        operation=StatisticalOperation.DESCRIPTIVE,
-        value_fields=("value",),
-    )
-    with pytest.raises(ValueError, match="requires only a SQL payload"):
-        ToolRequestDraft(tool_name="read_only_sql", purpose="Query", required_fields=("value",))
-    with pytest.raises(ValueError, match="requires only a statistical request"):
-        ToolRequestDraft(
-            tool_name="statistical_analysis",
-            purpose="Analyze",
-            sql="SELECT value FROM dataset",
-            statistical_request=statistical_request,
-            required_fields=("value",),
-        )
-    with pytest.raises(ValueError, match="must match required_fields"):
-        ToolRequestDraft(
-            tool_name="statistical_analysis",
-            purpose="Analyze",
-            statistical_request=statistical_request,
-            required_fields=("other",),
+    assert set(SQLToolRequestDraft.model_fields) == {"sql"}
+    assert not {
+        "tool_name",
+        "purpose",
+        "required_fields",
+        "statistical_operation",
+    }.intersection(SQLToolRequestDraft.model_fields)
+    assert {
+        "value_fields",
+        "value_field",
+        "group_field",
+        "x_field",
+        "y_field",
+        "group_order",
+        "confidence_level",
+        "alternative",
+        "positive_class",
+    } == set(StatisticalToolRequestDraft.model_fields)
+    assert not {
+        "operation",
+        "alpha",
+        "multiple_testing_count",
+        "random_seed",
+        "tool_name",
+        "required_fields",
+    }.intersection(StatisticalToolRequestDraft.model_fields)
+    with pytest.raises(ValidationError, match="required_fields"):
+        SQLToolRequestDraft.model_validate(
+            {"sql": "SELECT value FROM dataset", "required_fields": ["value"]}
         )
 
     with pytest.raises(ValueError, match="require p_value"):

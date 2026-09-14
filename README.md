@@ -3,7 +3,8 @@
 A local-first, single-agent workspace for analyzing CSV and XLSX datasets through
 reproducible tools, deterministic verification, and user-curated dashboards.
 
-The project has implemented **Milestone 5.2 — Dashboard artifact lifecycle**. Product and technical decisions
+The project has implemented **Milestone 5.2 — Dashboard artifact lifecycle**; **M5.3 — Streamlit
+workspace** is implemented and undergoing live integration validation. Product and technical decisions
 are captured in [Spec.md](./Spec.md), while shared domain language lives in
 [CONTEXT.md](./CONTEXT.md).
 
@@ -38,16 +39,28 @@ Do not add API keys to the repository. Use `.env.example` as a local configurati
 provide `GOOGLE_API_KEY` through the process environment or, later, Streamlit Secrets for live
 Gemini calls. Automated tests use `FakeModelGateway` and do not call an external model.
 
+Start the local MVP after creating `.env` from `.env.example`:
+
+```powershell
+.\.venv\Scripts\python.exe -m streamlit run streamlit_app.py
+```
+
+The browser flow supports safe CSV/XLSX upload, profiling, conversational goal capture, semantic and
+plan approval, verified results, candidate charts, explicit dashboard pinning, and an audit view.
+
 ## Current layout
 
 ```text
 src/tabular_analytics_agent/domain/      Domain contracts and invariants
+src/tabular_analytics_agent/application/ UI-neutral session workflow service
 src/tabular_analytics_agent/data/        Secure ingestion, profiling, and read-only querying
 src/tabular_analytics_agent/evaluation/  Golden evaluation case contracts
 src/tabular_analytics_agent/model_gateway/ Provider-neutral structured LLM boundary
 src/tabular_analytics_agent/orchestration/ LangGraph workflow and SQLite checkpoints
 src/tabular_analytics_agent/statistics/    Deterministic statistics and bounded Tool Actions
 src/tabular_analytics_agent/verification/ Deterministic evidence gates
+src/tabular_analytics_agent/visualization/ Validated Plotly specs and artifact lifecycle
+streamlit_app.py                          Streamlit delivery adapter
 tests/                                   Tests through public module interfaces
 tests/fixtures/                          Small deterministic datasets
 docs/                                    Architecture and engineering decisions

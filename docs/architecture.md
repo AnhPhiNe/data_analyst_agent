@@ -79,8 +79,17 @@ SQLite and publishes immutable, versioned Plotly JSON specifications through an 
 Every artifact carries a typed Query Result reference and passed chart verification. Refinement is
 allowed only while an artifact is a candidate; pinning is an explicit user-controlled dashboard
 transition and never changes the referenced render version. Publication, pinning, and dashboard reads
-are grounded against the current Analysis Session dataset and Working Dataset version, so stale or
-cross-session results cannot surface as current dashboard content.
+are grounded against the current Analysis Session dataset, Working Dataset version, and deterministic
+Semantic Annotation fingerprint, so stale or cross-session results cannot surface as current dashboard
+content.
+
+### Application module
+
+`LocalAnalysisApplication` is the UI-neutral use-case boundary. It stages untrusted uploads beneath a
+generated session namespace, delegates inspection/ingestion/profiling to `TabularDataCore`, persists a
+validated workspace atomically, opens the session's SQLite checkpointer for each agent operation, and
+publishes completed chart renders idempotently through `ArtifactStore`. It can be integration-tested
+with `FakeModelGateway` and later reused by a FastAPI adapter.
 
 ### Orchestration module
 
@@ -104,6 +113,10 @@ the Model Gateway, and publishes each draft as a Verified Insight or Unsupported
 evidence is capped at 200 values, statistical summaries are prioritized, and query results above 50
 rows are withheld until the agent produces a bounded aggregate. Statistical plan steps declare their
 operation up front; the orchestrator derives multiple-testing family size from the approved plan.
+After insight synthesis, the graph may request one structured Chart Intent using goal and schema
+metadata only. It resolves the exact verified query through Evidence Trail action IDs and invokes the
+deterministic visualization adapter. Chart-proposal failure is recorded separately and does not turn a
+successfully verified analysis into a failed run.
 
 ### Model seam
 
@@ -117,6 +130,8 @@ tests. Provider response objects, credentials, and error bodies do not cross thi
 
 Streamlit is the first delivery adapter. Application operations must remain callable without
 Streamlit so FastAPI and React can be introduced later without rewriting the analytical core.
+The current adapter implements upload, profile inspection, conversational requests, approval pauses,
+verified/unsupported outcomes, candidate charts, dashboard pinning, and audit metadata.
 
 ## Testing rule
 
