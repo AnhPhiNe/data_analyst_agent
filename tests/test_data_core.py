@@ -20,6 +20,7 @@ from tabular_analytics_agent.data import (
     UnsafeFileError,
     UnsafeQueryError,
     UnsupportedFileError,
+    replace_column_references,
 )
 from tabular_analytics_agent.domain import FieldKind
 
@@ -153,6 +154,23 @@ def test_query_inspection_reports_unaliased_outputs_and_filters(tmp_path: Path) 
     assert plain.unaliased_outputs == ()
     assert plain.filters == ()
     assert result.filters == ("revenue >= 100",)
+
+
+def test_field_ids_are_rewritten_to_exact_names_without_touching_aliases() -> None:
+    replacements = {"c1": "Khu vực", "c2": "Doanh thu", "c9": "Unused"}
+    sql = (
+        "SELECT c1, SUM(c2) AS total, COUNT(*) AS c9 FROM dataset "
+        "WHERE C1 = 'Bắc' GROUP BY c1 ORDER BY c9"
+    )
+
+    rewritten = replace_column_references(sql, replacements)
+
+    assert 'SELECT "Khu vực", SUM("Doanh thu") AS total' in rewritten
+    assert "WHERE \"Khu vực\" = 'Bắc'" in rewritten
+    assert 'GROUP BY "Khu vực"' in rewritten
+    assert rewritten.endswith("ORDER BY c9")
+    assert replace_column_references(sql, {}) == sql
+    assert replace_column_references("SELECT (", replacements) == "SELECT ("
 
 
 def test_identifier_warning_skips_tiny_tables_and_continuous_measures(tmp_path: Path) -> None:

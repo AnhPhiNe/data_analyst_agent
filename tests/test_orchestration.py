@@ -294,7 +294,8 @@ def test_malformed_insight_draft_becomes_unsupported_without_failing_run(
         in (completed["unsupported_claims"][0]["reason"])
     )
     assert '"region"' in gateway.requests[-1].prompt
-    assert "Allowed column names" in gateway.requests[-1].prompt
+    assert "Allowed result columns" in gateway.requests[-1].prompt
+    assert '"r1": "region"' in gateway.requests[-1].prompt
     assert "every value or comparison the analytical goal asks for" in gateway.requests[3].prompt
     assert "exactly one y field" in gateway.requests[-1].prompt
 
@@ -1016,6 +1017,57 @@ def test_new_request_replaces_a_pending_clarification(tmp_path: Path) -> None:
     assert restarted["status"] == AgentRunStatus.AWAITING_PLAN_APPROVAL
     assert restarted["clarification_question"] == ""
     assert len(gateway.requests) == 3
+
+
+def test_ascii_field_ids_stand_in_for_vietnamese_names_end_to_end(tmp_path: Path) -> None:
+    upload = tmp_path / "doanh_thu.csv"
+    upload.write_text("Khu vực,Doanh thu\nBắc,100\nNam,150\nBắc,50\n", encoding="utf-8", newline="")
+    core = TabularDataCore(tmp_path / "vn-session")
+    handle = core.ingest(upload)
+    request = AgentRunRequest(
+        session_id="vn-session",
+        user_request="Tổng doanh thu theo khu vực",
+        dataset_handle=handle,
+        data_profile=core.profile(handle),
+    )
+    mapping = {"requested_label": "doanh thu", "status": "direct", "source_fields": ["c2"]}
+    gateway = FakeModelGateway(
+        [
+            {**goal_output(), "requested_metric_mappings": [mapping]},
+            plan_output(required_fields=["c1", "c2"]),
+            tool_output("SELECT c1, SUM(c2) AS total FROM dataset GROUP BY c1 ORDER BY c1"),
+            insight_output(
+                left_metric="row[0].total",
+                right_metric="row[1].total",
+                evidence_metrics=["row[0].total", "row[1].total"],
+            ),
+            {
+                "artifact_type": "bar",
+                "analytical_purpose": "Compare regional revenue",
+                "x_field": "r1",
+                "y_fields": ["r2"],
+                "title": "Doanh thu theo khu vực",
+                "labels": {"r2": "Tổng doanh thu"},
+            },
+        ]
+    )
+    agent = AgentOrchestrator(gateway, core, checkpointer=InMemorySaver())
+
+    agent.start(request)
+    completed = agent.resume(request.session_id, True)
+
+    assert '"id": "c1"' in gateway.requests[0].prompt
+    assert completed["status"] == AgentRunStatus.COMPLETED
+    assert completed["requested_metric_mappings"][0]["source_fields"] == ["Doanh thu"]
+    assert completed["plan"]["steps"][0]["required_fields"] == ["Khu vực", "Doanh thu"]
+    assert '"Khu vực"' in completed["tool_actions"][0]["inputs"]["sql"]
+    assert completed["verified_insights"]
+    chart = completed["chart_renders"][0]["intent"]
+    assert (chart["x_field"], chart["y_fields"], chart["labels"]) == (
+        "Khu vực",
+        ["total"],
+        {"total": "Tổng doanh thu"},
+    )
 
 
 def test_tool_request_cannot_expand_beyond_approved_fields(tmp_path: Path) -> None:

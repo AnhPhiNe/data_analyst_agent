@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass
 
 import sqlglot
@@ -38,6 +39,34 @@ class SQLAnalysis:
     group_by_columns: tuple[str, ...] = ()
     unaliased_outputs: tuple[str, ...] = ()
     filters: tuple[str, ...] = ()
+
+
+def replace_column_references(sql: str, replacements: Mapping[str, str]) -> str:
+    """Rewrite unqualified column references, matched case-insensitively, to exact names.
+
+    Output aliases keep their meaning, and SQL that cannot be parsed is returned unchanged so
+    the read-only policy reports the parse error itself.
+    """
+    lookup = {key.casefold(): value for key, value in replacements.items()}
+    if not lookup:
+        return sql
+    try:
+        statements = sqlglot.parse(sql, read="duckdb")
+    except sqlglot.errors.ParseError:
+        return sql
+    if len(statements) != 1 or statements[0] is None:
+        return sql
+    statement = statements[0]
+    aliases = {alias.alias.casefold() for alias in statement.find_all(exp.Alias) if alias.alias}
+    changed = False
+    for column in statement.find_all(exp.Column):
+        name = column.name
+        target = lookup.get(name.casefold()) if name else None
+        if target is None or column.table or name.casefold() in aliases:
+            continue
+        column.set("this", exp.to_identifier(target, quoted=True))
+        changed = True
+    return statement.sql(dialect="duckdb") if changed else sql
 
 
 def validate_read_only_sql(sql: str, *, allowed_table: str) -> str:

@@ -22,6 +22,7 @@ from tabular_analytics_agent.data import (
     QueryResult,
     TabularDataCore,
     UnsafeQueryError,
+    replace_column_references,
 )
 from tabular_analytics_agent.domain import (
     ActionStatus,
@@ -303,7 +304,7 @@ def build_agent_graph(
             ),
             response_schema=GoalInterpretation,
             system_instruction=_SYSTEM_INSTRUCTION,
-            prompt_template_version="semantic-v9",
+            prompt_template_version="semantic-v10",
             timeout_seconds=_model_call_timeout_seconds(state, budget, clock()),
         )
         trace: ModelCallTrace | None = None
@@ -518,7 +519,7 @@ def build_agent_graph(
             ),
             response_schema=PlanDraft,
             system_instruction=_SYSTEM_INSTRUCTION,
-            prompt_template_version="plan-v4",
+            prompt_template_version="plan-v5",
             timeout_seconds=_model_call_timeout_seconds(state, budget, clock()),
         )
         trace: ModelCallTrace | None = None
@@ -658,7 +659,7 @@ def build_agent_graph(
                 else StatisticalToolRequestDraft
             ),
             system_instruction=_SYSTEM_INSTRUCTION,
-            prompt_template_version="tool-request-v9",
+            prompt_template_version="tool-request-v10",
             timeout_seconds=_model_call_timeout_seconds(state, plan.budget, clock()),
         )
         trace: ModelCallTrace | None = None
@@ -1082,6 +1083,9 @@ def build_agent_graph(
             SemanticAnnotation.model_validate(value)
             for value in state.get("semantic_annotations", [])
         )
+        result_columns = {
+            f"r{index}": column.name for index, column in enumerate(result.columns, start=1)
+        }
         request = StructuredModelRequest(
             task=ModelTask.CHART_INTENT,
             prompt=(
@@ -1089,19 +1093,21 @@ def build_agent_graph(
                 f"{_json_for_prompt(state['goal'])}\n"
                 "Verified query result metadata (schema only; no cell values): "
                 f"{_json_for_prompt(_chart_result_metadata(result, profile))}\n"
-                "Allowed column names for x_field, y_fields, color_field, and label keys: "
-                f"{_json_for_prompt([column.name for column in result.columns])}. "
+                "Allowed result columns for x_field, y_fields, color_field, and label keys, as id "
+                "to exact name (write either the id or the exact name): "
+                f"{_json_for_prompt(result_columns)}. "
                 "Never use placeholder names such as x or y.\n"
                 "Propose one readable chart using only these supported artifact types: "
                 "kpi, table, histogram, bar, line, scatter. A kpi needs exactly one result row "
                 "and exactly one y field; for one row with several values, use table with no "
                 "encodings. Choose based on the analytical goal, field types, cardinality, and "
-                "row count. Use only exact result column names in encodings and labels. Set "
+                "row count. Use only these result columns, by id or exact name, in encodings and "
+                "labels. Set "
                 "aggregation to null because aggregation already happened in verified SQL."
             ),
             response_schema=ChartIntentDraft,
             system_instruction=_SYSTEM_INSTRUCTION,
-            prompt_template_version="chart-intent-v4",
+            prompt_template_version="chart-intent-v5",
             max_output_tokens=1024,
             timeout_seconds=_model_call_timeout_seconds(state, plan.budget, clock()),
         )
@@ -1115,16 +1121,21 @@ def build_agent_graph(
             artifact_type = ArtifactType(draft.artifact_type)
             # A table always renders every result column, so stray encodings carry no meaning.
             is_table = artifact_type is ArtifactType.TABLE
+            columns = _result_column_lookup(result)
             intent = ChartIntent(
                 artifact_type=artifact_type,
                 analytical_purpose=draft.analytical_purpose,
                 source_result_ref=make_query_result_reference(result, annotations),
-                x_field=None if is_table else draft.x_field,
-                y_fields=() if is_table else draft.y_fields,
-                color_field=None if is_table else draft.color_field,
+                x_field=None if is_table else _resolve_column(columns, draft.x_field),
+                y_fields=()
+                if is_table
+                else tuple(columns.get(_field_key(field), field) for field in draft.y_fields),
+                color_field=None if is_table else _resolve_column(columns, draft.color_field),
                 aggregation=draft.aggregation,
                 title=draft.title,
-                labels=draft.labels,
+                labels={
+                    columns.get(_field_key(key), key): value for key, value in draft.labels.items()
+                },
                 # Formatting is cosmetic; keys the renderer does not support are dropped here.
                 formatting_intent={
                     key: value
@@ -1226,10 +1237,12 @@ _MAX_PROMPT_SAMPLE_VALUES = 10
 
 def _profile_prompt(profile: DataProfile) -> str:
     pii_fields = set(profile.pii_candidates)
+    ids_by_name = {name: field_id for field_id, name in _field_ids(profile).items()}
     metadata = {
         "row_count": profile.row_count,
         "fields": [
             {
+                "id": ids_by_name.get(field.name),
                 "name": field.name,
                 "kind": field.kind.value,
                 "missing_rate": field.missing_rate,
@@ -1249,7 +1262,11 @@ def _profile_prompt(profile: DataProfile) -> str:
         ],
         "pii_candidates": profile.pii_candidates,
     }
-    return f"<untrusted_dataset_metadata>{_json_for_prompt(metadata)}</untrusted_dataset_metadata>"
+    return (
+        f"<untrusted_dataset_metadata>{_json_for_prompt(metadata)}</untrusted_dataset_metadata>\n"
+        "Each field has an ASCII id such as c1. Wherever a field name is required, including in "
+        "SQL, you may write the id instead of the name; ids avoid miscopying non-ASCII names."
+    )
 
 
 def _insight_evidence_catalog(state: AgentState, profile: DataProfile) -> list[dict[str, Any]]:
@@ -1440,8 +1457,39 @@ def _field_key(name: str) -> str:
     return unicodedata.normalize("NFC", name).casefold()
 
 
+def _field_ids(profile: DataProfile) -> dict[str, str]:
+    """Stable ASCII ids (c1, c2, ...) that let the model avoid copying non-ASCII field names.
+
+    An id that equals a real field name is not assigned, so a real name always wins.
+    """
+    real_names = {_field_key(field.name) for field in profile.fields}
+    return {
+        f"c{index}": field.name
+        for index, field in enumerate(profile.fields, start=1)
+        if f"c{index}" not in real_names
+    }
+
+
+def _field_lookup(profile: DataProfile) -> dict[str, str]:
+    lookup = {_field_key(field.name): field.name for field in profile.fields}
+    lookup.update({_field_key(field_id): name for field_id, name in _field_ids(profile).items()})
+    return lookup
+
+
+def _result_column_lookup(result: QueryResult) -> dict[str, str]:
+    """Map exact result column names and their ids (r1, r2, ...) to result column names."""
+    lookup = {_field_key(column.name): column.name for column in result.columns}
+    for index, column in enumerate(result.columns, start=1):
+        lookup.setdefault(_field_key(f"r{index}"), column.name)
+    return lookup
+
+
+def _resolve_column(lookup: dict[str, str], name: str | None) -> str | None:
+    return None if name is None else lookup.get(_field_key(name), name)
+
+
 def _canonicalize_profile_fields(profile: DataProfile, fields: tuple[str, ...]) -> tuple[str, ...]:
-    canonical_names = {_field_key(field.name): field.name for field in profile.fields}
+    canonical_names = _field_lookup(profile)
     canonical: list[str] = []
     unknown: list[str] = []
     for field in fields:
@@ -1600,7 +1648,7 @@ def _bind_tool_request_to_step(
         raise ValueError("Plan step declares an unsupported tool")
     if not isinstance(request, SQLToolRequestDraft):
         raise ValueError("SQL plan step requires a SQL query")
-    sql = request.sql
+    sql = replace_column_references(request.sql, _field_ids(profile))
     inspection = data_core.inspect_query(handle, sql)
     if inspection.has_wildcard:
         raise ValueError("Wildcard projections are not allowed for approved Tool Actions")
@@ -1631,7 +1679,7 @@ def _bind_tool_request_to_step(
 def _canonicalize_statistical_fields(
     request: dict[str, Any], profile: DataProfile
 ) -> dict[str, Any]:
-    canonical_fields = {_field_key(field.name): field.name for field in profile.fields}
+    canonical_fields = _field_lookup(profile)
     field_names = ("value_fields", "value_field", "group_field", "x_field", "y_field")
     for name in field_names:
         value = request[name]

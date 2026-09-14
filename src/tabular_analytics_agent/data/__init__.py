@@ -19,6 +19,7 @@ from tabular_analytics_agent.data.models import (
     QueryResult,
     UploadInspection,
 )
+from tabular_analytics_agent.data.sql_policy import replace_column_references
 
 __all__ = [
     "DataCoreError",
@@ -36,4 +37,5 @@ __all__ = [
     "UnsafeQueryError",
     "UnsupportedFileError",
     "UploadInspection",
+    "replace_column_references",
 ]
