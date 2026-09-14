@@ -1,0 +1,47 @@
+{
+  "case_id": "holdout-v5-clinic-no-show-rate-by-insurance-v1",
+  "dataset_path": "tests/fixtures/eval_holdout_v5/clinic_appointments.csv",
+  "dataset_sha256": "c3390dd77ea9e7f7cecda1eb9bab615316a736f7ce4069e5830076ca941d19a9",
+  "user_request": "What proportion of appointments were no-shows for each insurance type, as a value between 0 and 1?",
+  "goal_family": "comparison",
+  "required_calculations": [
+    {
+      "metric": "no_show",
+      "group": {
+        "field": "insurance_type",
+        "value": "Private"
+      },
+      "expected": 0.056,
+      "absolute_tolerance": 0.0001
+    },
+    {
+      "metric": "no_show",
+      "group": {
+        "field": "insurance_type",
+        "value": "Public"
+      },
+      "expected": 0.15270935960591134,
+      "absolute_tolerance": 0.0001
+    },
+    {
+      "metric": "no_show",
+      "group": {
+        "field": "insurance_type",
+        "value": "Uninsured"
+      },
+      "expected": 0.21621621621621623,
+      "absolute_tolerance": 0.0001
+    }
+  ],
+  "allowed_fields": [
+    "insurance_type",
+    "no_show"
+  ],
+  "supported_conclusions": [
+    "Uninsured appointments have the highest no-show rate."
+  ],
+  "valid_chart_types": [
+    "bar",
+    "table"
+  ]
+}

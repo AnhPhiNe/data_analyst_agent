@@ -1,0 +1,56 @@
+{
+  "case_id": "holdout-v5-coffee-revenue-by-branch-v1",
+  "dataset_path": "tests/fixtures/eval_holdout_v5/quan_ca_phe.csv",
+  "dataset_sha256": "731cbc9899987f230843ccee69ef3ae591d5137a909f0ce2d492ed0c6a1b00c9",
+  "user_request": "Tổng thành tiền của mỗi chi nhánh là bao nhiêu?",
+  "goal_family": "comparison",
+  "required_calculations": [
+    {
+      "metric": "Thành tiền",
+      "group": {
+        "field": "Chi nhánh",
+        "value": "Bình Thạnh"
+      },
+      "expected": 7145000.0,
+      "absolute_tolerance": 1e-06
+    },
+    {
+      "metric": "Thành tiền",
+      "group": {
+        "field": "Chi nhánh",
+        "value": "Quận 1"
+      },
+      "expected": 13850000.0,
+      "absolute_tolerance": 1e-06
+    },
+    {
+      "metric": "Thành tiền",
+      "group": {
+        "field": "Chi nhánh",
+        "value": "Quận 3"
+      },
+      "expected": 12035000.0,
+      "absolute_tolerance": 1e-06
+    },
+    {
+      "metric": "Thành tiền",
+      "group": {
+        "field": "Chi nhánh",
+        "value": "Thủ Đức"
+      },
+      "expected": 8415000.0,
+      "absolute_tolerance": 1e-06
+    }
+  ],
+  "allowed_fields": [
+    "Chi nhánh",
+    "Thành tiền"
+  ],
+  "supported_conclusions": [
+    "Quận 1 có tổng thành tiền cao nhất."
+  ],
+  "valid_chart_types": [
+    "bar",
+    "table"
+  ]
+}

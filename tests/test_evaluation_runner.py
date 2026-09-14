@@ -26,6 +26,7 @@ HOLDOUT_CASES = ROOT / "tests" / "evaluation_cases_holdout"
 CONTAMINATED_HOLDOUT_CASES = ROOT / "tests" / "evaluation_cases_holdout_contaminated"
 HOLDOUT_V3_CASES = ROOT / "tests" / "evaluation_cases_holdout_v3"
 HOLDOUT_V4_CASES = ROOT / "tests" / "evaluation_cases_holdout_v4"
+HOLDOUT_V5_CASES = ROOT / "tests" / "evaluation_cases_holdout_v5"
 
 
 def load_case(filename: str) -> GoldenCase:
@@ -92,15 +93,19 @@ def test_every_committed_case_is_bound_to_its_dataset() -> None:
     holdout = (*load_cases(HOLDOUT_CASES), *load_cases(CONTAMINATED_HOLDOUT_CASES))
     holdout_v3 = load_cases(HOLDOUT_V3_CASES)
     holdout_v4 = load_cases(HOLDOUT_V4_CASES)
-    cases = (*development, *holdout, *holdout_v3, *holdout_v4)
+    holdout_v5 = load_cases(HOLDOUT_V5_CASES)
+    cases = (*development, *holdout, *holdout_v3, *holdout_v4, *holdout_v5)
 
     assert holdout_v3
     assert holdout_v4
+    assert holdout_v5
     # Each holdout set's datasets were unseen by every earlier case set when it was committed.
     earlier_datasets = {case.dataset_path for case in (*development, *holdout)}
     assert not earlier_datasets & {case.dataset_path for case in holdout_v3}
     earlier_datasets |= {case.dataset_path for case in holdout_v3}
     assert not earlier_datasets & {case.dataset_path for case in holdout_v4}
+    earlier_datasets |= {case.dataset_path for case in holdout_v4}
+    assert not earlier_datasets & {case.dataset_path for case in holdout_v5}
 
     assert development
     assert load_cases(HOLDOUT_CASES)

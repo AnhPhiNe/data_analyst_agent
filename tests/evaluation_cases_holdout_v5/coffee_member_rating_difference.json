@@ -1,0 +1,29 @@
+{
+  "case_id": "holdout-v5-coffee-member-rating-difference-v1",
+  "dataset_path": "tests/fixtures/eval_holdout_v5/quan_ca_phe.csv",
+  "dataset_sha256": "731cbc9899987f230843ccee69ef3ae591d5137a909f0ce2d492ed0c6a1b00c9",
+  "user_request": "Điểm đánh giá trung bình của khách thành viên và khách không phải thành viên có khác nhau có ý nghĩa thống kê không?",
+  "goal_family": "comparison",
+  "required_calculations": [
+    {
+      "metric": "group[str:\"Có\"].mean",
+      "expected": 4.2421875,
+      "absolute_tolerance": 1e-06
+    },
+    {
+      "metric": "group[str:\"Không\"].mean",
+      "expected": 3.8000000000000003,
+      "absolute_tolerance": 1e-06
+    }
+  ],
+  "allowed_fields": [
+    "Khách thành viên",
+    "Điểm đánh giá"
+  ],
+  "supported_conclusions": [
+    "Điểm đánh giá trung bình của hai nhóm được so sánh bằng kiểm định hai nhóm."
+  ],
+  "forbidden_claims": [
+    "cause"
+  ]
+}

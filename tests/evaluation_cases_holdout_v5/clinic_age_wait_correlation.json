@@ -1,0 +1,24 @@
+{
+  "case_id": "holdout-v5-clinic-age-wait-correlation-v1",
+  "dataset_path": "tests/fixtures/eval_holdout_v5/clinic_appointments.csv",
+  "dataset_sha256": "c3390dd77ea9e7f7cecda1eb9bab615316a736f7ce4069e5830076ca941d19a9",
+  "user_request": "Is patient age correlated with wait time?",
+  "goal_family": "relationship",
+  "required_calculations": [
+    {
+      "metric": "pearson_r",
+      "expected": 0.7570249082732474,
+      "absolute_tolerance": 0.001
+    }
+  ],
+  "allowed_fields": [
+    "patient_age",
+    "wait_minutes"
+  ],
+  "supported_conclusions": [
+    "Patient age and wait time are positively associated, which does not establish causation."
+  ],
+  "forbidden_claims": [
+    "cause"
+  ]
+}

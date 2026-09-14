@@ -1,0 +1,23 @@
+{
+  "case_id": "holdout-v5-coffee-ewallet-order-count-v1",
+  "dataset_path": "tests/fixtures/eval_holdout_v5/quan_ca_phe.csv",
+  "dataset_sha256": "731cbc9899987f230843ccee69ef3ae591d5137a909f0ce2d492ed0c6a1b00c9",
+  "user_request": "Có bao nhiêu đơn hàng thanh toán bằng ví điện tử?",
+  "goal_family": "summary",
+  "required_calculations": [
+    {
+      "metric": "order_count",
+      "expected": 126
+    }
+  ],
+  "allowed_fields": [
+    "Hình thức thanh toán"
+  ],
+  "supported_conclusions": [
+    "Có 126 đơn hàng thanh toán bằng ví điện tử."
+  ],
+  "valid_chart_types": [
+    "kpi",
+    "table"
+  ]
+}

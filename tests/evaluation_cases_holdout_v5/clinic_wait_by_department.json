@@ -1,0 +1,56 @@
+{
+  "case_id": "holdout-v5-clinic-wait-by-department-v1",
+  "dataset_path": "tests/fixtures/eval_holdout_v5/clinic_appointments.csv",
+  "dataset_sha256": "c3390dd77ea9e7f7cecda1eb9bab615316a736f7ce4069e5830076ca941d19a9",
+  "user_request": "What is the average wait time in minutes for each department?",
+  "goal_family": "comparison",
+  "required_calculations": [
+    {
+      "metric": "wait_minutes",
+      "group": {
+        "field": "department",
+        "value": "Cardiology"
+      },
+      "expected": 43.10571428571429,
+      "absolute_tolerance": 1e-06
+    },
+    {
+      "metric": "wait_minutes",
+      "group": {
+        "field": "department",
+        "value": "Dermatology"
+      },
+      "expected": 31.972093023255812,
+      "absolute_tolerance": 1e-06
+    },
+    {
+      "metric": "wait_minutes",
+      "group": {
+        "field": "department",
+        "value": "Orthopedics"
+      },
+      "expected": 39.11304347826087,
+      "absolute_tolerance": 1e-06
+    },
+    {
+      "metric": "wait_minutes",
+      "group": {
+        "field": "department",
+        "value": "Pediatrics"
+      },
+      "expected": 18.15126050420168,
+      "absolute_tolerance": 1e-06
+    }
+  ],
+  "allowed_fields": [
+    "department",
+    "wait_minutes"
+  ],
+  "supported_conclusions": [
+    "Pediatrics has the shortest average wait."
+  ],
+  "valid_chart_types": [
+    "bar",
+    "table"
+  ]
+}

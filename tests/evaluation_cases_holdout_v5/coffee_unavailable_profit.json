@@ -1,0 +1,15 @@
+{
+  "case_id": "holdout-v5-coffee-unavailable-profit-v1",
+  "dataset_path": "tests/fixtures/eval_holdout_v5/quan_ca_phe.csv",
+  "dataset_sha256": "731cbc9899987f230843ccee69ef3ae591d5137a909f0ce2d492ed0c6a1b00c9",
+  "user_request": "Lợi nhuận trung bình của mỗi chi nhánh là bao nhiêu?",
+  "goal_family": "summary",
+  "expected_outcome": "clarification",
+  "acceptable_outcomes": [
+    "refused"
+  ],
+  "forbidden_claims": [
+    "Thành tiền",
+    "Đơn giá"
+  ]
+}

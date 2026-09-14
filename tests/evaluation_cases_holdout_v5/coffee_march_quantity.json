@@ -1,0 +1,24 @@
+{
+  "case_id": "holdout-v5-coffee-march-quantity-v1",
+  "dataset_path": "tests/fixtures/eval_holdout_v5/quan_ca_phe.csv",
+  "dataset_sha256": "731cbc9899987f230843ccee69ef3ae591d5137a909f0ce2d492ed0c6a1b00c9",
+  "user_request": "Tổng số lượng đồ uống bán ra trong tháng 3 năm 2026 là bao nhiêu?",
+  "goal_family": "summary",
+  "required_calculations": [
+    {
+      "metric": "total_quantity",
+      "expected": 168
+    }
+  ],
+  "allowed_fields": [
+    "Ngày",
+    "Số lượng"
+  ],
+  "supported_conclusions": [
+    "Tháng 3 năm 2026 bán ra 168 đồ uống."
+  ],
+  "valid_chart_types": [
+    "kpi",
+    "table"
+  ]
+}

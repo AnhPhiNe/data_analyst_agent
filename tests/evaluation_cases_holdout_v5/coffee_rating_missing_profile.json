@@ -1,0 +1,15 @@
+{
+  "case_id": "holdout-v5-coffee-rating-missing-profile-v1",
+  "dataset_path": "tests/fixtures/eval_holdout_v5/quan_ca_phe.csv",
+  "dataset_sha256": "731cbc9899987f230843ccee69ef3ae591d5137a909f0ce2d492ed0c6a1b00c9",
+  "user_request": "Cột Điểm đánh giá có bao nhiêu giá trị bị thiếu?",
+  "goal_family": "data_quality",
+  "expected_outcome": "profile",
+  "required_profile_facts": [
+    {
+      "fact": "missing_count",
+      "field": "Điểm đánh giá",
+      "expected": 20
+    }
+  ]
+}

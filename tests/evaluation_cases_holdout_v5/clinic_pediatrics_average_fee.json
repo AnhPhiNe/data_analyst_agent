@@ -1,0 +1,25 @@
+{
+  "case_id": "holdout-v5-clinic-pediatrics-average-fee-v1",
+  "dataset_path": "tests/fixtures/eval_holdout_v5/clinic_appointments.csv",
+  "dataset_sha256": "c3390dd77ea9e7f7cecda1eb9bab615316a736f7ce4069e5830076ca941d19a9",
+  "user_request": "What is the average visit fee for pediatrics appointments?",
+  "goal_family": "summary",
+  "required_calculations": [
+    {
+      "metric": "avg_visit_fee",
+      "expected": 69.00394957983193,
+      "absolute_tolerance": 1e-06
+    }
+  ],
+  "allowed_fields": [
+    "department",
+    "visit_fee"
+  ],
+  "supported_conclusions": [
+    "The average pediatrics visit fee is reported."
+  ],
+  "valid_chart_types": [
+    "kpi",
+    "table"
+  ]
+}
