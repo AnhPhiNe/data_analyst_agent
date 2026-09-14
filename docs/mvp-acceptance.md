@@ -37,6 +37,8 @@ These items are in integration review until the verification record below is com
 
 - Goal suggestions (Spec Section 6, step 5) are implemented deterministically from the Data
   Profile and offered before the first question; a manual Streamlit review remains.
+- The Data Overview (Should tier, FR-11) is implemented in `application/overview.py` and shown
+  after ingestion without model calls; a manual Streamlit review on the user's own data remains.
 - Check every Must-tier workflow in Streamlit: upload, profile, clarification, approval, result,
   chart, pin/unpin, open another session, reopen after restart, export, and confirmed deletion.
 - Run live smoke evaluation with grading version 2 or later: at least 10 cases, 3 datasets,

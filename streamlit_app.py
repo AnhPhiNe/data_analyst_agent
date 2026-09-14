@@ -26,6 +26,7 @@ from tabular_analytics_agent.application.exports import (
     export_query_result_csv,
     export_verified_insights_json,
 )
+from tabular_analytics_agent.application.overview import DataOverview
 from tabular_analytics_agent.application.suggestions import suggest_goals
 from tabular_analytics_agent.model_gateway import (
     DEFAULT_GEMINI_MODEL,
@@ -245,14 +246,55 @@ def profile_table(workspace: AnalysisWorkspace) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def render_dataset_summary(workspace: AnalysisWorkspace) -> None:
+@st.cache_data(show_spinner=False, max_entries=16)
+def data_overview(
+    _application: LocalAnalysisApplication,
+    _workspace: AnalysisWorkspace,
+    session_id: str,
+    working_dataset_version: int,
+) -> DataOverview:
+    # The session id and dataset version identify the data; underscored arguments are not hashed.
+    return _application.data_overview(_workspace)
+
+
+def render_dataset_summary(
+    application: LocalAnalysisApplication, workspace: AnalysisWorkspace
+) -> None:
     profile = workspace.data_profile
+    overview = data_overview(
+        application,
+        workspace,
+        str(workspace.session.session_id),
+        workspace.dataset_handle.working_dataset_version,
+    )
     missing_cells = sum(field.missing_count for field in profile.fields)
     columns = st.columns(4)
-    columns[0].metric("Rows", f"{profile.row_count:,}")
-    columns[1].metric("Columns", len(profile.fields))
-    columns[2].metric("Missing cells", f"{missing_cells:,}")
-    columns[3].metric("Duplicate rows", f"{profile.duplicate_row_count:,}")
+    columns[0].metric("Rows", f"{overview.row_count:,}")
+    columns[1].metric("Columns", overview.column_count)
+    columns[2].metric("Missing cells", f"{missing_cells:,} ({overview.missing_rate:.1%})")
+    columns[3].metric("Duplicate rows", f"{overview.duplicate_row_count:,}")
+
+    with st.expander("Data overview", expanded=not st.session_state.get("messages")):
+        st.caption(
+            "Descriptive facts from the Data Profile and read-only queries. No model was "
+            "called, and none of these charts is a Verified Insight."
+        )
+        chart_columns = st.columns(2)
+        for index, chart in enumerate(overview.charts):
+            with chart_columns[index % 2]:
+                st.plotly_chart(
+                    go.Figure(chart.figure),
+                    width="stretch",
+                    config={"displaylogo": False},
+                    key=f"overview-chart-{index}",
+                )
+                st.caption(chart.caption)
+                if chart.suggested_question and st.button(
+                    "Ask the agent to test this", key=f"overview-question-{index}"
+                ):
+                    st.session_state["overview_goal"] = chart.suggested_question
+        for note in overview.omitted:
+            st.caption(note)
 
     with st.expander("Dataset profile", expanded=False):
         st.dataframe(profile_table(workspace), hide_index=True, width="stretch")
@@ -529,7 +571,7 @@ def render_analyze_tab(
     application: LocalAnalysisApplication,
     workspace: AnalysisWorkspace,
 ) -> None:
-    render_dataset_summary(workspace)
+    render_dataset_summary(application, workspace)
     state = current_state()
     if state and state.get("session_id") not in (None, str(workspace.session.session_id)):
         st.error(
@@ -586,6 +628,7 @@ def render_analyze_tab(
             key="analysis-question",
         )
         or suggested_goal
+        or (None if waiting else st.session_state.pop("overview_goal", None))
     )
     if prompt:
         st.session_state.setdefault("messages", []).append({"role": "user", "content": prompt})

@@ -19,6 +19,7 @@ from tabular_analytics_agent.application.models import (
     SessionSummary,
     StagedUpload,
 )
+from tabular_analytics_agent.application.overview import DataOverview, build_data_overview
 from tabular_analytics_agent.data import (
     DataCoreLimits,
     TabularDataCore,
@@ -412,6 +413,11 @@ class LocalAnalysisApplication:
 
     def read_render_spec(self, artifact: AnalyticalArtifact) -> dict[str, Any]:
         return self._artifact_store.read_render_spec(artifact)
+
+    def data_overview(self, workspace: AnalysisWorkspace) -> DataOverview:
+        """Build the deterministic Data Overview for a workspace; no model is called."""
+        core = TabularDataCore(self._session_directory(workspace.session.session_id), self._limits)
+        return build_data_overview(core, workspace.dataset_handle, workspace.data_profile)
 
     @contextmanager
     def _open_orchestrator(self, workspace: AnalysisWorkspace) -> Iterator[AgentOrchestrator]:

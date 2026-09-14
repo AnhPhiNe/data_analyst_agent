@@ -99,6 +99,18 @@ def test_profile_shows_numeric_statistics_without_approval_or_model_calls(
     assert not gateway.requests
 
 
+def test_data_overview_renders_descriptive_charts_without_model_calls(
+    ui_workspace: tuple[AppTest, AnalysisWorkspace, LocalAnalysisApplication, FakeModelGateway],
+) -> None:
+    app, _, _, gateway = ui_workspace
+    app.run()
+
+    assert not app.exception
+    assert any(expander.label == "Data overview" for expander in app.expander)
+    assert any("No model was called" in caption.value for caption in app.caption)
+    assert not gateway.requests
+
+
 def test_suggested_goal_starts_analysis_like_a_typed_question(
     ui_workspace: tuple[AppTest, AnalysisWorkspace, LocalAnalysisApplication, FakeModelGateway],
 ) -> None:
