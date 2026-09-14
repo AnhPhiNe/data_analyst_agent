@@ -1,6 +1,6 @@
 # Tabular Analytics Agent — Product and Technical Specification
 
-**Status:** Approved — v1.1 targeted amendments (see Section 24)
+**Status:** Approved — v1.2 targeted amendments (see Section 24)
 **Target:** Local-first MVP and AI Engineer portfolio project
 **Primary interface:** Streamlit
 **Last updated:** 2026-09-14
@@ -99,6 +99,7 @@ The maximum size and execution limits must be configurable rather than hard-code
 - A session operates within its own storage namespace.
 - Reloading Streamlit must not silently lose a persisted session.
 - Deleting a session removes its Source Dataset, Working Dataset, artifacts, metadata, and local traces.
+- Deletion requires an explicit confirmation bound to the selected session and never touches another session's namespace. Artifact metadata and session files are removed in sequence rather than in one transaction; a partial failure is reported instead of claimed as success. Deletion is not a forensic secure erase.
 
 ### FR-02 — File ingestion
 
@@ -133,6 +134,8 @@ The Data Profile is factual evidence and must not be labeled as an insight.
 - Permit the agent to state a hypothesis but require user confirmation before relying on it.
 - Save confirmed meanings as Semantic Annotations for the current session.
 - Re-enter clarification if a later request exposes unresolved ambiguity.
+- Map every explicitly requested metric to the dataset as direct, derived, or unavailable (Section 25.4). The agent never lets a different field stand in for a requested metric.
+- An unavailable metric pauses for clarification. The user either corrects the request, which is interpreted again from the start, or accepts that the metric is unavailable, which ends the run as a typed refusal rather than a failure.
 
 ### FR-05 — Analytical goals
 
@@ -241,6 +244,8 @@ The MVP exports, in priority order:
 - Should: an interactive or self-contained HTML analytical report.
 
 PDF and generated notebooks are stretch goals.
+
+Exports include only results referenced by current Verified Insights, bound to the current session, dataset, Working Dataset version, and Semantic Annotations; evidence correctness remains the responsibility of the Verification Gates. JSON carries query schema, SQL, and counts plus full statistical results, but no result rows, model prompts, traces, or provider settings. CSV text cells and headers that could run as spreadsheet formulas are prefixed with an apostrophe.
 
 ## 8. Application Architecture
 
@@ -673,9 +678,16 @@ Targeted amendments based on live Gemini smoke runs. Decisions from v1.0 remain 
 
 Known gaps at v1.1: session listing, resume, and deletion in the UI; goal suggestions; export; Should-tier charts; extracting SQL filters into Evidence Trails; environment-configurable resource limits and execution budgets; and a quota-aware model gateway.
 
-Implementation follow-up: session listing/open/deletion and verified-result CSV/JSON downloads are
-now implemented, with offline integration acceptance tracked in `docs/mvp-acceptance.md`. This
-does not waive live evaluation, full Streamlit acceptance, or clean-environment release checks.
+### v1.2 — 2026-09-14
+
+Synchronizes the specification with the implemented metric grounding, session lifecycle, and export work. No v1.1 decision is reversed.
+
+- Requested-metric mappings and the typed unavailable-metric refusal (FR-04, Section 25.4).
+- Confirmed, per-session deletion and its non-transactional limit (FR-01).
+- Export selection, binding, and content rules (FR-13).
+- Evaluation pacing default corrected to 12 requests per minute (Section 25.3).
+
+Known gaps at v1.2: goal suggestions (Section 6, step 5 — Must-tier, not implemented); live evaluation of the metric-mapping prompt and the Section 17.4 gates; manual Streamlit acceptance; Should-tier charts and HTML report export; extracting SQL filters into Evidence Trails; environment-configurable resource limits and execution budgets; a quota-aware model gateway; Milestone 6 hardening evidence; Docker packaging. Acceptance status is tracked in `docs/mvp-acceptance.md`.
 
 ## 25. Implementation Contracts
 
@@ -697,6 +709,15 @@ Questions fully covered by the Data Profile are answered without a tool (Section
 - New Verified Insights persist their typed assertion so evaluation can distinguish values actually asserted from extra supporting evidence. Legacy insights without a stored assertion remain readable but cannot establish assertion coverage automatically.
 - A statistical p-value belongs to the result's identified primary test statistic. P-value and significance claims name that test explicitly. The current correlation tool tests Pearson correlation; its supplementary Spearman coefficient is descriptive and does not share Pearson's p-value.
 
+### 25.4 Requested Metric Mapping
+
+- Goal interpretation returns `requested_metric_mappings`, one entry per explicitly requested metric, each keeping the user's `requested_label`. Structural questions may return an empty list; dimensions such as region or month need no entry.
+- `direct` names the exact `source_fields` that measure the metric. `derived` names every source field and an explicit reproducible `derivation`. `unavailable` has no source fields or derivation and may give a `reason`.
+- Source fields must exist in the Data Profile after NFC normalization and case folding. A derived metric is never answered from the Data Profile.
+- Every direct or derived mapping must have all of its source fields in the `required_fields` of at least one plan step; otherwise the plan fails. A plan cannot be created while any mapping is unavailable.
+- An unavailable mapping pauses for clarification. A corrected request clears earlier mappings and is interpreted again. Accepting the unavailable metric ends the run with status `refused`, refusal code `unavailable_metric`, and a non-empty reason; the session is recorded as completed. Execution errors such as insufficient samples are never relabeled as refusals.
+- These checks make the mapping inspectable and grounded in real fields; they do not prove that the language equivalence or the derivation is semantically correct, so the UI shows the mapping for user review.
+
 ### 25.3 Configuration
 
 | Setting | Source | Default |
@@ -707,4 +728,4 @@ Questions fully covered by the Data Profile are answered without a tool (Section
 | Data directory | `TABULAR_AGENT_DATA_DIR` | `.data` |
 | Resource limits (`DataCoreLimits`) | Code defaults; not yet environment-configurable | 100 MB file, 10,000 query rows, 30-second query timeout, 512 MB DuckDB memory, 500 MB uncompressed XLSX, compression ratio 100, 5 profile top values |
 | Execution budget (`ExecutionBudget`) | Code defaults; not yet environment-configurable | 12 Tool Actions, 2 repairs per action, 30-second model and tool timeouts, 300-second active run time |
-| Evaluation pacing | Evaluation runner `--rpm` option | 15 requests per minute |
+| Evaluation pacing | Evaluation runner `--rpm` option | 12 requests per minute (below the 15 RPM free-tier limit) |
