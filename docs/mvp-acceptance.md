@@ -22,7 +22,8 @@ These items are in integration review until the verification record below is com
   language equivalence and the requested derivation; these checks do not prove either is correct.
 - An unavailable metric pauses for clarification. A corrected request is interpreted again;
   accepting that the metric is unavailable produces the typed `unavailable_metric` refusal.
-  Insufficient sample-size errors are not silently relabeled as responsible refusals.
+  Too few usable values for a statistical test produce a typed `insufficient_sample` refusal
+  from a dedicated error type; other execution errors are never relabeled as refusals.
 - Session switching clears transient conversation and approval widgets. Deletion requires a fresh
   confirmation bound to the selected session. It is permanent and limited to the selected namespace;
   it is not a forensic secure erase or a transaction spanning both SQLite and filesystem storage.

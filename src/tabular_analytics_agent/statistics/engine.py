@@ -13,7 +13,10 @@ import pandas as pd
 from numpy.typing import NDArray
 from scipy import stats
 
-from tabular_analytics_agent.statistics.errors import StatisticalAnalysisError
+from tabular_analytics_agent.statistics.errors import (
+    InsufficientSampleError,
+    StatisticalAnalysisError,
+)
 from tabular_analytics_agent.statistics.models import (
     AssumptionCheck,
     AssumptionStatus,
@@ -451,7 +454,7 @@ def _numeric(series: pd.Series[Any], field: str) -> pd.Series[float]:
 
 def _require_sample(values: NDArray[np.float64], subject: str) -> None:
     if len(values) < _MIN_SAMPLE_SIZE:
-        raise StatisticalAnalysisError(
+        raise InsufficientSampleError(
             f"{subject} has only {len(values)} usable values; "
             f"at least {_MIN_SAMPLE_SIZE} are required"
         )
@@ -471,7 +474,7 @@ def display_group_label(label: str) -> str:
 
 def _require_rows(frame: pd.DataFrame) -> None:
     if len(frame) < _MIN_SAMPLE_SIZE:
-        raise StatisticalAnalysisError(
+        raise InsufficientSampleError(
             f"complete-case analysis requires at least {_MIN_SAMPLE_SIZE} rows"
         )
 

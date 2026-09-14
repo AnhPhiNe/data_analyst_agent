@@ -522,7 +522,9 @@ def render_analyze_tab(
                 state.get("refusal_reason")
                 or "This request cannot be supported with the current data."
             )
-            st.caption("Ask a new question that uses the available columns.")
+            st.caption(
+                "Ask a new question, for example with other columns or groups, or add more data."
+            )
         elif state.get("status") == AgentRunStatus.REJECTED:
             st.warning(state.get("error") or "The analysis plan was rejected.")
         elif state.get("status") == AgentRunStatus.FAILED:

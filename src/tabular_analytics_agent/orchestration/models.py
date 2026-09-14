@@ -32,6 +32,7 @@ class RefusalCode(StrEnum):
     """Typed reasons for a request that cannot be supported safely."""
 
     UNAVAILABLE_METRIC = "unavailable_metric"
+    INSUFFICIENT_SAMPLE = "insufficient_sample"
 
 
 class OrchestrationModel(BaseModel):

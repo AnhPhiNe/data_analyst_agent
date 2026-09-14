@@ -474,7 +474,7 @@ Limits must be configurable and visible in failure messages.
 - Write tool outputs to temporary locations before verification and publication.
 - Mark failed runs clearly without converting partial output into Verified Insights.
 - Allow users to resume from a safe checkpoint.
-- Explain when the requested analysis cannot be supported because of missing fields, inadequate sample size, unresolved semantics, unsupported causal claims, or an exceeded budget.
+- Explain when the requested analysis cannot be supported because of missing fields, inadequate sample size, unresolved semantics, unsupported causal claims, or an exceeded budget. Too few usable values for a statistical test end the run as a typed `insufficient_sample` refusal that names the affected group or field.
 - Show users a plain-language failure message with a next step; keep technical details in a collapsed view and in the audit trail.
 - Classify terminal failures as provider errors (quota, overload, timeout) or analysis errors so that evaluation does not count provider outages as agent mistakes.
 - A new request in the same Analysis Session must not inherit errors or per-run results from an earlier request; confirmed Semantic Annotations persist.
@@ -529,7 +529,7 @@ Each case declares its expected outcome — answered with Verified Insights, ans
 
 ### 17.3 Evaluation process
 
-Grading version 2 binds expected query values to a metric (or an explicitly allowed alias) and optional group identity; statistical metrics use their exact metric identifiers. Insight coverage requires a persisted assertion operand and evidence from the same successful Tool Action/result, not merely a matching number elsewhere. Profile cases declare concrete expected facts. Failed runs and rejected insight drafts do not count as safe refusals. The explicit unavailable-metric refusal requires its typed code, reason, and unavailable mapping; other failure categories, including insufficient-sample execution errors, do not receive refusal credit. Earlier grading reports are not directly comparable with version 2. This deterministic grader does not replace semantic review of metric meaning, filters, or the rendered UI.
+Grading version 2 binds expected query values to a metric (or an explicitly allowed alias) and optional group identity; statistical metrics use their exact metric identifiers. Insight coverage requires a persisted assertion operand and evidence from the same successful Tool Action/result, not merely a matching number elsewhere. Profile cases declare concrete expected facts. Failed runs and rejected insight drafts do not count as safe refusals. Refusal credit requires a typed refusal code and a non-empty reason: `unavailable_metric` also requires an unavailable mapping, and `insufficient_sample` comes only from the statistical tool's typed sample-size error. Other failure categories never receive refusal credit, and error messages are never matched as text. Earlier grading reports are not directly comparable with version 2. This deterministic grader does not replace semantic review of metric meaning, filters, or the rendered UI.
 
 1. Smoke stage: at least 10 cases across at least 3 datasets, including Vietnamese headers, dirty data with prompt-injection text, and a refusal case, each run 3 times.
 2. Error analysis: read failed runs and their traces, group failures by cause, and fix the most frequent cause first.
@@ -697,6 +697,7 @@ Amendments from the first manual Streamlit acceptance session. A Vietnamese head
 - Calculated SQL outputs require ASCII identifier aliases; query results record their filters (Section 25.1).
 - Claims name SQL filters and the two related fields of a statistic (FR-10).
 - SQL steps without required fields are replanned, insight drafts with unknown metric identifiers are regenerated once, and Verification Gate failures name the failed gate (Section 15).
+- Too few usable values for a statistical test become a typed `insufficient_sample` refusal instead of a failure, and evaluation credits it as a refusal (Sections 15 and 17.3).
 
 ## 25. Implementation Contracts
 
@@ -724,7 +725,7 @@ Questions fully covered by the Data Profile are answered without a tool (Section
 - `direct` names the exact `source_fields` that measure the metric. `derived` names every source field and an explicit reproducible `derivation`. `unavailable` has no source fields or derivation and may give a `reason`.
 - Source fields must exist in the Data Profile after NFC normalization and case folding. A derived metric is never answered from the Data Profile.
 - Every direct or derived mapping must have all of its source fields in the `required_fields` of at least one plan step; otherwise the plan fails. A plan cannot be created while any mapping is unavailable.
-- An unavailable mapping pauses for clarification. A corrected request clears earlier mappings and is interpreted again. Accepting the unavailable metric ends the run with status `refused`, refusal code `unavailable_metric`, and a non-empty reason; the session is recorded as completed. Execution errors such as insufficient samples are never relabeled as refusals.
+- An unavailable mapping pauses for clarification. A corrected request clears earlier mappings and is interpreted again. Accepting the unavailable metric ends the run with status `refused`, refusal code `unavailable_metric`, and a non-empty reason; the session is recorded as completed. Other execution errors are never relabeled as refusals; insufficient samples use their own typed refusal code (Section 15).
 - These checks make the mapping inspectable and grounded in real fields; they do not prove that the language equivalence or the derivation is semantically correct, so the UI shows the mapping for user review.
 
 ### 25.3 Configuration

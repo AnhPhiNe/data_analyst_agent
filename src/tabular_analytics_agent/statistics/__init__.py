@@ -1,7 +1,10 @@
 """Public interface for deterministic statistical analysis."""
 
 from tabular_analytics_agent.statistics.engine import analyze, display_group_label
-from tabular_analytics_agent.statistics.errors import StatisticalAnalysisError
+from tabular_analytics_agent.statistics.errors import (
+    InsufficientSampleError,
+    StatisticalAnalysisError,
+)
 from tabular_analytics_agent.statistics.models import (
     AlternativeHypothesis,
     AssumptionCheck,
@@ -20,6 +23,7 @@ __all__ = [
     "AssumptionCheck",
     "AssumptionStatus",
     "ConfidenceInterval",
+    "InsufficientSampleError",
     "StatisticalAnalysisError",
     "StatisticalEstimate",
     "StatisticalOperation",

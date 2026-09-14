@@ -67,6 +67,7 @@ from tabular_analytics_agent.orchestration.models import (
     RefusalCode,
 )
 from tabular_analytics_agent.statistics import (
+    InsufficientSampleError,
     StatisticalAnalysisError,
     StatisticalOperation,
     StatisticalRequest,
@@ -766,6 +767,17 @@ def build_agent_graph(
                 ],
                 "attempted_action_signatures": attempted,
             }
+            if isinstance(exc, InsufficientSampleError):
+                # Too little data is a responsible refusal with a typed code, not a crash.
+                return {
+                    **updated,
+                    **_typed_refusal_state(
+                        state,
+                        f"Not enough data for a reliable statistical test: {exc}.",
+                        clock(),
+                        code=RefusalCode.INSUFFICIENT_SAMPLE,
+                    ),
+                }
             if isinstance(exc, StatisticalAnalysisError):
                 terminal: AgentState = {
                     **updated,
@@ -1611,15 +1623,21 @@ def _failed_state(state: AgentState, error: Exception, now: datetime) -> AgentSt
     }
 
 
-def _typed_refusal_state(state: AgentState, reason: str, now: datetime) -> AgentState:
-    """Persist the one supported refusal category without reclassifying ordinary failures."""
+def _typed_refusal_state(
+    state: AgentState,
+    reason: str,
+    now: datetime,
+    *,
+    code: RefusalCode = RefusalCode.UNAVAILABLE_METRIC,
+) -> AgentState:
+    """Persist a typed refusal without reclassifying ordinary failures."""
     if not reason.strip():
         raise ValueError("typed refusal requires a non-empty reason")
     return {
         "status": AgentRunStatus.REFUSED.value,
         "error": "",
         "error_kind": "unsupported_request",
-        "refusal_code": RefusalCode.UNAVAILABLE_METRIC.value,
+        "refusal_code": code.value,
         "refusal_reason": reason,
         **_pause_execution_budget(state, now),
     }

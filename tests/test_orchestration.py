@@ -238,12 +238,15 @@ def test_statistical_prompt_lists_parameters_and_sample_error_is_readable(
     agent = AgentOrchestrator(gateway, core, checkpointer=InMemorySaver())
 
     agent.start(request)
-    failed = agent.resume(request.session_id, True)
+    refused = agent.resume(request.session_id, True)
 
     assert "t_test requires: value_field, group_field, group_order" in gateway.requests[2].prompt
-    assert failed["status"] == AgentRunStatus.FAILED
-    assert "group 'North' of 'region' has only 2 usable values" in failed["error"]
-    assert "str:" not in failed["error"]
+    assert refused["status"] == AgentRunStatus.REFUSED
+    assert refused["refusal_code"] == "insufficient_sample"
+    assert "group 'North' of 'region' has only 2 usable values" in refused["refusal_reason"]
+    assert "str:" not in refused["refusal_reason"]
+    assert refused["tool_actions"][0]["status"] == "failed"
+    assert refused["error"] == ""
 
 
 def test_malformed_insight_draft_becomes_unsupported_without_failing_run(

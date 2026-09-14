@@ -299,15 +299,18 @@ def _actual_outcome(state: AgentState) -> str:
 
 
 def _is_typed_refusal(state: AgentState) -> bool:
-    """Recognize only the explicit unavailable-metric refusal contract."""
+    """Recognize only typed refusals, never an ordinary failure or its error message."""
     if state.get("status") != AgentRunStatus.REFUSED.value:
         return False
     if state.get("answered_from_profile") or state.get("verified_insights"):
         return False
-    if state.get("refusal_code") != RefusalCode.UNAVAILABLE_METRIC.value:
-        return False
     reason = state.get("refusal_reason")
     if not isinstance(reason, str) or not reason.strip():
+        return False
+    code = state.get("refusal_code")
+    if code == RefusalCode.INSUFFICIENT_SAMPLE.value:
+        return True
+    if code != RefusalCode.UNAVAILABLE_METRIC.value:
         return False
     mappings = state.get("requested_metric_mappings")
     return isinstance(mappings, (list, tuple)) and any(

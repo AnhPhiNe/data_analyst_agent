@@ -444,6 +444,16 @@ def test_grader_recognizes_only_typed_refusal_and_keeps_crash_failed() -> None:
     assert _actual_outcome(profile_answer) == ExpectedOutcome.FAILED
     assert _actual_outcome(verified_answer) == ExpectedOutcome.FAILED
 
+    sample_refusal: AgentState = {
+        "status": "refused",
+        "refusal_code": "insufficient_sample",
+        "refusal_reason": "Group South has only 2 usable values.",
+    }
+    unknown_code: AgentState = {**sample_refusal, "refusal_code": "not_a_refusal_code"}
+    assert _actual_outcome(sample_refusal) == ExpectedOutcome.REFUSED
+    assert _actual_outcome({**sample_refusal, "refusal_reason": ""}) == ExpectedOutcome.FAILED
+    assert _actual_outcome(unknown_code) == ExpectedOutcome.FAILED
+
 
 def test_legacy_state_without_metric_mappings_is_not_a_refusal() -> None:
     assert _actual_outcome({"status": "failed", "error": "old checkpoint failure"}) == (
