@@ -403,6 +403,23 @@ def test_table_chart_ignores_encodings_that_tables_do_not_use(tmp_path: Path) ->
     assert completed["chart_renders"][0]["plotly_spec"]["data"][0]["type"] == "table"
 
 
+def test_chart_intent_drops_formatting_keys_the_renderer_does_not_support(
+    tmp_path: Path,
+) -> None:
+    core, request = run_request(tmp_path)
+    chart = {**chart_output(), "formatting_intent": {"show_legend": False, "revenue": "currency"}}
+    gateway = FakeModelGateway(
+        [goal_output(), plan_output(), tool_output(), insight_output(), chart]
+    )
+    agent = AgentOrchestrator(gateway, core, checkpointer=InMemorySaver())
+
+    agent.start(request)
+    completed = agent.resume(request.session_id, True)
+
+    assert completed["artifact_error"] == ""
+    assert completed["chart_renders"][0]["intent"]["formatting_intent"] == {"show_legend": False}
+
+
 def test_graph_pauses_for_plan_approval_then_executes_verified_query(tmp_path: Path) -> None:
     core, request = run_request(tmp_path)
     gateway = FakeModelGateway(

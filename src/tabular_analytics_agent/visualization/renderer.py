@@ -52,7 +52,7 @@ _MAX_TABLE_ROWS = 500
 _MAX_BAR_CATEGORIES = 50
 _MAX_COLOR_GROUPS = 12
 _MAX_POINT_ROWS = 5_000
-_FORMATTING_KEYS = {"height", "number_format", "show_legend"}
+SUPPORTED_FORMATTING_KEYS = {"height", "number_format", "show_legend"}
 
 
 def make_query_result_reference(
@@ -281,7 +281,7 @@ def _type_errors(intent: ChartIntent, column_types: dict[str, str]) -> tuple[str
 def _formatting_errors(intent: ChartIntent) -> tuple[str, ...]:
     errors = [
         "Unsupported formatting keys: " + ", ".join(unknown) + "."
-        for unknown in [sorted(set(intent.formatting_intent) - _FORMATTING_KEYS)]
+        for unknown in [sorted(set(intent.formatting_intent) - SUPPORTED_FORMATTING_KEYS)]
         if unknown
     ]
     height = intent.formatting_intent.get("height")

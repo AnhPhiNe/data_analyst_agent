@@ -77,6 +77,7 @@ from tabular_analytics_agent.verification import (
     verify_query_evidence,
 )
 from tabular_analytics_agent.visualization import (
+    SUPPORTED_FORMATTING_KEYS,
     ChartValidationError,
     make_query_result_reference,
     render_chart,
@@ -883,7 +884,12 @@ def build_agent_graph(
                 aggregation=draft.aggregation,
                 title=draft.title,
                 labels=draft.labels,
-                formatting_intent=draft.formatting_intent,
+                # Formatting is cosmetic; keys the renderer does not support are dropped here.
+                formatting_intent={
+                    key: value
+                    for key, value in draft.formatting_intent.items()
+                    if key in SUPPORTED_FORMATTING_KEYS
+                },
                 validation_constraints=draft.validation_constraints,
             )
             rendered = render_chart(intent, result, source_action)

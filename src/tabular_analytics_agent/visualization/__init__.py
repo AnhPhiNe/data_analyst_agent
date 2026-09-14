@@ -9,12 +9,14 @@ from tabular_analytics_agent.visualization.errors import (
 )
 from tabular_analytics_agent.visualization.models import ChartRenderResult
 from tabular_analytics_agent.visualization.renderer import (
+    SUPPORTED_FORMATTING_KEYS,
     make_query_result_reference,
     render_chart,
     validate_chart_intent,
 )
 
 __all__ = [
+    "SUPPORTED_FORMATTING_KEYS",
     "ArtifactNotFoundError",
     "ArtifactStore",
     "ArtifactStoreError",
