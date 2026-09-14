@@ -523,6 +523,8 @@ Each case declares its expected outcome — answered with Verified Insights, ans
 
 ### 17.3 Evaluation process
 
+Grading version 2 binds expected query values to a metric (or an explicitly allowed alias) and optional group identity; statistical metrics use their exact metric identifiers. Insight coverage requires a persisted assertion operand and evidence from the same successful Tool Action/result, not merely a matching number elsewhere. Profile cases declare concrete expected facts. Failed runs and rejected insight drafts do not count as safe refusals. Until a typed refusal outcome is persisted, refusal-only cases remain failing rather than receiving credit for an analysis error. Earlier grading reports are not directly comparable with version 2. This deterministic grader does not replace semantic review of metric meaning, filters, or the rendered UI.
+
 1. Smoke stage: at least 10 cases across at least 3 datasets, including Vietnamese headers, dirty data with prompt-injection text, and a refusal case, each run 3 times.
 2. Error analysis: read failed runs and their traces, group failures by cause, and fix the most frequent cause first.
 3. Every new capability adds at least one case before it is considered done.
@@ -688,6 +690,8 @@ Questions fully covered by the Data Profile are answered without a tool (Section
 - Metrics are exact identifiers from the evidence catalog: `row[i].column` for query results, and names such as `pearson_r`, `p_value`, `adjusted_alpha`, or `group[...].mean` for statistical results.
 - Comparison operators require a right metric; the other operators must not have one. Significance assertions use `p_value` as the left metric and must also select `adjusted_alpha`.
 - The claim sentence is rendered deterministically and is published only when every Verification Gate passes.
+- New Verified Insights persist their typed assertion so evaluation can distinguish values actually asserted from extra supporting evidence. Legacy insights without a stored assertion remain readable but cannot establish assertion coverage automatically.
+- A statistical p-value belongs to the result's identified primary test statistic. P-value and significance claims name that test explicitly. The current correlation tool tests Pearson correlation; its supplementary Spearman coefficient is descriptive and does not share Pearson's p-value.
 
 ### 25.3 Configuration
 

@@ -5,10 +5,10 @@
   "user_request": "Tổng doanh thu theo từng tháng thay đổi như thế nào?",
   "goal_family": "trend",
   "required_calculations": [
-    {"metric": "month_1_revenue", "expected": 360, "absolute_tolerance": 0.000001},
-    {"metric": "month_2_revenue", "expected": 385, "absolute_tolerance": 0.000001},
-    {"metric": "month_3_revenue", "expected": 395, "absolute_tolerance": 0.000001},
-    {"metric": "month_4_revenue", "expected": 430, "absolute_tolerance": 0.000001}
+    {"metric": "Doanh thu", "aliases": ["total_revenue", "revenue"], "group": {"field": "Tháng", "value": 1}, "expected": 360, "absolute_tolerance": 0.000001},
+    {"metric": "Doanh thu", "aliases": ["total_revenue", "revenue"], "group": {"field": "Tháng", "value": 2}, "expected": 385, "absolute_tolerance": 0.000001},
+    {"metric": "Doanh thu", "aliases": ["total_revenue", "revenue"], "group": {"field": "Tháng", "value": 3}, "expected": 395, "absolute_tolerance": 0.000001},
+    {"metric": "Doanh thu", "aliases": ["total_revenue", "revenue"], "group": {"field": "Tháng", "value": 4}, "expected": 430, "absolute_tolerance": 0.000001}
   ],
   "allowed_fields": ["Tháng", "Doanh thu"],
   "supported_conclusions": ["Tổng doanh thu tăng qua từng tháng."],

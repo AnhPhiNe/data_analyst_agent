@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from uuid import uuid4
 
 import pandas as pd
+import pytest
 
 from tabular_analytics_agent.data import QueryColumn, QueryResult
 from tabular_analytics_agent.domain import (
@@ -348,6 +349,74 @@ def test_association_assertion_publishes_only_canonical_noncausal_language() -> 
         "p_value",
         "adjusted_alpha",
     }
+
+
+@pytest.mark.parametrize(
+    "operator",
+    [InsightOperator.REPORTS, InsightOperator.STATISTICALLY_SIGNIFICANT],
+)
+def test_correlation_p_value_names_its_test_and_preserves_assertion(
+    operator: InsightOperator,
+) -> None:
+    profile, query_action, _ = context()
+    # A monotonic nonlinear relationship: Spearman and Pearson differ.
+    frame = pd.DataFrame({"revenue": [1, 2, 3, 4, 5, 6], "score": [1, 4, 9, 16, 25, 36]})
+    result = analyze(
+        frame,
+        StatisticalRequest(
+            operation=StatisticalOperation.CORRELATION, x_field="revenue", y_field="score"
+        ),
+    )
+    statistical_profile = profile.model_copy(
+        update={
+            "fields": (
+                profile.fields[1],
+                profile.fields[1].model_copy(update={"name": "score"}),
+            ),
+            "row_count": len(frame),
+        }
+    )
+    action = query_action.model_copy(
+        update={
+            "tool_name": "statistical_analysis",
+            "inputs": result.parameters,
+            "output_ref": f"statistical-result:{result.result_id}",
+        }
+    )
+    assertion = InsightAssertion(operator=operator, left_metric="p_value")
+    publication = publish_insight(
+        assertion=assertion,
+        evidence_metrics=("p_value", "adjusted_alpha", "spearman_rho"),
+        caveats=(),
+        profile=statistical_profile,
+        action=action,
+        result=result,
+        current_working_dataset_version=1,
+    )
+
+    assert isinstance(publication, VerifiedInsight)
+    assert "pearson correlation" in publication.claim.lower()
+    assert "spearman" not in publication.claim.lower()
+    assert publication.assertion == assertion
+    restored = VerifiedInsight.model_validate_json(publication.model_dump_json())
+    assert restored.assertion == assertion
+    legacy = publication.model_dump(exclude={"assertion"})
+    assert VerifiedInsight.model_validate(legacy).assertion is None
+    assert any("separate descriptive estimate" in note for note in publication.evidence.caveats)
+
+    # Legacy/malformed state must not publish an unidentified test as a verified claim.
+    unidentified = result.model_copy(update={"statistic_name": None})
+    rejected = publish_insight(
+        assertion=assertion,
+        evidence_metrics=("p_value", "adjusted_alpha"),
+        caveats=(),
+        profile=statistical_profile,
+        action=action,
+        result=unidentified,
+        current_working_dataset_version=1,
+    )
+    assert isinstance(rejected, UnsupportedClaim)
+    assert "identified test statistic" in rejected.reason
 
 
 def test_failed_statistical_assumptions_are_preserved_as_evidence_caveats() -> None:

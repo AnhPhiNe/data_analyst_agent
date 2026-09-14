@@ -7,8 +7,11 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import math
 import time
-from collections.abc import Callable, Sequence
+import unicodedata
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -19,6 +22,7 @@ from tabular_analytics_agent.evaluation.models import (
     EvaluationModel,
     ExpectedCalculation,
     ExpectedOutcome,
+    ExpectedProfileFact,
     GoldenCase,
 )
 from tabular_analytics_agent.model_gateway import GeminiModelGateway, GeminiSettings
@@ -26,6 +30,18 @@ from tabular_analytics_agent.orchestration import AgentRunStatus, AgentState
 
 _MAX_PLAN_APPROVALS = 3
 Scalar = str | int | float | bool | None
+_GRADING_VERSION = "2"
+_MISSING = object()
+
+
+@dataclass(frozen=True)
+class _OutputValue:
+    metric: str
+    value: Scalar
+    evidence_metric: str
+    result_ref: str
+    group_values: tuple[tuple[str, Scalar], ...] = ()
+    source: str = "query"
 
 
 class CheckResult(EvaluationModel):
@@ -53,6 +69,7 @@ class CaseRunResult(EvaluationModel):
 
 class SuiteSummary(EvaluationModel):
     runs: int
+    grading_version: str = _GRADING_VERSION
     passed: int
     provider_errors: int
     pass_rate_excluding_provider_errors: float
@@ -115,6 +132,8 @@ def grade_run(case: GoldenCase, state: AgentState, *, run_index: int = 0) -> Cas
     ]
     if case.expected_outcome is ExpectedOutcome.ANSWERED:
         checks.extend(_answer_checks(case, state))
+    elif case.expected_outcome is ExpectedOutcome.PROFILE:
+        checks.extend(_profile_checks(case, state))
     traces = state.get("model_traces", [])
     return CaseRunResult(
         case_id=case.case_id,
@@ -152,6 +171,12 @@ def run_suite(
     sleep: Callable[[float], None] = time.sleep,
     clock: Callable[[], float] = time.monotonic,
 ) -> SuiteSummary:
+    if runs < 1:
+        raise ValueError("runs must be at least 1")
+    if not math.isfinite(requests_per_minute) or requests_per_minute <= 0:
+        raise ValueError("requests_per_minute must be finite and greater than 0")
+    if not cases:
+        raise ValueError("at least one evaluation case is required")
     output_dir.mkdir(parents=True, exist_ok=True)
     results: list[CaseRunResult] = []
 
@@ -226,10 +251,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--output", type=Path, default=None)
     args = parser.parse_args(argv)
 
-    load_dotenv()
+    if args.runs < 1:
+        parser.error("--runs must be at least 1")
+    if not math.isfinite(args.rpm) or args.rpm <= 0:
+        parser.error("--rpm must be finite and greater than 0")
+
     cases = tuple(
         case for case in load_cases(args.cases) if not args.case or case.case_id in args.case
     )
+    if not cases:
+        parser.error("no evaluation cases selected")
+    load_dotenv()
     output_dir: Path = args.output or Path(".eval") / datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     application = LocalAnalysisApplication(
         output_dir / "app-data",
@@ -245,32 +277,35 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     print(summary.model_dump_json(indent=2))
     print(f"Results written to {output_dir}")
-    return 0
+    return 0 if not summary.failures else 1
 
 
 def _actual_outcome(state: AgentState) -> str:
     status = state.get("status")
-    if status == AgentRunStatus.AWAITING_SEMANTIC_REVIEW:
+    if status == AgentRunStatus.AWAITING_SEMANTIC_REVIEW.value:
         return ExpectedOutcome.CLARIFICATION.value
-    if state.get("answered_from_profile"):
+    if (
+        status == AgentRunStatus.COMPLETED.value
+        and state.get("answered_from_profile")
+        and state.get("data_profile")
+    ):
         return ExpectedOutcome.PROFILE.value
-    if status == AgentRunStatus.COMPLETED and state.get("verified_insights"):
+    if status == AgentRunStatus.COMPLETED.value and state.get("verified_insights"):
         return ExpectedOutcome.ANSWERED.value
-    return ExpectedOutcome.REFUSED.value
+    # Neither FAILED nor rejected insight drafts establish a responsible refusal.
+    # The product does not yet persist a typed refusal outcome/reason.
+    return ExpectedOutcome.FAILED.value
 
 
 def _answer_checks(case: GoldenCase, state: AgentState) -> list[CheckResult]:
     computed = _computed_values(state)
-    reported: list[Scalar] = [
-        value["value"]
-        for insight in state.get("verified_insights", [])
-        for value in insight.get("evidence", {}).get("values", [])
-    ]
     missing_computed = [
-        item.metric for item in case.required_calculations if not _matches(item, computed)
+        item for item in case.required_calculations if not _calculation_matches(item, computed)
     ]
-    missing_reported = [
-        item.metric for item in case.required_calculations if not _matches(item, reported)
+    missing_coverage = [
+        item
+        for item in case.required_calculations
+        if not _insight_covers_calculation(item, computed, state)
     ]
     allowed = {field.casefold() for field in case.allowed_fields}
     used = sorted(
@@ -284,7 +319,7 @@ def _answer_checks(case: GoldenCase, state: AgentState) -> list[CheckResult]:
     outside = [field for field in used if field.casefold() not in allowed]
     checks = [
         _check("calculations", not missing_computed, _missing_detail(missing_computed)),
-        _check("insight_coverage", not missing_reported, _missing_detail(missing_reported)),
+        _check("insight_coverage", not missing_coverage, _missing_detail(missing_coverage)),
         _check(
             "schema_grounding",
             not outside,
@@ -306,33 +341,306 @@ def _answer_checks(case: GoldenCase, state: AgentState) -> list[CheckResult]:
     return checks
 
 
-def _computed_values(state: AgentState) -> list[Scalar]:
-    values: list[Scalar] = []
+def _profile_checks(case: GoldenCase, state: AgentState) -> list[CheckResult]:
+    missing = [
+        fact for fact in case.required_profile_facts if not _profile_fact_matches(fact, state)
+    ]
+    return [
+        _check(
+            "profile_facts",
+            not missing,
+            _missing_profile_detail(missing),
+        )
+    ]
+
+
+def _computed_values(state: AgentState) -> list[_OutputValue]:
+    values: list[_OutputValue] = []
     for query_result in state.get("query_results", []):
-        for row in query_result.get("rows", []):
-            values.extend(row)
+        query_id = query_result.get("query_id")
+        if not query_id:
+            continue
+        columns = [
+            str(column["name"])
+            for column in query_result.get("columns", [])
+            if isinstance(column, Mapping) and isinstance(column.get("name"), str)
+        ]
+        group_columns = tuple(
+            str(column)
+            for column in query_result.get("group_by_columns", [])
+            if isinstance(column, str)
+        )
+        if not columns:
+            continue
+        for row_index, row in enumerate(query_result.get("rows", [])):
+            if not isinstance(row, (list, tuple)) or len(row) != len(columns):
+                continue
+            group_values = tuple(
+                (column, row[columns.index(column)])
+                for column in group_columns
+                if column in columns
+            )
+            values.extend(
+                _OutputValue(
+                    metric=column,
+                    value=row[column_index],
+                    evidence_metric=f"row[{row_index}].{column}",
+                    result_ref=f"query-result:{query_id}",
+                    group_values=group_values,
+                    source="query",
+                )
+                for column_index, column in enumerate(columns)
+            )
     for statistical_result in state.get("statistical_results", []):
-        values.extend(estimate["value"] for estimate in statistical_result.get("estimates", []))
-        for key in ("statistic", "p_value"):
-            if statistical_result.get(key) is not None:
-                values.append(statistical_result[key])
-        if statistical_result.get("effect_size"):
-            values.append(statistical_result["effect_size"]["value"])
-        if statistical_result.get("confidence_interval"):
+        result_id = statistical_result.get("result_id")
+        if not result_id:
+            continue
+        result_ref = f"statistical-result:{result_id}"
+        for estimate in statistical_result.get("estimates", []):
+            if isinstance(estimate, Mapping) and isinstance(estimate.get("metric"), str):
+                values.append(
+                    _OutputValue(
+                        metric=estimate["metric"],
+                        value=estimate.get("value"),
+                        evidence_metric=estimate["metric"],
+                        result_ref=result_ref,
+                        source="statistical",
+                    )
+                )
+        statistic_name = statistical_result.get("statistic_name")
+        statistic = statistical_result.get("statistic")
+        has_primary_statistic = (
+            isinstance(statistic_name, str) and bool(statistic_name) and (statistic is not None)
+        )
+        if isinstance(statistic_name, str) and has_primary_statistic:
+            values.append(
+                _OutputValue(
+                    metric=statistic_name,
+                    value=statistic,
+                    evidence_metric=statistic_name,
+                    result_ref=result_ref,
+                    source="statistical",
+                )
+            )
+        if statistical_result.get("p_value") is not None and has_primary_statistic:
+            values.append(
+                _OutputValue(
+                    metric="p_value",
+                    value=statistical_result["p_value"],
+                    evidence_metric="p_value",
+                    result_ref=result_ref,
+                    source="statistical",
+                )
+            )
+            if statistical_result.get("adjusted_alpha") is not None:
+                values.append(
+                    _OutputValue(
+                        metric="adjusted_alpha",
+                        value=statistical_result["adjusted_alpha"],
+                        evidence_metric="adjusted_alpha",
+                        result_ref=result_ref,
+                        source="statistical",
+                    )
+                )
+            if statistical_result.get("statistically_significant") is not None:
+                values.append(
+                    _OutputValue(
+                        metric="statistically_significant",
+                        value=statistical_result["statistically_significant"],
+                        evidence_metric="statistically_significant",
+                        result_ref=result_ref,
+                        source="statistical",
+                    )
+                )
+        if isinstance(statistical_result.get("effect_size"), Mapping):
+            effect = statistical_result["effect_size"]
+            if isinstance(effect.get("metric"), str):
+                values.append(
+                    _OutputValue(
+                        metric=effect["metric"],
+                        value=effect.get("value"),
+                        evidence_metric=effect["metric"],
+                        result_ref=result_ref,
+                        source="statistical",
+                    )
+                )
+        if isinstance(statistical_result.get("confidence_interval"), Mapping):
             interval = statistical_result["confidence_interval"]
-            values.extend((interval["lower"], interval["upper"]))
+            for bound in ("lower", "upper"):
+                if bound in interval:
+                    metric = f"confidence_interval.{bound}"
+                    values.append(
+                        _OutputValue(
+                            metric=metric,
+                            value=interval[bound],
+                            evidence_metric=metric,
+                            result_ref=result_ref,
+                            source="statistical",
+                        )
+                    )
     return values
 
 
-def _matches(calculation: ExpectedCalculation, values: Sequence[Scalar]) -> bool:
-    expected = calculation.expected
-    if isinstance(expected, bool) or not isinstance(expected, int | float):
-        return expected in values
+def _calculation_matches(calculation: ExpectedCalculation, values: Sequence[_OutputValue]) -> bool:
     return any(
-        isinstance(value, int | float)
-        and not isinstance(value, bool)
-        and abs(value - expected) <= calculation.absolute_tolerance
+        _metric_matches(calculation, value)
+        and _group_matches(calculation, value)
+        and _value_matches(calculation.expected, value.value, calculation.absolute_tolerance)
         for value in values
+    )
+
+
+def _metric_matches(calculation: ExpectedCalculation, value: _OutputValue) -> bool:
+    if value.source == "statistical":
+        return _text_equal(calculation.metric, value.metric)
+    return any(
+        _text_equal(metric, value.metric) for metric in (calculation.metric, *calculation.aliases)
+    )
+
+
+def _group_matches(calculation: ExpectedCalculation, value: _OutputValue) -> bool:
+    if calculation.group is None:
+        return True
+    return any(
+        _text_equal(calculation.group.field, field)
+        and _scalar_equal(calculation.group.value, group_value)
+        for field, group_value in value.group_values
+    )
+
+
+def _insight_covers_calculation(
+    calculation: ExpectedCalculation,
+    computed: Sequence[_OutputValue],
+    state: AgentState,
+) -> bool:
+    """Require each expected output cell/estimate to be an assertion operand."""
+    for insight in state.get("verified_insights", []):
+        if not isinstance(insight, Mapping):
+            continue
+        assertion = insight.get("assertion")
+        if not isinstance(assertion, Mapping):
+            # Legacy persisted insights intentionally cannot establish coverage.
+            continue
+        assertion_metrics = {
+            metric
+            for key in ("left_metric", "right_metric")
+            for metric in (assertion.get(key),)
+            if isinstance(metric, str)
+        }
+        evidence = insight.get("evidence")
+        if not isinstance(evidence, Mapping):
+            continue
+        result_refs = {
+            action.get("output_ref")
+            for action in state.get("tool_actions", [])
+            if action.get("action_id") in evidence.get("tool_action_ids", [])
+            and action.get("status") == "succeeded"
+        }
+        evidence_values = [
+            (str(item["metric"]), item.get("value"))
+            for item in evidence.get("values", [])
+            if isinstance(item, Mapping) and isinstance(item.get("metric"), str)
+        ]
+        for value in computed:
+            if value.result_ref not in result_refs:
+                continue
+            if not _calculation_matches(calculation, (value,)):
+                continue
+            if not any(_text_equal(metric, value.evidence_metric) for metric in assertion_metrics):
+                continue
+            if any(
+                _text_equal(metric, value.evidence_metric)
+                and _value_matches(
+                    value.value,
+                    evidence_value,
+                    calculation.absolute_tolerance,
+                )
+                for metric, evidence_value in evidence_values
+            ):
+                return True
+    return False
+
+
+def _profile_fact_matches(fact: ExpectedProfileFact, state: AgentState) -> bool:
+    actual = _profile_fact_value(fact, state)
+    return actual is not _MISSING and _value_matches(
+        fact.expected,
+        actual,
+        fact.absolute_tolerance,
+    )
+
+
+def _profile_fact_value(fact: ExpectedProfileFact, state: AgentState) -> object:
+    profile = state.get("data_profile")
+    if not isinstance(profile, Mapping):
+        return _MISSING
+    if fact.fact in {"field_names", "row_count", "duplicate_row_count"}:
+        if fact.fact == "field_names":
+            fields = profile.get("fields")
+            if not isinstance(fields, (list, tuple)):
+                return _MISSING
+            names = [
+                field.get("name")
+                for field in fields
+                if isinstance(field, Mapping) and isinstance(field.get("name"), str)
+            ]
+            return tuple(names) if len(names) == len(fields) else _MISSING
+        return profile.get(fact.fact, _MISSING)
+
+    fields = profile.get("fields")
+    if not isinstance(fields, (list, tuple)) or fact.field is None:
+        return _MISSING
+    field = next(
+        (
+            item
+            for item in fields
+            if isinstance(item, Mapping)
+            and isinstance(item.get("name"), str)
+            and _text_equal(item["name"], fact.field)
+        ),
+        None,
+    )
+    if not isinstance(field, Mapping):
+        return _MISSING
+    if fact.fact == "field_kind":
+        return field.get("kind", _MISSING)
+    if fact.fact in {"missing_count", "missing_rate", "unique_count"}:
+        return field.get(fact.fact, _MISSING)
+    summary = field.get("numeric_summary")
+    if not isinstance(summary, Mapping):
+        return _MISSING
+    return summary.get(fact.fact, _MISSING)
+
+
+def _value_matches(expected: object, actual: object, tolerance: float) -> bool:
+    if isinstance(expected, tuple):
+        return (
+            isinstance(actual, (list, tuple))
+            and len(expected) == len(actual)
+            and all(
+                _value_matches(item, value, tolerance)
+                for item, value in zip(expected, actual, strict=True)
+            )
+        )
+    if isinstance(expected, bool) or not isinstance(expected, int | float):
+        return _scalar_equal(expected, actual)
+    return (
+        isinstance(actual, int | float)
+        and not isinstance(actual, bool)
+        and abs(actual - expected) <= tolerance
+    )
+
+
+def _scalar_equal(left: object, right: object) -> bool:
+    if isinstance(left, bool) or isinstance(right, bool):
+        return type(left) is type(right) and left == right
+    return left == right
+
+
+def _text_equal(left: str, right: str) -> bool:
+    return (
+        unicodedata.normalize("NFC", left).casefold()
+        == unicodedata.normalize("NFC", right).casefold()
     )
 
 
@@ -360,8 +668,20 @@ def _check(name: str, passed: bool, detail: str) -> CheckResult:
     return CheckResult(name=name, passed=passed, detail=detail)
 
 
-def _missing_detail(missing: Sequence[str]) -> str:
-    return f"missing: {', '.join(missing)}" if missing else "all expected values found"
+def _calculation_label(calculation: ExpectedCalculation) -> str:
+    if calculation.group is None:
+        return calculation.metric
+    return f"{calculation.metric} where {calculation.group.field}={calculation.group.value}"
+
+
+def _missing_detail(missing: Sequence[ExpectedCalculation]) -> str:
+    labels = [_calculation_label(item) for item in missing]
+    return f"missing: {', '.join(labels)}" if labels else "all expected values found"
+
+
+def _missing_profile_detail(missing: Sequence[ExpectedProfileFact]) -> str:
+    labels = [f"{item.fact}{f'[{item.field}]' if item.field else ''}" for item in missing]
+    return f"missing: {', '.join(labels)}" if labels else "all expected profile facts found"
 
 
 def _rate(values: Sequence[bool]) -> float:

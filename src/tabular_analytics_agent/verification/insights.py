@@ -228,6 +228,7 @@ def publish_insight(
     return VerifiedInsight(
         insight_id=uuid4(),
         claim=claim,
+        assertion=assertion,
         evidence=evidence,
         verification=verification,
     )
@@ -325,6 +326,12 @@ def _evaluate_assertion(
     fallback = (
         f"{assertion.left_metric} {assertion.operator.value} {assertion.right_metric or ''}"
     ).strip()
+    if (
+        isinstance(result, StatisticalResult)
+        and "p_value" in selected_metrics
+        and (not result.statistic_name or result.statistic is None)
+    ):
+        return fallback, False, "P-value evidence requires an identified test statistic."
     if left is None or (assertion.right_metric and right is None):
         return fallback, False, "Insight assertion references unavailable deterministic evidence."
 
@@ -410,7 +417,8 @@ def _evaluate_assertion(
         supported = p_value is not None and alpha is not None and (p_value < alpha) is expected
         qualifier = "statistically significant" if expected else "not statistically significant"
         return (
-            f"The result is {qualifier} (p-value {_format_evidence_value(left.value)}, "
+            f"The test for {_lower_first(_display_metric(result.statistic_name or '', result))} "
+            f"is {qualifier} (p-value {_format_evidence_value(left.value)}, "
             f"adjusted alpha {_format_evidence_value(adjusted_alpha.value)}).",
             supported,
             "Significance assertion matches the adjusted deterministic test result."
@@ -451,6 +459,13 @@ def _format_evidence_value(value: str | int | float | bool | None) -> str:
 
 
 def _display_metric(metric: str, result: EvidenceResult) -> str:
+    if (
+        metric == "p_value"
+        and isinstance(result, StatisticalResult)
+        and result.statistic_name
+        and result.statistic_name != metric
+    ):
+        return f"P-value for {_lower_first(_display_metric(result.statistic_name, result))}"
     metric_labels = {
         "adjusted_alpha": "Adjusted alpha",
         "anova_f": "ANOVA F statistic",

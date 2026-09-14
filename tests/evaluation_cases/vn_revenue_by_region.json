@@ -5,9 +5,9 @@
   "user_request": "Tổng doanh thu theo từng khu vực là bao nhiêu?",
   "goal_family": "summary",
   "required_calculations": [
-    {"metric": "bac_revenue", "expected": 515, "absolute_tolerance": 0.000001},
-    {"metric": "nam_revenue", "expected": 660, "absolute_tolerance": 0.000001},
-    {"metric": "trung_revenue", "expected": 395, "absolute_tolerance": 0.000001}
+    {"metric": "Doanh thu", "aliases": ["total_revenue", "revenue"], "group": {"field": "Khu vực", "value": "Bắc"}, "expected": 515, "absolute_tolerance": 0.000001},
+    {"metric": "Doanh thu", "aliases": ["total_revenue", "revenue"], "group": {"field": "Khu vực", "value": "Nam"}, "expected": 660, "absolute_tolerance": 0.000001},
+    {"metric": "Doanh thu", "aliases": ["total_revenue", "revenue"], "group": {"field": "Khu vực", "value": "Trung"}, "expected": 395, "absolute_tolerance": 0.000001}
   ],
   "allowed_fields": ["Khu vực", "Doanh thu"],
   "supported_conclusions": ["Nam có tổng doanh thu cao nhất."],

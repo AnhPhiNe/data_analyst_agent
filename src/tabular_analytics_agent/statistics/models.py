@@ -222,6 +222,8 @@ class StatisticalResult(StatisticsModel):
     @model_validator(mode="after")
     def significance_is_reproducible(self) -> Self:
         if self.p_value is not None:
+            if not self.statistic_name or self.statistic is None:
+                raise ValueError("p-values require an identified test statistic")
             if self.adjusted_alpha is None or self.statistically_significant is None:
                 raise ValueError("p-values require adjusted alpha and significance status")
             if self.statistically_significant is not (self.p_value < self.adjusted_alpha):

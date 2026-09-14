@@ -333,6 +333,18 @@ def test_result_contract_rejects_inconsistent_significance_status() -> None:
         StatisticalResult.model_validate(payload)
 
 
+@pytest.mark.parametrize("missing", ["statistic_name", "statistic"])
+def test_p_value_requires_its_test_identity(missing: str) -> None:
+    result = analyze(
+        analysis_frame(),
+        StatisticalRequest(operation=StatisticalOperation.CORRELATION, x_field="x", y_field="y"),
+    )
+    payload = result.model_dump()
+    payload[missing] = None
+    with pytest.raises(ValidationError, match="identified test statistic"):
+        StatisticalResult.model_validate(payload)
+
+
 def test_mixed_type_group_labels_do_not_collide() -> None:
     frame = pd.DataFrame(
         {

@@ -157,7 +157,11 @@ def _correlation(frame: pd.DataFrame, request: StatisticalRequest) -> dict[str, 
             _normality_check(x, name=f"normality:{x_field}"),
             _normality_check(y, name=f"normality:{y_field}"),
         ),
-        warnings=("Correlation measures association and does not establish causation.",),
+        warnings=(
+            "Correlation measures association and does not establish causation.",
+            "The p-value and significance decision refer to Pearson correlation. "
+            "Spearman correlation is a separate descriptive estimate without a reported p-value.",
+        ),
     )
 
 

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Annotated, Self
+from typing import Annotated, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -21,12 +21,56 @@ class ExpectedOutcome(StrEnum):
     PROFILE = "profile"
     CLARIFICATION = "clarification"
     REFUSED = "refused"
+    FAILED = "failed"
+
+
+Scalar = str | int | float | bool | None
+
+
+class ExpectedGroup(EvaluationModel):
+    """The group identity that selects one row from a grouped output."""
+
+    field: NonEmptyText
+    value: Scalar
 
 
 class ExpectedCalculation(EvaluationModel):
     metric: NonEmptyText
-    expected: int | float | str | bool | None
+    expected: Scalar
     absolute_tolerance: Annotated[float, Field(ge=0.0)] = 0.0
+    aliases: tuple[NonEmptyText, ...] = ()
+    group: ExpectedGroup | None = None
+
+
+class ExpectedProfileFact(EvaluationModel):
+    fact: Literal[
+        "field_names",
+        "row_count",
+        "duplicate_row_count",
+        "field_kind",
+        "missing_count",
+        "missing_rate",
+        "unique_count",
+        "mean",
+        "standard_deviation",
+        "minimum",
+        "first_quartile",
+        "median",
+        "third_quartile",
+        "maximum",
+    ]
+    expected: Scalar | tuple[Scalar, ...]
+    field: NonEmptyText | None = None
+    absolute_tolerance: Annotated[float, Field(ge=0.0)] = 0.0
+
+    @model_validator(mode="after")
+    def field_scope_matches_fact(self) -> Self:
+        dataset_facts = {"field_names", "row_count", "duplicate_row_count"}
+        if self.fact in dataset_facts and self.field is not None:
+            raise ValueError(f"{self.fact} is a dataset-level profile fact")
+        if self.fact not in dataset_facts and self.field is None:
+            raise ValueError(f"{self.fact} requires a field")
+        return self
 
 
 class GoldenCase(EvaluationModel):
@@ -38,6 +82,7 @@ class GoldenCase(EvaluationModel):
     expected_outcome: ExpectedOutcome = ExpectedOutcome.ANSWERED
     acceptable_outcomes: tuple[ExpectedOutcome, ...] = ()
     required_calculations: tuple[ExpectedCalculation, ...] = ()
+    required_profile_facts: tuple[ExpectedProfileFact, ...] = ()
     allowed_fields: tuple[str, ...] = ()
     allowed_filters: tuple[str, ...] = ()
     supported_conclusions: tuple[str, ...] = ()
@@ -51,6 +96,8 @@ class GoldenCase(EvaluationModel):
     @model_validator(mode="after")
     def require_gradable_expectations(self) -> Self:
         if self.expected_outcome is not ExpectedOutcome.ANSWERED:
+            if self.expected_outcome is ExpectedOutcome.PROFILE and not self.required_profile_facts:
+                raise ValueError("a profile golden case requires expected profile facts")
             return self
         if not self.required_calculations:
             raise ValueError("an answered golden case requires at least one calculation")

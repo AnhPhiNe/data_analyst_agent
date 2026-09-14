@@ -5,9 +5,9 @@
   "user_request": "Giá trị amount trung bình của từng category là bao nhiêu?",
   "goal_family": "summary",
   "required_calculations": [
-    {"metric": "books_average_amount", "expected": 47.75, "absolute_tolerance": 0.000001},
-    {"metric": "electronics_average_amount", "expected": 283.5, "absolute_tolerance": 0.000001},
-    {"metric": "home_average_amount", "expected": 100.0, "absolute_tolerance": 0.000001}
+    {"metric": "avg_amount", "aliases": ["average_amount", "amount_average"], "group": {"field": "category", "value": "Books"}, "expected": 47.75, "absolute_tolerance": 0.000001},
+    {"metric": "avg_amount", "aliases": ["average_amount", "amount_average"], "group": {"field": "category", "value": "Electronics"}, "expected": 283.5, "absolute_tolerance": 0.000001},
+    {"metric": "avg_amount", "aliases": ["average_amount", "amount_average"], "group": {"field": "category", "value": "Home"}, "expected": 100.0, "absolute_tolerance": 0.000001}
   ],
   "allowed_fields": ["category", "amount"],
   "supported_conclusions": ["Electronics có amount trung bình cao nhất."],

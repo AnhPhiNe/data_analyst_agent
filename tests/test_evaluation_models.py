@@ -56,8 +56,8 @@ def test_answered_golden_case_requires_gradable_expectations(empty_field: str) -
 def test_non_answer_cases_do_not_require_calculations() -> None:
     for outcome in (
         ExpectedOutcome.REFUSED,
-        ExpectedOutcome.PROFILE,
         ExpectedOutcome.CLARIFICATION,
+        ExpectedOutcome.FAILED,
     ):
         payload = {
             **answered_case_payload(),
@@ -69,6 +69,45 @@ def test_non_answer_cases_do_not_require_calculations() -> None:
         }
 
         assert GoldenCase.model_validate(payload).expected_outcome is outcome
+
+
+def test_profile_golden_case_requires_deterministic_profile_facts() -> None:
+    payload = {
+        **answered_case_payload(),
+        "expected_outcome": ExpectedOutcome.PROFILE,
+        "required_calculations": [],
+        "allowed_fields": [],
+        "supported_conclusions": [],
+        "valid_chart_types": [],
+    }
+
+    with pytest.raises(ValidationError):
+        GoldenCase.model_validate(payload)
+
+    payload["required_profile_facts"] = [
+        {"fact": "field_names", "expected": ["order_id", "region"]}
+    ]
+    case = GoldenCase.model_validate(payload)
+    assert case.required_profile_facts[0].fact == "field_names"
+
+
+def test_grouped_calculation_requires_a_named_group_context_in_case_data() -> None:
+    case = GoldenCase.model_validate(
+        {
+            **answered_case_payload(),
+            "required_calculations": [
+                {
+                    "metric": "revenue",
+                    "aliases": ["total_revenue"],
+                    "group": {"field": "region", "value": "North"},
+                    "expected": 350,
+                }
+            ],
+        }
+    )
+
+    assert case.required_calculations[0].group is not None
+    assert case.required_calculations[0].group.value == "North"
 
 
 def test_accepted_outcomes_include_the_expected_outcome() -> None:

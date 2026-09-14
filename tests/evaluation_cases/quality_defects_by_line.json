@@ -5,8 +5,8 @@
   "user_request": "Số lỗi (defects) giữa line A và line B có khác biệt có ý nghĩa thống kê không?",
   "goal_family": "comparison",
   "required_calculations": [
-    {"metric": "line_a_mean_defects", "expected": 3.5, "absolute_tolerance": 0.000001},
-    {"metric": "line_b_mean_defects", "expected": 7.25, "absolute_tolerance": 0.000001}
+    {"metric": "group[str:\"A\"].mean", "expected": 3.5, "absolute_tolerance": 0.000001},
+    {"metric": "group[str:\"B\"].mean", "expected": 7.25, "absolute_tolerance": 0.000001}
   ],
   "allowed_fields": ["line", "defects"],
   "supported_conclusions": ["Line B has more defects on average than line A, and the difference is statistically significant."],

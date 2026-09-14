@@ -4,5 +4,10 @@
   "dataset_sha256": "cda4f9b4c6a72ac4b49a1897aab4924bb5e2a9badbb78d88a13025406537b710",
   "user_request": "giá trị trung bình mỗi cột",
   "goal_family": "summary",
-  "expected_outcome": "profile"
+  "expected_outcome": "profile",
+  "required_profile_facts": [
+    {"fact": "mean", "field": "order_id", "expected": 3.0, "absolute_tolerance": 0.000001},
+    {"fact": "mean", "field": "revenue", "expected": 110.0, "absolute_tolerance": 0.000001},
+    {"fact": "mean", "field": "units", "expected": 2.2, "absolute_tolerance": 0.000001}
+  ]
 }

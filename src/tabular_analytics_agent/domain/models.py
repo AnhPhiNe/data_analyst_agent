@@ -361,6 +361,8 @@ class VerifiedInsight(DomainModel):
     evidence: EvidenceTrail
     verification: VerificationResult
     artifact_id: UUID | None = None
+    # Older persisted insights predate assertion storage; new publications always supply it.
+    assertion: InsightAssertion | None = None
 
     @model_validator(mode="after")
     def require_passed_verification(self) -> Self:

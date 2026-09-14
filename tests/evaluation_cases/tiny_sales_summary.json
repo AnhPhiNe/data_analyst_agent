@@ -5,8 +5,8 @@
   "user_request": "Summarize revenue by region.",
   "goal_family": "summary",
   "required_calculations": [
-    {"metric": "north_revenue", "expected": 350.0, "absolute_tolerance": 0.000001},
-    {"metric": "south_revenue", "expected": 200.0, "absolute_tolerance": 0.000001}
+    {"metric": "revenue", "aliases": ["total_revenue", "sum_revenue"], "group": {"field": "region", "value": "North"}, "expected": 350.0, "absolute_tolerance": 0.000001},
+    {"metric": "revenue", "aliases": ["total_revenue", "sum_revenue"], "group": {"field": "region", "value": "South"}, "expected": 200.0, "absolute_tolerance": 0.000001}
   ],
   "allowed_fields": ["region", "revenue"],
   "allowed_filters": [],
