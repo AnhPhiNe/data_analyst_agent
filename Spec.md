@@ -743,6 +743,7 @@ Adds scope agreed after the Milestone 6 hardening work. No earlier decision is r
 - An option withholds frequent sample values from model prompts, and the data sent to the provider at each step is documented with its limits (Sections 14.4, 14.5, and 25.3).
 - A deterministic Data Overview after ingestion, with fixed chart-selection limits and a descriptive correlation heatmap (Should tier; Section 6 and FR-11).
 - A local model adapter is recorded as the path to keeping all data on the machine (Could tier; Section 4.1).
+- Profiling fix found while preparing holdout v5, before any live run: a column whose values are all ISO dates is a datetime field whatever its name or language, and ISO dates are no longer mistaken for phone numbers. Vietnamese date columns such as `Ngày` had been profiled as text and flagged as possible PII (FR-03 and Section 14.4).
 
 ## 25. Implementation Contracts
 

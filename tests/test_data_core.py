@@ -192,6 +192,27 @@ def test_identifier_warning_skips_tiny_tables_and_continuous_measures(tmp_path: 
     assert "identifier-like unique field" not in large_fields["score"].warnings
 
 
+def test_iso_dates_are_detected_in_any_language_and_are_not_phone_numbers(tmp_path: Path) -> None:
+    upload = write_csv(
+        tmp_path / "lich.csv",
+        "Ngày,Mã tham chiếu,Liên hệ,Kỳ\n"
+        "2026-03-02,2026-02-30,0901 234 567,2026-03\n"
+        "2026-03-15,2026-01-15,+84 90 123 4567,2026-04\n"
+        "2026-04-01,chưa rõ,0912-345-678,2026-05\n",
+    )
+    core = TabularDataCore(tmp_path / "session")
+
+    profile = core.profile(core.ingest(upload))
+    fields = {field.name: field for field in profile.fields}
+
+    assert fields["Ngày"].kind is FieldKind.DATETIME
+    assert fields["Ngày"].temporal_summary is not None
+    # Month labels and a column with one non-date value stay text.
+    assert fields["Kỳ"].kind is not FieldKind.DATETIME
+    assert fields["Mã tham chiếu"].kind is not FieldKind.DATETIME
+    assert profile.pii_candidates == ("Liên hệ",)
+
+
 def test_query_inspection_does_not_treat_ordered_output_alias_as_source_field(
     tmp_path: Path,
 ) -> None:

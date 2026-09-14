@@ -61,6 +61,7 @@ _PII_NAME = re.compile(
 )
 _EMAIL_VALUE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
 _PHONE_VALUE = re.compile(r"^\+?[0-9][0-9 ()-]{7,}[0-9]$")
+_ISO_DATE_VALUE = re.compile(r"^\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?)?$")
 _NUMERIC_TYPES = {
     "BIGINT",
     "DECIMAL",
@@ -584,8 +585,12 @@ class TabularDataCore:
         samples = connection.execute(
             f"SELECT CAST({quoted} AS VARCHAR) FROM dataset WHERE {quoted} IS NOT NULL LIMIT 50"
         ).fetchall()
+        texts = [str(value) for (value,) in samples]
         return any(
-            _EMAIL_VALUE.match(str(value)) or _PHONE_VALUE.match(str(value)) for (value,) in samples
+            _EMAIL_VALUE.match(text)
+            # An ISO date such as 2026-03-02 has the digits-and-dashes shape of a phone number.
+            or (_PHONE_VALUE.match(text) and not _ISO_DATE_VALUE.match(text))
+            for text in texts
         )
 
 
@@ -673,17 +678,22 @@ def _validate_and_normalize_headers(frame: pd.DataFrame) -> None:
 
 def _coerce_unambiguous_dates(frame: pd.DataFrame) -> None:
     for name in frame.columns:
-        if not _DATE_NAME.search(str(name)):
-            continue
         series = frame[name]
         if not pd.api.types.is_string_dtype(series.dtype):
             continue
         present = series.dropna()
         if present.empty:
             continue
-        parsed = pd.to_datetime(present, errors="coerce", format="mixed", utc=True)
+        # ISO dates are unambiguous in any language; other formats need a date-like column name.
+        if all(_ISO_DATE_VALUE.match(str(value)) for value in present):
+            date_format = "ISO8601"
+        elif _DATE_NAME.search(str(name)):
+            date_format = "mixed"
+        else:
+            continue
+        parsed = pd.to_datetime(present, errors="coerce", format=date_format, utc=True)
         if parsed.notna().all():
-            normalized = pd.to_datetime(series, errors="coerce", format="mixed", utc=True)
+            normalized = pd.to_datetime(series, errors="coerce", format=date_format, utc=True)
             frame[name] = normalized.dt.tz_convert(None)
 
 
