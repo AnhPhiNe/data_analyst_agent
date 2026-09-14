@@ -19,6 +19,7 @@ def model_outputs() -> list[dict[str, object]]:
         {
             "goal_text": "Compare total revenue by region",
             "goal_family": "comparison",
+            "requested_metric_mappings": [],
             "semantic_annotations": [],
             "clarification_question": None,
         },
@@ -142,12 +143,18 @@ def test_application_reports_restore_and_publication_preconditions(tmp_path: Pat
     with pytest.raises(ApplicationError, match="completed agent run"):
         application.publish_candidates(
             workspace,
-            {"status": AgentRunStatus.PLANNING},
+            {
+                "session_id": str(workspace.session.session_id),
+                "status": AgentRunStatus.PLANNING,
+            },
         )
 
     failed_workspace = application.sync_workspace(
         workspace,
-        {"status": AgentRunStatus.FAILED},
+        {
+            "session_id": str(workspace.session.session_id),
+            "status": AgentRunStatus.FAILED,
+        },
     )
     assert failed_workspace.session.status is SessionStatus.FAILED
 
