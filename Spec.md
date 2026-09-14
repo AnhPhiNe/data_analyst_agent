@@ -714,6 +714,7 @@ Amendments from the first manual Streamlit acceptance session. A Vietnamese head
 - Simplification: the automatic row-count claim and the goal-interpretation field repair were removed (field ids address the cause), SQL alias guidance was shortened, and a provider error during chart proposal is classified as a provider error (FR-10 and Section 15).
 - After holdout v4 (33/36): significance questions require a statistical analysis step, a failure class seen on two datasets (FR-06).
 - Goal suggestions: three to five deterministic goals from the Data Profile, offered before the first question (FR-05 and Section 6, step 5).
+- Milestone 6: resource limits and execution budgets are read from environment variables (Sections 14.3 and 25.3), with tests for zip-bomb limits, query interruption, DuckDB memory, Tool Action and model-call budgets, injection text in cell values, destructive model SQL, PII samples, and recovery after a crash during tool execution. An option that sends no row samples to the model (Section 14.4) remains open.
 
 ## 25. Implementation Contracts
 
@@ -751,8 +752,8 @@ Questions fully covered by the Data Profile are answered without a tool (Section
 | Gemini API key | `GOOGLE_API_KEY` or `GEMINI_API_KEY` | None; required for live runs |
 | Additional keys for rotation | Comma-separated values in any key variable (for example `GOOGLE_API_KEY=key-1,key-2`), `GEMINI_API_KEY_2`, `GEMINI_API_KEY_3`, …, or `GEMINI_API_KEYS` | None; each key serves 15 requests per minute, then rests 65 seconds |
 | Model identifier | `TABULAR_AGENT_MODEL` | `gemini-3.5-flash-lite` |
-| Model call timeout | `TABULAR_AGENT_MODEL_TIMEOUT_SECONDS` | 30 seconds (minimum 21) |
+| Model call timeout | `TABULAR_AGENT_MODEL_TIMEOUT_SECONDS`, whole seconds; also the execution budget's per-call cap | 30 seconds (minimum 21 for Gemini) |
 | Data directory | `TABULAR_AGENT_DATA_DIR` | `.data` |
-| Resource limits (`DataCoreLimits`) | Code defaults; not yet environment-configurable | 100 MB file, 10,000 query rows, 30-second query timeout, 512 MB DuckDB memory, 500 MB uncompressed XLSX, compression ratio 100, 5 profile top values |
-| Execution budget (`ExecutionBudget`) | Code defaults; not yet environment-configurable | 12 Tool Actions, 2 repairs per action, 30-second model and tool timeouts, 300-second active run time |
+| Resource limits (`DataCoreLimits`) | `TABULAR_AGENT_<FIELD NAME>`, for example `TABULAR_AGENT_MAX_QUERY_ROWS`; the full list is in `.env.example`; an invalid value stops startup with the variable named | 100 MB file, 10,000 query rows, 30-second query timeout, 512 MB DuckDB memory, 500 MB uncompressed XLSX, compression ratio 100, 5 profile top values |
+| Execution budget (`ExecutionBudget`) | `TABULAR_AGENT_<FIELD NAME>`, for example `TABULAR_AGENT_MAX_TOOL_ACTIONS` | 12 Tool Actions, 2 repairs per action, 30-second model and tool timeouts, 300-second active run time |
 | Evaluation pacing | Evaluation runner `--rpm` option | 12 requests per minute per configured key (below the 15 RPM free-tier limit); a provider error is retried once after 66 seconds |

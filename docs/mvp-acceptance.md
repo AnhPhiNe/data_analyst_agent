@@ -47,7 +47,9 @@ These items are in integration review until the verification record below is com
   case-check pass rate alone does not establish per-value accuracy, tool success, or all other gates.
 - Review semantic correctness and filter use in addition to deterministic number/evidence checks.
   A model-produced mapping makes a decision inspectable; it does not prove the meaning is correct.
-- Complete bounded-resource, prompt-injection, PII, and crash-recovery evidence for Milestone 6.
+- Milestone 6 hardening tests are in `tests/test_hardening.py` and `tests/test_settings.py`
+  (see the verification record). Still open from Section 14.4: an option that sends no row
+  samples to the model API; today only PII candidate fields are withheld.
 - Provide Docker packaging and verify setup/build/test from a clean environment.
 - Complete sales, manufacturing, and workforce demonstrations; diagrams, screenshots, demo video,
   sample traces, documented limitations, and the portfolio README.
@@ -104,3 +106,11 @@ the outstanding Must-tier flows and reliability gates.
   SQL averages without a statistical test. The same pattern appeared once in the v3 development
   rerun. Gates met on this set: end-to-end success, chart validity, schema grounding, and
   unsupported claims; calculation accuracy (95%) is not met.
+- Milestone 6 hardening (2026-09-15): resource limits and execution budgets are configurable
+  through `TABULAR_AGENT_*` environment variables, and an invalid value stops startup with the
+  variable named. New deterministic tests cover XLSX zip-bomb limits, interruption of a
+  long-running query, the DuckDB memory limit, the Tool Action and model-call budgets, injection
+  text in cell values, destructive SQL proposed by the model, PII sample withholding, and
+  resuming a session after a simulated crash during tool execution. 339 tests passed (2 skipped),
+  branch-inclusive coverage 90.66%, Ruff, formatting, and mypy passed. No live model run was
+  needed because no prompt changed.

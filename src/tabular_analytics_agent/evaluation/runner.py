@@ -17,7 +17,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from tabular_analytics_agent.application import LocalAnalysisApplication
+from tabular_analytics_agent.application import LocalAnalysisApplication, limits_from_environment
 from tabular_analytics_agent.evaluation.models import (
     EvaluationModel,
     ExpectedCalculation,
@@ -275,7 +275,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         f"Using {gateway.api_key_count} Gemini API key(s); "
         f"pacing to {requests_per_minute:g} requests per minute"
     )
-    application = LocalAnalysisApplication(output_dir / "app-data", gateway)
+    limits, execution_budget = limits_from_environment()
+    application = LocalAnalysisApplication(
+        output_dir / "app-data",
+        gateway,
+        limits=limits,
+        execution_budget=execution_budget,
+    )
     summary = run_suite(
         application,
         cases,

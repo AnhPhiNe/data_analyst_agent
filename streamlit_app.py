@@ -17,6 +17,7 @@ from tabular_analytics_agent.application import (
     LocalAnalysisApplication,
     SessionSummary,
     StagedUpload,
+    limits_from_environment,
 )
 from tabular_analytics_agent.application.exports import (
     ExportRequest,
@@ -66,7 +67,13 @@ def build_application(data_root: str, model_id: str) -> LocalAnalysisApplication
             "TABULAR_AGENT_MODEL": model_id,
         }
     )
-    return LocalAnalysisApplication(Path(data_root), GeminiModelGateway(settings))
+    limits, execution_budget = limits_from_environment()
+    return LocalAnalysisApplication(
+        Path(data_root),
+        GeminiModelGateway(settings),
+        limits=limits,
+        execution_budget=execution_budget,
+    )
 
 
 def current_workspace() -> AnalysisWorkspace | None:
@@ -771,6 +778,10 @@ def main() -> None:
     except ModelConfigurationError as exc:
         st.error(str(exc))
         st.caption("Add GOOGLE_API_KEY to .env, then restart Streamlit.")
+        st.stop()
+    except ApplicationError as exc:
+        st.error(str(exc))
+        st.caption("Fix the setting in .env or the data directory, then restart Streamlit.")
         st.stop()
 
     if notice := st.session_state.pop("session_notice", None):

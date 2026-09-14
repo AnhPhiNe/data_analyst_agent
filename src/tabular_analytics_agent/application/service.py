@@ -19,12 +19,18 @@ from tabular_analytics_agent.application.models import (
     SessionSummary,
     StagedUpload,
 )
-from tabular_analytics_agent.data import TabularDataCore, UnsafeFileError, UnsupportedFileError
+from tabular_analytics_agent.data import (
+    DataCoreLimits,
+    TabularDataCore,
+    UnsafeFileError,
+    UnsupportedFileError,
+)
 from tabular_analytics_agent.domain import (
     AnalysisPlan,
     AnalysisSession,
     AnalyticalArtifact,
     AnalyticalGoal,
+    ExecutionBudget,
     SemanticAnnotation,
     SessionStatus,
 )
@@ -56,9 +62,18 @@ _SAFE_FILENAME_CHARS = re.compile(r"[^A-Za-z0-9._ -]+")
 class LocalAnalysisApplication:
     """Coordinate local data, agent checkpoints, and dashboard artifacts."""
 
-    def __init__(self, data_root: Path, model_gateway: ModelGateway) -> None:
+    def __init__(
+        self,
+        data_root: Path,
+        model_gateway: ModelGateway,
+        *,
+        limits: DataCoreLimits | None = None,
+        execution_budget: ExecutionBudget | None = None,
+    ) -> None:
         self._data_root = data_root.resolve()
         self._model_gateway = model_gateway
+        self._limits = limits or DataCoreLimits()
+        self._execution_budget = execution_budget or ExecutionBudget()
         self._sessions_root = _resolve_storage_path(
             self._data_root,
             self._data_root / "sessions",
@@ -88,7 +103,7 @@ class LocalAnalysisApplication:
         session_id = uuid4()
         safe_name = _safe_upload_name(original_filename)
         session_directory = self._session_directory(session_id)
-        core = TabularDataCore(session_directory)
+        core = TabularDataCore(session_directory, self._limits)
         if not content:
             raise UnsafeFileError("Upload cannot be empty")
         if len(content) > core.limits.max_file_bytes:
@@ -123,7 +138,7 @@ class LocalAnalysisApplication:
         )
         if upload_path.parent != incoming_directory or not upload_path.is_file():
             raise ApplicationError("staged upload path is not owned by its Analysis Session")
-        core = TabularDataCore(session_directory)
+        core = TabularDataCore(session_directory, self._limits)
         handle = core.ingest(upload_path, sheet_name=sheet_name)
         profile = core.profile(handle)
         now = datetime.now(UTC)
@@ -403,8 +418,9 @@ class LocalAnalysisApplication:
         with open_sqlite_checkpointer(checkpoint_path) as saver:
             yield AgentOrchestrator(
                 self._model_gateway,
-                TabularDataCore(session_directory),
+                TabularDataCore(session_directory, self._limits),
                 checkpointer=saver,
+                execution_budget=self._execution_budget,
             )
 
     def _save_workspace(self, workspace: AnalysisWorkspace) -> None:
