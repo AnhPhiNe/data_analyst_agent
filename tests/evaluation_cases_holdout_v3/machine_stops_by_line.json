@@ -1,0 +1,74 @@
+{
+  "case_id": "holdout-v3-machine-stops-by-line-v1",
+  "dataset_path": "tests/fixtures/eval_holdout_v3/bao_tri_may.csv",
+  "dataset_sha256": "ef4f4040f453f9db8668734b5ac7ad11b0fbaf32f18046c1672da0021cbbfdea",
+  "user_request": "Tổng số lần dừng máy của từng dây chuyền là bao nhiêu?",
+  "goal_family": "summary",
+  "required_calculations": [
+    {
+      "metric": "Số lần dừng máy",
+      "aliases": [
+        "tong_so_lan_dung_may",
+        "total_stops",
+        "sum_stops",
+        "so_lan_dung_may",
+        "sum_1",
+        "total_stoppages",
+        "tong_dung_may"
+      ],
+      "group": {
+        "field": "Dây chuyền",
+        "value": "Dây chuyền 1"
+      },
+      "expected": 25,
+      "absolute_tolerance": 1e-06
+    },
+    {
+      "metric": "Số lần dừng máy",
+      "aliases": [
+        "tong_so_lan_dung_may",
+        "total_stops",
+        "sum_stops",
+        "so_lan_dung_may",
+        "sum_1",
+        "total_stoppages",
+        "tong_dung_may"
+      ],
+      "group": {
+        "field": "Dây chuyền",
+        "value": "Dây chuyền 2"
+      },
+      "expected": 28,
+      "absolute_tolerance": 1e-06
+    },
+    {
+      "metric": "Số lần dừng máy",
+      "aliases": [
+        "tong_so_lan_dung_may",
+        "total_stops",
+        "sum_stops",
+        "so_lan_dung_may",
+        "sum_1",
+        "total_stoppages",
+        "tong_dung_may"
+      ],
+      "group": {
+        "field": "Dây chuyền",
+        "value": "Dây chuyền 3"
+      },
+      "expected": 29,
+      "absolute_tolerance": 1e-06
+    }
+  ],
+  "allowed_fields": [
+    "Dây chuyền",
+    "Số lần dừng máy"
+  ],
+  "supported_conclusions": [
+    "Dây chuyền 3 có tổng số lần dừng máy cao nhất."
+  ],
+  "valid_chart_types": [
+    "bar",
+    "table"
+  ]
+}

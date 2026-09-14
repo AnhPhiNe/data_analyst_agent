@@ -1,0 +1,40 @@
+{
+  "case_id": "holdout-v3-tickets-open-count-v1",
+  "dataset_path": "tests/fixtures/eval_holdout_v3/support_tickets.csv",
+  "dataset_sha256": "8338da3a488aa75d922893618f73df04a67835a5733d0e7461538cda3c3c5634",
+  "user_request": "How many tickets are still open?",
+  "goal_family": "summary",
+  "required_calculations": [
+    {
+      "metric": "row_count",
+      "aliases": [
+        "count_1",
+        "count",
+        "open_tickets",
+        "open_ticket_count",
+        "open_count",
+        "ticket_count",
+        "result.row_count"
+      ],
+      "expected": 4,
+      "absolute_tolerance": 1e-06
+    }
+  ],
+  "allowed_fields": [
+    "status",
+    "ticket_id"
+  ],
+  "allowed_filters": [
+    "status = 'open'"
+  ],
+  "supported_conclusions": [
+    "4 tickets are still open."
+  ],
+  "forbidden_claims": [
+    "is 0."
+  ],
+  "valid_chart_types": [
+    "kpi",
+    "table"
+  ]
+}

@@ -1,0 +1,74 @@
+{
+  "case_id": "holdout-v3-machine-repair-cost-by-shift-v1",
+  "dataset_path": "tests/fixtures/eval_holdout_v3/bao_tri_may.csv",
+  "dataset_sha256": "ef4f4040f453f9db8668734b5ac7ad11b0fbaf32f18046c1672da0021cbbfdea",
+  "user_request": "Chi phí sửa chữa trung bình của mỗi ca là bao nhiêu?",
+  "goal_family": "comparison",
+  "required_calculations": [
+    {
+      "metric": "Chi phí sửa chữa (triệu)",
+      "aliases": [
+        "avg_1",
+        "avg_repair_cost",
+        "average_repair_cost",
+        "chi_phi_trung_binh",
+        "avg_chi_phi_sua_chua",
+        "avg_cost",
+        "chi_phi_sua_chua_trung_binh"
+      ],
+      "group": {
+        "field": "Ca",
+        "value": "Chiều"
+      },
+      "expected": 7.3375,
+      "absolute_tolerance": 1e-06
+    },
+    {
+      "metric": "Chi phí sửa chữa (triệu)",
+      "aliases": [
+        "avg_1",
+        "avg_repair_cost",
+        "average_repair_cost",
+        "chi_phi_trung_binh",
+        "avg_chi_phi_sua_chua",
+        "avg_cost",
+        "chi_phi_sua_chua_trung_binh"
+      ],
+      "group": {
+        "field": "Ca",
+        "value": "Sáng"
+      },
+      "expected": 6.65,
+      "absolute_tolerance": 1e-06
+    },
+    {
+      "metric": "Chi phí sửa chữa (triệu)",
+      "aliases": [
+        "avg_1",
+        "avg_repair_cost",
+        "average_repair_cost",
+        "chi_phi_trung_binh",
+        "avg_chi_phi_sua_chua",
+        "avg_cost",
+        "chi_phi_sua_chua_trung_binh"
+      ],
+      "group": {
+        "field": "Ca",
+        "value": "Đêm"
+      },
+      "expected": 7.225,
+      "absolute_tolerance": 1e-06
+    }
+  ],
+  "allowed_fields": [
+    "Ca",
+    "Chi phí sửa chữa (triệu)"
+  ],
+  "supported_conclusions": [
+    "Ca Sáng có chi phí sửa chữa trung bình thấp nhất."
+  ],
+  "valid_chart_types": [
+    "bar",
+    "table"
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "case_id": "holdout-v3-machine-unavailable-labor-cost-v1",
+  "dataset_path": "tests/fixtures/eval_holdout_v3/bao_tri_may.csv",
+  "dataset_sha256": "ef4f4040f453f9db8668734b5ac7ad11b0fbaf32f18046c1672da0021cbbfdea",
+  "user_request": "Chi phí nhân công của từng máy là bao nhiêu?",
+  "goal_family": "summary",
+  "expected_outcome": "clarification",
+  "acceptable_outcomes": [
+    "refused"
+  ],
+  "forbidden_claims": [
+    "sửa chữa",
+    "repair"
+  ]
+}

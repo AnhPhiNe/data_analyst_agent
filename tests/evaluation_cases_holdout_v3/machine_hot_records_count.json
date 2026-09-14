@@ -1,0 +1,37 @@
+{
+  "case_id": "holdout-v3-machine-hot-records-count-v1",
+  "dataset_path": "tests/fixtures/eval_holdout_v3/bao_tri_may.csv",
+  "dataset_sha256": "ef4f4040f453f9db8668734b5ac7ad11b0fbaf32f18046c1672da0021cbbfdea",
+  "user_request": "Có bao nhiêu bản ghi có nhiệt độ trung bình trên 80 độ?",
+  "goal_family": "summary",
+  "required_calculations": [
+    {
+      "metric": "row_count",
+      "aliases": [
+        "count_1",
+        "count",
+        "so_ban_ghi",
+        "record_count",
+        "hot_records",
+        "so_luong",
+        "total_records",
+        "result.row_count"
+      ],
+      "expected": 10,
+      "absolute_tolerance": 1e-06
+    }
+  ],
+  "allowed_fields": [
+    "Nhiệt độ trung bình"
+  ],
+  "allowed_filters": [
+    "Nhiệt độ trung bình > 80"
+  ],
+  "supported_conclusions": [
+    "10 bản ghi có nhiệt độ trung bình trên 80 độ."
+  ],
+  "valid_chart_types": [
+    "kpi",
+    "table"
+  ]
+}

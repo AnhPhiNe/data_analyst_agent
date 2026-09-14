@@ -1,0 +1,29 @@
+{
+  "case_id": "holdout-v3-tickets-satisfaction-by-team-test-v1",
+  "dataset_path": "tests/fixtures/eval_holdout_v3/support_tickets.csv",
+  "dataset_sha256": "8338da3a488aa75d922893618f73df04a67835a5733d0e7461538cda3c3c5634",
+  "user_request": "Is the average satisfaction score significantly different between team A and team B?",
+  "goal_family": "comparison",
+  "required_calculations": [
+    {
+      "metric": "group[str:\"A\"].mean",
+      "expected": 3.6666666666666665,
+      "absolute_tolerance": 1e-06
+    },
+    {
+      "metric": "group[str:\"B\"].mean",
+      "expected": 3.375,
+      "absolute_tolerance": 1e-06
+    }
+  ],
+  "allowed_fields": [
+    "agent_team",
+    "satisfaction_score"
+  ],
+  "supported_conclusions": [
+    "The teams' mean satisfaction scores are compared with a two-group test."
+  ],
+  "forbidden_claims": [
+    "cause"
+  ]
+}

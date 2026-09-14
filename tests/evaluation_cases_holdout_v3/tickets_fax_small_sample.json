@@ -1,0 +1,11 @@
+{
+  "case_id": "holdout-v3-tickets-fax-small-sample-v1",
+  "dataset_path": "tests/fixtures/eval_holdout_v3/support_tickets.csv",
+  "dataset_sha256": "8338da3a488aa75d922893618f73df04a67835a5733d0e7461538cda3c3c5634",
+  "user_request": "Is the satisfaction score for fax tickets significantly different from email tickets?",
+  "goal_family": "comparison",
+  "expected_outcome": "refused",
+  "forbidden_claims": [
+    "is statistically significant ("
+  ]
+}

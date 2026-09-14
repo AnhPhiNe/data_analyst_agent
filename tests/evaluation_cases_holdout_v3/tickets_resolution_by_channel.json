@@ -1,0 +1,92 @@
+{
+  "case_id": "holdout-v3-tickets-resolution-by-channel-v1",
+  "dataset_path": "tests/fixtures/eval_holdout_v3/support_tickets.csv",
+  "dataset_sha256": "8338da3a488aa75d922893618f73df04a67835a5733d0e7461538cda3c3c5634",
+  "user_request": "What is the average resolution time in hours for each channel?",
+  "goal_family": "comparison",
+  "required_calculations": [
+    {
+      "metric": "resolution_hours",
+      "aliases": [
+        "avg_1",
+        "avg_resolution_hours",
+        "average_resolution_hours",
+        "avg_resolution_time",
+        "average_resolution_time",
+        "avg_hours",
+        "mean_resolution_hours"
+      ],
+      "group": {
+        "field": "channel",
+        "value": "chat"
+      },
+      "expected": 28.01,
+      "absolute_tolerance": 1e-06
+    },
+    {
+      "metric": "resolution_hours",
+      "aliases": [
+        "avg_1",
+        "avg_resolution_hours",
+        "average_resolution_hours",
+        "avg_resolution_time",
+        "average_resolution_time",
+        "avg_hours",
+        "mean_resolution_hours"
+      ],
+      "group": {
+        "field": "channel",
+        "value": "email"
+      },
+      "expected": 15.0,
+      "absolute_tolerance": 1e-06
+    },
+    {
+      "metric": "resolution_hours",
+      "aliases": [
+        "avg_1",
+        "avg_resolution_hours",
+        "average_resolution_hours",
+        "avg_resolution_time",
+        "average_resolution_time",
+        "avg_hours",
+        "mean_resolution_hours"
+      ],
+      "group": {
+        "field": "channel",
+        "value": "fax"
+      },
+      "expected": 16.25,
+      "absolute_tolerance": 1e-06
+    },
+    {
+      "metric": "resolution_hours",
+      "aliases": [
+        "avg_1",
+        "avg_resolution_hours",
+        "average_resolution_hours",
+        "avg_resolution_time",
+        "average_resolution_time",
+        "avg_hours",
+        "mean_resolution_hours"
+      ],
+      "group": {
+        "field": "channel",
+        "value": "phone"
+      },
+      "expected": 11.166666666666666,
+      "absolute_tolerance": 1e-06
+    }
+  ],
+  "allowed_fields": [
+    "channel",
+    "resolution_hours"
+  ],
+  "supported_conclusions": [
+    "phone has the shortest average resolution time."
+  ],
+  "valid_chart_types": [
+    "bar",
+    "table"
+  ]
+}

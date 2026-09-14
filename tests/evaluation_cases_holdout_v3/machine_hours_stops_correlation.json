@@ -1,0 +1,24 @@
+{
+  "case_id": "holdout-v3-machine-hours-stops-correlation-v1",
+  "dataset_path": "tests/fixtures/eval_holdout_v3/bao_tri_may.csv",
+  "dataset_sha256": "ef4f4040f453f9db8668734b5ac7ad11b0fbaf32f18046c1672da0021cbbfdea",
+  "user_request": "Giờ vận hành và số lần dừng máy có tương quan với nhau không?",
+  "goal_family": "relationship",
+  "required_calculations": [
+    {
+      "metric": "pearson_r",
+      "expected": 0.35958863246105977,
+      "absolute_tolerance": 0.001
+    }
+  ],
+  "allowed_fields": [
+    "Giờ vận hành",
+    "Số lần dừng máy"
+  ],
+  "supported_conclusions": [
+    "Operating hours and stoppages are positively associated, which does not establish causation."
+  ],
+  "forbidden_claims": [
+    "cause"
+  ]
+}
