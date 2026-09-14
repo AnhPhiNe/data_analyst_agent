@@ -483,6 +483,9 @@ def build_agent_graph(
                 "allowlisted tool: read_only_sql or statistical_analysis. Statistical analysis "
                 "supports descriptive, correlation, confidence_interval, t_test, mann_whitney, "
                 "chi_square, anova, kruskal_wallis, linear_regression, and logistic_regression. "
+                "When the goal asks whether a difference or relationship is statistically "
+                "significant or could be due to chance, include a statistical_analysis step; "
+                "SQL aggregates alone cannot answer that. "
                 "Reference only listed fields. SQL reads rows of the dataset table only; schema "
                 "catalogs such as information_schema are unavailable. Set requires_approval to "
                 "true only for a step the user should review before it runs; ordinary read-only "
@@ -494,7 +497,7 @@ def build_agent_graph(
             ),
             response_schema=PlanDraft,
             system_instruction=_SYSTEM_INSTRUCTION,
-            prompt_template_version="plan-v5",
+            prompt_template_version="plan-v6",
             timeout_seconds=_model_call_timeout_seconds(state, budget, clock()),
         )
         trace: ModelCallTrace | None = None

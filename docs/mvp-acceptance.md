@@ -95,3 +95,12 @@ the outstanding Must-tier flows and reliability gates.
   wrong (3 instead of the profile's 1) instead of from the Data Profile. The Section 17.4 gates
   for end-to-end success (85%), calculation accuracy (95%), and chart validity (95%) are not
   yet met on this set.
+- Holdout v4 first run (2026-09-14, grading version 3, commit 9133194, paced at 30 requests per
+  minute): 33/36 runs passed (91.7%); 11 of 12 cases passed all 3 runs, covering the public Iris
+  and Titanic tables, a synthetic student table, and a messy orders table. Check rates: outcome,
+  chart, schema grounding, forbidden claims, and profile facts 100%; calculations and insight
+  coverage 87.5%. One rate-limit error was retried and no provider error remained. All 3 failures
+  are one case: asked whether two groups' mean scores differ significantly, the agent compared
+  SQL averages without a statistical test. The same pattern appeared once in the v3 development
+  rerun. Gates met on this set: end-to-end success, chart validity, schema grounding, and
+  unsupported claims; calculation accuracy (95%) is not met.

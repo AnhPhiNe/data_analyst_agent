@@ -160,6 +160,7 @@ Goals may be written in English or Vietnamese, and Supported Datasets may use Vi
 - Answer questions fully covered by the Data Profile (Section 6, step 7) without creating a plan.
 - Pause for approval only when a step requires review; read-only plans run immediately and remain visible to the user.
 - Permit the user to reject or revise a plan that paused for approval.
+- A goal that asks whether a difference or relationship is statistically significant must include a statistical analysis step; SQL aggregates alone do not answer it.
 
 ### FR-07 — Working Dataset transformations (Should tier)
 
@@ -709,6 +710,7 @@ Amendments from the first manual Streamlit acceptance session. A Vietnamese head
 - After rechecking those fixes: grading version 3 matches grouped query values by group and value instead of alias lists, and ASCII field ids replace copied non-ASCII names in model outputs (Sections 15, 17.3, and 25.1).
 - After holdout v3: SQL may read a subset of the approved fields, duplicate-row questions are answered from the Data Profile, and rejected API keys leave the rotation (Sections 6, 11.2, and 25.1).
 - Simplification: the automatic row-count claim and the goal-interpretation field repair were removed (field ids address the cause), SQL alias guidance was shortened, and a provider error during chart proposal is classified as a provider error (FR-10 and Section 15).
+- After holdout v4 (33/36): significance questions require a statistical analysis step, a failure class seen on two datasets (FR-06).
 
 ## 25. Implementation Contracts
 

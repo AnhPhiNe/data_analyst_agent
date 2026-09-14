@@ -647,6 +647,7 @@ def test_misspelled_plan_field_is_repaired_with_the_error(tmp_path: Path) -> Non
     assert paused["status"] == AgentRunStatus.AWAITING_PLAN_APPROVAL
     assert "Unknown fields requested: regoin" in gateway.requests[2].prompt
     assert "do not substitute another field" in gateway.requests[2].prompt
+    assert "include a statistical_analysis step" in gateway.requests[1].prompt
     assert paused["model_traces"][1]["error"].startswith("Unknown fields requested")
 
 
