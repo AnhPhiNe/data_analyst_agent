@@ -167,7 +167,7 @@ def run_suite(
     runs: int,
     requests_per_minute: float,
     output_dir: Path,
-    provider_retry_delay_seconds: float = 60.0,
+    provider_retry_delay_seconds: float = 66.0,
     sleep: Callable[[float], None] = time.sleep,
     clock: Callable[[], float] = time.monotonic,
 ) -> SuiteSummary:
@@ -198,7 +198,7 @@ def run_suite(
             for case in cases:
                 result = paced_run(case, run_index)
                 if result.provider_error:
-                    # Quota and overload errors are retried once after the rate window resets.
+                    # Quota errors are retried once after the 65-second API key cooldown ends.
                     sleep(provider_retry_delay_seconds)
                     result = paced_run(case, run_index)
                 results.append(result)
@@ -245,15 +245,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument(
         "--rpm",
         type=float,
-        default=12.0,
-        help="Requests per minute to pace to; keep headroom below the provider quota",
+        default=None,
+        help="Requests per minute to pace to (default: 12 per configured API key)",
     )
     parser.add_argument("--output", type=Path, default=None)
     args = parser.parse_args(argv)
 
     if args.runs < 1:
         parser.error("--runs must be at least 1")
-    if not math.isfinite(args.rpm) or args.rpm <= 0:
+    if args.rpm is not None and (not math.isfinite(args.rpm) or args.rpm <= 0):
         parser.error("--rpm must be finite and greater than 0")
 
     cases = tuple(
@@ -263,16 +263,20 @@ def main(argv: Sequence[str] | None = None) -> int:
         parser.error("no evaluation cases selected")
     load_dotenv()
     output_dir: Path = args.output or Path(".eval") / datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
-    application = LocalAnalysisApplication(
-        output_dir / "app-data",
-        GeminiModelGateway(GeminiSettings.from_environment()),
+    gateway = GeminiModelGateway(GeminiSettings.from_environment())
+    # Each key serves up to 15 requests per minute; pace a little below the combined budget.
+    requests_per_minute = args.rpm or 12.0 * gateway.api_key_count
+    print(
+        f"Using {gateway.api_key_count} Gemini API key(s); "
+        f"pacing to {requests_per_minute:g} requests per minute"
     )
+    application = LocalAnalysisApplication(output_dir / "app-data", gateway)
     summary = run_suite(
         application,
         cases,
         project_root=Path.cwd(),
         runs=args.runs,
-        requests_per_minute=args.rpm,
+        requests_per_minute=requests_per_minute,
         output_dir=output_dir,
     )
     print(summary.model_dump_json(indent=2))

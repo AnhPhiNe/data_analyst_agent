@@ -345,7 +345,7 @@ class RateLimitError(RuntimeError):
     status_code = 429
 
 
-def test_gemini_adapter_bounds_rate_limit_retries() -> None:
+def test_gemini_adapter_rests_a_rate_limited_single_key_without_waiting() -> None:
     client = FakeChatModel([RateLimitError("private") for _ in range(3)])
     delays: list[float] = []
     gateway = GeminiModelGateway(
@@ -361,9 +361,113 @@ def test_gemini_adapter_bounds_rate_limit_retries() -> None:
     with pytest.raises(ModelProviderError, match="status=429") as caught:
         gateway.generate_structured(goal_request())
 
+    assert "All 1 Gemini API keys are rate limited" in str(caught.value)
+    assert "available in 65 seconds" in str(caught.value)
     assert "private" not in str(caught.value)
-    assert len(client.calls) == 3
-    assert delays == [0.25, 0.5]
+    assert len(client.calls) == 1
+    assert delays == []
+
+
+class ManualMonotonic:
+    def __init__(self) -> None:
+        self.now = 1000.0
+
+    def __call__(self) -> float:
+        return self.now
+
+
+def recording_factory(client: FakeChatModel, used_keys: list[str]) -> Any:
+    def build(
+        settings: GeminiSettings,
+        request: object,
+        *,
+        timeout_seconds: float,
+        api_key: SecretStr,
+    ) -> FakeChatModel:
+        used_keys.append(api_key.get_secret_value())
+        return client
+
+    return build
+
+
+def test_settings_collect_every_api_key_in_order_without_duplicates() -> None:
+    settings = GeminiSettings.from_environment(
+        {
+            "GOOGLE_API_KEY": "key-a, key-e",
+            "GEMINI_API_KEY_3": "key-c",
+            "GEMINI_API_KEY_2": "key-b",
+            "GEMINI_API_KEYS": " key-d, key-a,",
+        }
+    )
+
+    assert [key.get_secret_value() for key in settings.api_keys] == [
+        "key-a",
+        "key-e",
+        "key-b",
+        "key-c",
+        "key-d",
+    ]
+    assert "key-b" not in repr(settings)
+
+
+def test_each_key_is_used_up_to_its_minute_budget_then_rotation_wraps() -> None:
+    clock = ManualMonotonic()
+    used_keys: list[str] = []
+    client = FakeChatModel([gemini_response(valid_goal()) for _ in range(5)])
+    gateway = GeminiModelGateway(
+        GeminiSettings(
+            api_key=SecretStr("key-a"),
+            additional_api_keys=(SecretStr("key-b"),),
+            model_id="gemini-test",
+            requests_per_minute_per_key=2,
+        ),
+        client_factory=recording_factory(client, used_keys),
+        monotonic=clock,
+    )
+
+    for _ in range(4):
+        gateway.generate_structured(goal_request())
+    with pytest.raises(ModelProviderError, match="All 2 Gemini API keys are rate limited"):
+        gateway.generate_structured(goal_request())
+    clock.now += 65
+    gateway.generate_structured(goal_request())
+
+    assert gateway.api_key_count == 2
+    assert used_keys == ["key-a", "key-a", "key-b", "key-b", "key-a"]
+
+
+def test_rate_limited_key_is_rested_and_the_next_key_is_used_immediately() -> None:
+    clock = ManualMonotonic()
+    used_keys: list[str] = []
+    delays: list[float] = []
+    client = FakeChatModel(
+        [
+            RateLimitError("private"),
+            gemini_response(valid_goal()),
+            gemini_response(valid_goal()),
+            gemini_response(valid_goal()),
+        ]
+    )
+    gateway = GeminiModelGateway(
+        GeminiSettings(
+            api_key=SecretStr("key-a"),
+            additional_api_keys=(SecretStr("key-b"),),
+            model_id="gemini-test",
+        ),
+        client_factory=recording_factory(client, used_keys),
+        sleep=delays.append,
+        monotonic=clock,
+    )
+
+    response = gateway.generate_structured(goal_request())
+    gateway.generate_structured(goal_request())
+    clock.now += 65
+    gateway.generate_structured(goal_request())
+
+    # key-b keeps serving until its own budget is used, even after key-a's flag expires.
+    assert used_keys == ["key-a", "key-b", "key-b", "key-b"]
+    assert delays == []
+    assert response.trace.provider_retry_count == 1
 
 
 def test_gemini_adapter_uses_raw_text_when_parsed_value_is_missing() -> None:

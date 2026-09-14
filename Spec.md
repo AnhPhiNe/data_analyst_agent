@@ -390,7 +390,7 @@ The implementation should define versioned equivalents of these models:
 - Provide a deterministic `FakeModelGateway` for automated tests.
 - Do not implement automatic provider fallback in the MVP.
 - Permit later hosted benchmarks with Qwen3.8-27B and `gpt-oss-120b` without changing analytical tools or graph contracts. Free tiers from Groq and Cohere were considered and deferred because their tokens-per-minute or monthly caps are tighter than Gemini Flash-Lite.
-- Model calls must respect provider quotas. Evaluation runs pace requests; a quota-aware gateway that honors `retry-after` is Should-tier.
+- Model calls must respect provider quotas. The Gemini gateway can rotate several configured API keys: it uses one key for up to 15 requests per minute, rests a key for 65 seconds after that budget is used or a rate-limit response arrives, moves to the next key immediately, and wraps to the first key after the last. When every key is resting, the call fails as a provider error that states the wait instead of blocking. Evaluation runs also pace requests. Using several keys must comply with the provider's terms; honoring provider `retry-after` headers remains Should-tier.
 
 ### 11.3 Model-output rules
 
@@ -702,6 +702,7 @@ Amendments from the first manual Streamlit acceptance session. A Vietnamese head
 - SQL steps without required fields are replanned, insight drafts with unknown metric identifiers are regenerated once, and Verification Gate failures name the failed gate (Section 15).
 - Too few usable values for a statistical test become a typed `insufficient_sample` refusal instead of a failure, and evaluation credits it as a refusal (Sections 15 and 17.3).
 - Row listings publish a deterministic row-count claim when no drafted claim survives and may number source rows (FR-10); KPIs are not rounded and bar charts use categorical axes (FR-11); CSV exports carry a UTF-8 byte-order mark (FR-13); the Audit view contents are defined (Section 16); contaminated holdouts are reported separately (Section 17.3).
+- The Gemini gateway rotates several API keys with a per-key minute budget and a 65-second cooldown, and evaluation pacing scales with the key count (Sections 11.2 and 25.3).
 
 ## 25. Implementation Contracts
 
@@ -737,9 +738,10 @@ Questions fully covered by the Data Profile are answered without a tool (Section
 | Setting | Source | Default |
 |---|---|---|
 | Gemini API key | `GOOGLE_API_KEY` or `GEMINI_API_KEY` | None; required for live runs |
+| Additional keys for rotation | Comma-separated values in any key variable (for example `GOOGLE_API_KEY=key-1,key-2`), `GEMINI_API_KEY_2`, `GEMINI_API_KEY_3`, …, or `GEMINI_API_KEYS` | None; each key serves 15 requests per minute, then rests 65 seconds |
 | Model identifier | `TABULAR_AGENT_MODEL` | `gemini-3.5-flash-lite` |
 | Model call timeout | `TABULAR_AGENT_MODEL_TIMEOUT_SECONDS` | 30 seconds (minimum 21) |
 | Data directory | `TABULAR_AGENT_DATA_DIR` | `.data` |
 | Resource limits (`DataCoreLimits`) | Code defaults; not yet environment-configurable | 100 MB file, 10,000 query rows, 30-second query timeout, 512 MB DuckDB memory, 500 MB uncompressed XLSX, compression ratio 100, 5 profile top values |
 | Execution budget (`ExecutionBudget`) | Code defaults; not yet environment-configurable | 12 Tool Actions, 2 repairs per action, 30-second model and tool timeouts, 300-second active run time |
-| Evaluation pacing | Evaluation runner `--rpm` option | 12 requests per minute (below the 15 RPM free-tier limit) |
+| Evaluation pacing | Evaluation runner `--rpm` option | 12 requests per minute per configured key (below the 15 RPM free-tier limit); a provider error is retried once after 66 seconds |
