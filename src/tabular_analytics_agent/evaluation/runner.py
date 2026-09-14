@@ -30,7 +30,7 @@ from tabular_analytics_agent.orchestration import AgentRunStatus, AgentState, Re
 
 _MAX_PLAN_APPROVALS = 3
 Scalar = str | int | float | bool | None
-_GRADING_VERSION = "2"
+_GRADING_VERSION = "3"
 _MISSING = object()
 
 
@@ -42,6 +42,7 @@ class _OutputValue:
     result_ref: str
     group_values: tuple[tuple[str, Scalar], ...] = ()
     source: str = "query"
+    result_row_count: int = 1
 
 
 class CheckResult(EvaluationModel):
@@ -72,6 +73,8 @@ class SuiteSummary(EvaluationModel):
     grading_version: str = _GRADING_VERSION
     passed: int
     provider_errors: int
+    # Provider errors that were retried successfully are otherwise invisible in the results.
+    provider_retries: int = 0
     pass_rate_excluding_provider_errors: float
     outcome_accuracy: float
     check_pass_rates: dict[str, float]
@@ -179,6 +182,7 @@ def run_suite(
         raise ValueError("at least one evaluation case is required")
     output_dir.mkdir(parents=True, exist_ok=True)
     results: list[CaseRunResult] = []
+    provider_retries = 0
 
     def paced_run(case: GoldenCase, run_index: int) -> CaseRunResult:
         started = clock()
@@ -199,13 +203,14 @@ def run_suite(
                 result = paced_run(case, run_index)
                 if result.provider_error:
                     # Quota errors are retried once after the 65-second API key cooldown ends.
+                    provider_retries += 1
                     sleep(provider_retry_delay_seconds)
                     result = paced_run(case, run_index)
                 results.append(result)
                 log.write(result.model_dump_json() + "\n")
                 log.flush()
                 _print_progress(result)
-    summary = summarize(results)
+    summary = summarize(results).model_copy(update={"provider_retries": provider_retries})
     (output_dir / "summary.json").write_text(summary.model_dump_json(indent=2), encoding="utf-8")
     return summary
 
@@ -414,6 +419,7 @@ def _computed_values(state: AgentState) -> list[_OutputValue]:
                     result_ref=f"query-result:{query_id}",
                     group_values=group_values,
                     source="query",
+                    result_row_count=len(query_result.get("rows", [])),
                 )
                 for column_index, column in enumerate(columns)
             )
@@ -519,6 +525,13 @@ def _calculation_matches(calculation: ExpectedCalculation, values: Sequence[_Out
 def _metric_matches(calculation: ExpectedCalculation, value: _OutputValue) -> bool:
     if value.source == "statistical":
         return _text_equal(calculation.metric, value.metric)
+    if any(_text_equal(value.metric, field) for field, _ in value.group_values):
+        # A GROUP BY label identifies the row; it is never the measured value.
+        return False
+    if calculation.group is not None or value.result_row_count == 1:
+        # Query output names are model-chosen aliases, so a grouped row or a single-row result
+        # is matched by its group and value rather than by guessing the alias.
+        return True
     return any(
         _text_equal(metric, value.metric) for metric in (calculation.metric, *calculation.aliases)
     )

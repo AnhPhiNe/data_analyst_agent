@@ -220,6 +220,7 @@ def test_provider_error_is_retried_once_after_the_rate_window(tmp_path: Path) ->
 
     assert summary.passed == 1, summary.failures
     assert summary.provider_errors == 0
+    assert summary.provider_retries == 1
     assert sleeps == [60.0]
 
 
@@ -239,7 +240,7 @@ def test_query_grading_rejects_swapped_group_values() -> None:
     }
 
 
-def test_query_grading_rejects_correct_value_under_wrong_metric() -> None:
+def test_query_grading_accepts_a_grouped_value_under_an_unlisted_alias() -> None:
     case = load_case("tiny_sales_summary.json")
     result = grade_run(
         case,
@@ -251,8 +252,60 @@ def test_query_grading_rejects_correct_value_under_wrong_metric() -> None:
         ),
     )
 
-    assert not result.passed
+    # Output names are model-chosen aliases; the group row and the value are what is graded.
+    assert next(check for check in result.checks if check.name == "calculations").passed
+    assert next(check for check in result.checks if check.name == "insight_coverage").passed
+
+
+def query_only_state(
+    columns: list[str], rows: list[list[object]], group_by: list[str]
+) -> AgentState:
+    return {
+        "status": "completed",
+        "tool_actions": [
+            {"action_id": "action-1", "status": "succeeded", "output_ref": "query-result:query-1"}
+        ],
+        "query_results": [
+            {
+                "query_id": "query-1",
+                "columns": [{"name": column} for column in columns],
+                "rows": rows,
+                "group_by_columns": group_by,
+            }
+        ],
+        "verified_insights": [],
+    }
+
+
+def test_group_label_column_never_counts_as_the_measured_value() -> None:
+    case = load_case("tiny_sales_summary.json").model_copy(
+        update={
+            "required_calculations": (
+                ExpectedCalculation.model_validate(
+                    {"metric": "count", "expected": 2, "group": {"field": "month", "value": 2}}
+                ),
+            )
+        }
+    )
+    state = query_only_state(["month", "count"], [[2, 5], [3, 7]], ["month"])
+
+    result = grade_run(case, state)
+
     assert not next(check for check in result.checks if check.name == "calculations").passed
+
+
+def test_ungrouped_value_needs_a_single_row_or_the_named_metric() -> None:
+    case = load_case("tiny_sales_summary.json").model_copy(
+        update={"required_calculations": (ExpectedCalculation(metric="total", expected=7),)}
+    )
+
+    listing = grade_run(case, query_only_state(["month", "count"], [[2, 5], [3, 7]], []))
+    single_row = grade_run(case, query_only_state(["sum_1"], [[7]], []))
+    named = grade_run(case, query_only_state(["month", "total"], [[2, 5], [3, 7]], []))
+
+    assert not next(check for check in listing.checks if check.name == "calculations").passed
+    assert next(check for check in single_row.checks if check.name == "calculations").passed
+    assert next(check for check in named.checks if check.name == "calculations").passed
 
 
 @pytest.mark.parametrize(
