@@ -140,6 +140,7 @@ class AgentOrchestrator:
         checkpointer: BaseCheckpointSaver[str],
         clock: Callable[[], datetime] | None = None,
         execution_budget: ExecutionBudget | None = None,
+        send_sample_values: bool = True,
     ) -> None:
         self._clock = clock or _utc_now
         self._execution_budget = execution_budget or ExecutionBudget()
@@ -149,6 +150,7 @@ class AgentOrchestrator:
             checkpointer=checkpointer,
             clock=self._clock,
             execution_budget=self._execution_budget,
+            send_sample_values=send_sample_values,
         )
 
     def start(self, request: AgentRunRequest) -> AgentState:
@@ -219,6 +221,7 @@ def build_agent_graph(
     checkpointer: BaseCheckpointSaver[str],
     clock: Callable[[], datetime] = _utc_now,
     execution_budget: ExecutionBudget | None = None,
+    send_sample_values: bool = True,
 ) -> Any:
     """Build one bounded graph; provider and analytical tools remain injected adapters."""
     budget = execution_budget or ExecutionBudget()
@@ -231,7 +234,7 @@ def build_agent_graph(
                 "<untrusted_user_request>"
                 f"{json_for_prompt(state['user_request'])}"
                 "</untrusted_user_request>\n"
-                f"{profile_prompt(profile)}\n"
+                f"{profile_prompt(profile, include_sample_values=send_sample_values)}\n"
                 "Confirmed semantic annotations: "
                 f"{json_for_prompt(state.get('semantic_annotations', []))}\n"
                 "Interpret the analytical goal using the original field names exactly as supplied. "
@@ -444,7 +447,7 @@ def build_agent_graph(
                 f"Analytical goal: {json_for_prompt(state['goal'])}\n"
                 "Confirmed annotations: "
                 f"{json_for_prompt(state.get('semantic_annotations', []))}\n"
-                f"{profile_prompt(profile)}\n"
+                f"{profile_prompt(profile, include_sample_values=send_sample_values)}\n"
                 "Requested metric mappings: "
                 f"{json_for_prompt(state.get('requested_metric_mappings', []))}\n"
                 "Requested plan revision: "
@@ -593,7 +596,7 @@ def build_agent_graph(
             prompt=(
                 "Current approved plan step: "
                 f"{json_for_prompt(step.model_dump(mode='json'))}\n"
-                f"{profile_prompt(profile)}\n"
+                f"{profile_prompt(profile, include_sample_values=send_sample_values)}\n"
                 "Previous tool error: <untrusted_tool_error>"
                 f"{json_for_prompt(state.get('error', 'none'))}"
                 "</untrusted_tool_error>\n"

@@ -18,6 +18,7 @@ from tabular_analytics_agent.application import (
     SessionSummary,
     StagedUpload,
     limits_from_environment,
+    send_sample_values_from_environment,
 )
 from tabular_analytics_agent.application.exports import (
     ExportRequest,
@@ -73,6 +74,7 @@ def build_application(data_root: str, model_id: str) -> LocalAnalysisApplication
         GeminiModelGateway(settings),
         limits=limits,
         execution_budget=execution_budget,
+        send_sample_values=send_sample_values_from_environment(),
     )
 
 
@@ -790,6 +792,8 @@ def main() -> None:
     with st.sidebar:
         st.markdown("### Tabular Analytics Agent")
         st.caption(f"Model: {model_id}")
+        if not application.sends_sample_values:
+            st.caption("Sample values are not sent to the model.")
         render_session_manager(application, workspace)
         if workspace:
             st.caption(f"Session: {str(workspace.session.session_id)[:8]}")

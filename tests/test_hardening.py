@@ -253,6 +253,20 @@ def test_pii_fields_send_no_sample_values_to_the_model(tmp_path: Path) -> None:
     assert '"North"' in gateway.requests[0].prompt
 
 
+def test_sample_value_option_withholds_every_field_value(tmp_path: Path) -> None:
+    core, request = _request(tmp_path)
+    gateway = FakeModelGateway([_goal(), _plan()])
+    agent = AgentOrchestrator(gateway, core, checkpointer=InMemorySaver(), send_sample_values=False)
+
+    paused = agent.start(request)
+
+    assert paused["status"] == AgentRunStatus.AWAITING_PLAN_APPROVAL
+    for model_request in gateway.requests:
+        assert '"sample_values": []' in model_request.prompt
+        assert "North" not in model_request.prompt
+        assert "@example.com" not in model_request.prompt
+
+
 # Crash recovery
 
 

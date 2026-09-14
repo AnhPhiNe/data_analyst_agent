@@ -69,11 +69,13 @@ class LocalAnalysisApplication:
         *,
         limits: DataCoreLimits | None = None,
         execution_budget: ExecutionBudget | None = None,
+        send_sample_values: bool = True,
     ) -> None:
         self._data_root = data_root.resolve()
         self._model_gateway = model_gateway
         self._limits = limits or DataCoreLimits()
         self._execution_budget = execution_budget or ExecutionBudget()
+        self._send_sample_values = send_sample_values
         self._sessions_root = _resolve_storage_path(
             self._data_root,
             self._data_root / "sessions",
@@ -97,6 +99,11 @@ class LocalAnalysisApplication:
             artifact_database,
             render_spec_root,
         )
+
+    @property
+    def sends_sample_values(self) -> bool:
+        """Whether frequent field values may appear in model prompts."""
+        return self._send_sample_values
 
     def stage_upload(self, original_filename: str, content: bytes) -> StagedUpload:
         """Persist an untrusted browser upload under a new session-owned safe path."""
@@ -421,6 +428,7 @@ class LocalAnalysisApplication:
                 TabularDataCore(session_directory, self._limits),
                 checkpointer=saver,
                 execution_budget=self._execution_budget,
+                send_sample_values=self._send_sample_values,
             )
 
     def _save_workspace(self, workspace: AnalysisWorkspace) -> None:

@@ -51,4 +51,22 @@ def _limits_from_values[LimitsT: BaseModel](
         raise ApplicationError(f"Invalid resource limit in the environment: {problems}") from exc
 
 
-__all__ = ["limit_variable", "limits_from_environment"]
+_SAMPLE_VALUES_VARIABLE = "TABULAR_AGENT_SEND_SAMPLE_VALUES"
+_TRUE_VALUES = {"1", "true", "yes", "on"}
+_FALSE_VALUES = {"0", "false", "no", "off"}
+
+
+def send_sample_values_from_environment(environment: Mapping[str, str] | None = None) -> bool:
+    """Return whether frequent field values may appear in model prompts; unset means yes."""
+    values = environment if environment is not None else os.environ
+    raw = values.get(_SAMPLE_VALUES_VARIABLE, "").strip().casefold()
+    if not raw or raw in _TRUE_VALUES:
+        return True
+    if raw in _FALSE_VALUES:
+        return False
+    raise ApplicationError(
+        f"Invalid setting in the environment: {_SAMPLE_VALUES_VARIABLE} must be true or false"
+    )
+
+
+__all__ = ["limit_variable", "limits_from_environment", "send_sample_values_from_environment"]

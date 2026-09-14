@@ -54,8 +54,12 @@ def tool_payload_guidance(step: PlanStep, handle: DatasetHandle) -> str:
     )
 
 
-def profile_prompt(profile: DataProfile) -> str:
-    pii_fields = set(profile.pii_candidates)
+def profile_prompt(profile: DataProfile, *, include_sample_values: bool = True) -> str:
+    withheld = (
+        set(profile.pii_candidates)
+        if include_sample_values
+        else {field.name for field in profile.fields}
+    )
     ids_by_name = {name: field_id for field_id, name in field_ids(profile).items()}
     metadata = {
         "row_count": profile.row_count,
@@ -71,7 +75,7 @@ def profile_prompt(profile: DataProfile) -> str:
                 # Exact frequent values let filters match the data instead of a translation.
                 "sample_values": (
                     []
-                    if field.name in pii_fields
+                    if field.name in withheld
                     else [
                         bounded_prompt_text(str(item.value))
                         for item in field.top_values[:MAX_PROMPT_SAMPLE_VALUES]

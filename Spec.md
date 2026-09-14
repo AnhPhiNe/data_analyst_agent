@@ -1,9 +1,9 @@
 # Tabular Analytics Agent — Product and Technical Specification
 
-**Status:** Approved — v1.3 targeted amendments (see Section 24)
+**Status:** Approved — v1.4 targeted amendments (see Section 24)
 **Target:** Local-first MVP and AI Engineer portfolio project
 **Primary interface:** Streamlit
-**Last updated:** 2026-09-14
+**Last updated:** 2026-09-15
 
 ## 1. Product Summary
 
@@ -56,8 +56,8 @@ The MVP will not provide:
 ### 4.1 MVP scope tiers
 
 - **Must:** secure CSV/XLSX ingestion; the Data Profile and profile answers; proposing and accepting Analytical Goals in English or Vietnamese; planning with read-only SQL and statistical Tool Actions; Verified Insights with Evidence Trails; Must-tier charts with Candidate and Pinned Artifacts; creating, resuming, and deleting sessions; CSV and JSON export; the evaluation runner and its quality gates.
-- **Should:** Working Dataset transformations (FR-07); Should-tier charts; HTML report export; Vietnamese user-interface text; a quota-aware model gateway.
-- **Could:** per-task model selection; additional provider adapters; PDF and notebook export.
+- **Should:** Working Dataset transformations (FR-07); Should-tier charts; the Data Overview (FR-11); HTML report export; Vietnamese user-interface text; a quota-aware model gateway.
+- **Could:** per-task model selection; additional provider adapters, including a local model so that no data leaves the machine (Section 14.5); PDF and notebook export.
 
 ## 5. Supported Dataset Contract
 
@@ -77,7 +77,7 @@ The maximum size and execution limits must be configurable rather than hard-code
 1. The user creates or resumes an Analysis Session.
 2. The user uploads a CSV or XLSX Source Dataset.
 3. The application validates the file, stores it immutably, and computes its hash.
-4. The application creates a Data Profile and surfaces quality risks and possible PII.
+4. The application creates a Data Profile, surfaces quality risks and possible PII, and shows a Data Overview (FR-11).
 5. The application proposes three to five relevant Analytical Goals.
 6. The user selects a suggestion or provides a different goal, in English or Vietnamese.
 7. Questions answerable from the Data Profile alone — column names, field types, row count, duplicate rows, missing values, unique counts, quality warnings, and whole-column descriptive statistics — are answered directly from the profile without an Analysis Plan or Tool Actions.
@@ -231,6 +231,14 @@ Row-level values are described by their SQL `GROUP BY` keys (for example `year =
 - Pie charts are not selected by default.
 - Candidate Artifacts appear separately from Pinned Artifacts.
 - The user controls which artifacts form the Dashboard.
+- **Data Overview (Should tier).** After ingestion, the application shows an overview built only from the Data Profile and bounded read-only DuckDB queries, with no model call. It is labeled as profile facts, never as Verified Insights, and stays separate from Candidate and Pinned Artifacts. It uses fixed design limits rather than every field combination:
+  - KPI cards: rows, columns, duplicate rows, and the overall missing-value rate.
+  - A missing-value bar chart of the fields that have missing values.
+  - At most 8 single-field charts, preferring fields with the fewest missing values: a histogram for a numeric field and a top-values bar chart for a categorical or boolean field. PII candidates, identifier-like fields, and fields with one distinct value are excluded.
+  - One correlation heatmap of Pearson coefficients over at most 15 eligible numeric fields, using pairwise-complete rows. It shows coefficients only, with no p-values or significance labels, and states that correlation is descriptive and not causal.
+  - Scatter plots for at most 3 field pairs with an absolute coefficient of at least 0.5, each offered as a question for the agent to test.
+  - One bar chart of the first eligible numeric field averaged by the first categorical field with 2 to 20 groups.
+  - Row counts over time for at most 2 datetime fields.
 
 ### FR-12 — Conversational follow-up
 
@@ -466,8 +474,20 @@ Limits must be configurable and visible in failure messages.
 - Redact credentials from errors and traces.
 - Detect likely emails, phone numbers, identifiers, addresses, and person names heuristically.
 - Mask likely PII in samples sent to the model.
-- Provide an option that sends no row samples to the API.
+- Provide an option that sends no row samples to the API: `TABULAR_AGENT_SEND_SAMPLE_VALUES=false` withholds every frequent field value from model prompts. The default sends them, and prompts are unchanged when the option is not set.
 - Do not commit real user data to the repository.
+
+### 14.5 Data sent to the model provider
+
+| Step | Sent to the model | Control |
+|---|---|---|
+| Goal interpretation, planning, and tool requests | The user request; field names, ids, kinds, missing rates, unique counts, and warnings; row and duplicate-row counts; up to 10 frequent values of each non-PII field; tool error messages | The sample-value option withholds every frequent value |
+| Insight drafting | Verified result values: statistical estimates and query results of at most 50 rows; results that read PII candidate fields are excluded | None; the model needs the values to select assertions |
+| Chart intent | Result column names, types, and row count; no cell values | None needed |
+
+- Withholding sample values limits exposure but does not keep data on the machine: field metadata and verified result values still reach the provider. It also removes the exact values that filters copy (Section 14.1), so questions that filter on text values fail more often.
+- Operators must check the provider's data-use terms before sending real customer data; free tiers may permit use of submitted content to improve the provider's products, so a paid tier or an enterprise offering is expected for such data.
+- Keeping all data on the machine requires a local model adapter behind `ModelGateway` (Section 4.1, Could tier), which must be evaluated against Section 17.4 before use. Per-organization privacy settings are post-MVP.
 
 ## 15. Failure and Recovery Behavior
 
@@ -716,6 +736,14 @@ Amendments from the first manual Streamlit acceptance session. A Vietnamese head
 - Goal suggestions: three to five deterministic goals from the Data Profile, offered before the first question (FR-05 and Section 6, step 5).
 - Milestone 6: resource limits and execution budgets are read from environment variables (Sections 14.3 and 25.3), with tests for zip-bomb limits, query interruption, DuckDB memory, Tool Action and model-call budgets, injection text in cell values, destructive model SQL, PII samples, and recovery after a crash during tool execution. An option that sends no row samples to the model (Section 14.4) remains open.
 
+### v1.4 — 2026-09-15
+
+Adds scope agreed after the Milestone 6 hardening work. No earlier decision is reversed.
+
+- An option withholds frequent sample values from model prompts, and the data sent to the provider at each step is documented with its limits (Sections 14.4, 14.5, and 25.3).
+- A deterministic Data Overview after ingestion, with fixed chart-selection limits and a descriptive correlation heatmap (Should tier; Section 6 and FR-11).
+- A local model adapter is recorded as the path to keeping all data on the machine (Could tier; Section 4.1).
+
 ## 25. Implementation Contracts
 
 ### 25.1 Tool Catalog
@@ -754,6 +782,7 @@ Questions fully covered by the Data Profile are answered without a tool (Section
 | Model identifier | `TABULAR_AGENT_MODEL` | `gemini-3.5-flash-lite` |
 | Model call timeout | `TABULAR_AGENT_MODEL_TIMEOUT_SECONDS`, whole seconds; also the execution budget's per-call cap | 30 seconds (minimum 21 for Gemini) |
 | Data directory | `TABULAR_AGENT_DATA_DIR` | `.data` |
+| Sample values in model prompts | `TABULAR_AGENT_SEND_SAMPLE_VALUES` (`true` or `false`) | `true`; PII candidate fields never send values (Section 14.5) |
 | Resource limits (`DataCoreLimits`) | `TABULAR_AGENT_<FIELD NAME>`, for example `TABULAR_AGENT_MAX_QUERY_ROWS`; the full list is in `.env.example`; an invalid value stops startup with the variable named | 100 MB file, 10,000 query rows, 30-second query timeout, 512 MB DuckDB memory, 500 MB uncompressed XLSX, compression ratio 100, 5 profile top values |
 | Execution budget (`ExecutionBudget`) | `TABULAR_AGENT_<FIELD NAME>`, for example `TABULAR_AGENT_MAX_TOOL_ACTIONS` | 12 Tool Actions, 2 repairs per action, 30-second model and tool timeouts, 300-second active run time |
 | Evaluation pacing | Evaluation runner `--rpm` option | 12 requests per minute per configured key (below the 15 RPM free-tier limit); a provider error is retried once after 66 seconds |

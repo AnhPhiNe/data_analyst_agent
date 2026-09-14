@@ -17,7 +17,11 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from tabular_analytics_agent.application import LocalAnalysisApplication, limits_from_environment
+from tabular_analytics_agent.application import (
+    LocalAnalysisApplication,
+    limits_from_environment,
+    send_sample_values_from_environment,
+)
 from tabular_analytics_agent.evaluation.models import (
     EvaluationModel,
     ExpectedCalculation,
@@ -281,6 +285,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         gateway,
         limits=limits,
         execution_budget=execution_budget,
+        send_sample_values=send_sample_values_from_environment(),
     )
     summary = run_suite(
         application,

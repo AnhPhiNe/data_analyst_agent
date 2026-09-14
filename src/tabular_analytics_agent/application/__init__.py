@@ -7,7 +7,11 @@ from tabular_analytics_agent.application.models import (
     StagedUpload,
 )
 from tabular_analytics_agent.application.service import LocalAnalysisApplication
-from tabular_analytics_agent.application.settings import limit_variable, limits_from_environment
+from tabular_analytics_agent.application.settings import (
+    limit_variable,
+    limits_from_environment,
+    send_sample_values_from_environment,
+)
 
 __all__ = [
     "AnalysisWorkspace",
@@ -17,4 +21,5 @@ __all__ = [
     "StagedUpload",
     "limit_variable",
     "limits_from_environment",
+    "send_sample_values_from_environment",
 ]

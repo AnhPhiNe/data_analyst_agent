@@ -11,6 +11,7 @@ from tabular_analytics_agent.application import (
     LocalAnalysisApplication,
     limit_variable,
     limits_from_environment,
+    send_sample_values_from_environment,
 )
 from tabular_analytics_agent.data import DataCoreLimits, UnsafeFileError
 from tabular_analytics_agent.domain import ExecutionBudget
@@ -117,3 +118,23 @@ def test_application_applies_configured_limits_and_budget(tmp_path: Path) -> Non
     timeouts = [request.timeout_seconds for request in gateway.requests]
     assert timeouts == pytest.approx([25.0, 25.0], abs=0.5)
     assert paused["plan"]["budget"]["model_call_timeout_seconds"] == 25
+    assert application.sends_sample_values
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [("", True), ("true", True), (" Yes ", True), ("1", True), ("false", False), ("OFF", False)],
+)
+def test_sample_value_option_parses_true_and_false(value: str, expected: bool) -> None:
+    environment = {"TABULAR_AGENT_SEND_SAMPLE_VALUES": value}
+
+    assert send_sample_values_from_environment(environment) is expected
+    assert send_sample_values_from_environment({}) is True
+
+
+def test_invalid_sample_value_option_names_the_variable() -> None:
+    with pytest.raises(ApplicationError, match="TABULAR_AGENT_SEND_SAMPLE_VALUES"):
+        send_sample_values_from_environment({"TABULAR_AGENT_SEND_SAMPLE_VALUES": "maybe"})
+
+    example = (Path(__file__).resolve().parents[1] / ".env.example").read_text(encoding="utf-8")
+    assert "TABULAR_AGENT_SEND_SAMPLE_VALUES=" in example
