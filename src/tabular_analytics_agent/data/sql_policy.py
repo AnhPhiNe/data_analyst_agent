@@ -122,6 +122,7 @@ def analyze_read_only_sql(sql: str, *, allowed_table: str) -> SQLAnalysis:
         if name.startswith("read_") or name in _DENIED_FUNCTIONS:
             raise UnsafeQueryError(f"External-access function is forbidden: {name}")
 
+    _alias_calculated_outputs(statement)
     output_alias_references = _output_alias_references(statement)
     referenced_columns = tuple(
         sorted(
@@ -145,11 +146,32 @@ def analyze_read_only_sql(sql: str, *, allowed_table: str) -> SQLAnalysis:
     )
 
 
-def _unaliased_outputs(statement: exp.Query) -> tuple[str, ...]:
-    """Return calculated outer projections that lack a short ASCII identifier alias.
+def _alias_calculated_outputs(statement: exp.Query) -> None:
+    """Give each unaliased calculated outer output a deterministic ASCII alias such as sum_1.
 
-    Plain source columns keep their names. Models copy long expression or non-ASCII output
-    names unreliably, so calculated outputs need a simple alias to be referenced as evidence.
+    Nothing can reference an unaliased expression by name, so adding the alias is safe, and
+    evidence identifiers no longer depend on the model copying a long expression exactly.
+    """
+    if not isinstance(statement, exp.Select):
+        return
+    used = {projection.alias_or_name.casefold() for projection in statement.expressions}
+    for projection in list(statement.expressions):
+        if isinstance(projection, (exp.Alias, exp.Column, exp.Star)):
+            continue
+        base = projection.key.lower() if isinstance(projection, exp.AggFunc) else "value"
+        index = 1
+        while f"{base}_{index}" in used:
+            index += 1
+        alias = f"{base}_{index}"
+        used.add(alias)
+        projection.replace(exp.alias_(projection.copy(), alias))
+
+
+def _unaliased_outputs(statement: exp.Query) -> tuple[str, ...]:
+    """Return calculated outer projections whose explicit alias is not a short ASCII identifier.
+
+    Plain source columns keep their names. Models copy non-ASCII output names unreliably, so a
+    calculated output needs a simple alias to be referenced as evidence.
     """
     if not isinstance(statement, exp.Select):
         return ()

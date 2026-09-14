@@ -684,13 +684,15 @@ def test_plan_fields_are_canonicalized_to_original_dataset_names(tmp_path: Path)
     assert completed["tool_actions"][0]["inputs"]["required_fields"] == ["Student Score"]
 
 
-def test_empty_query_result_fails_deterministic_verification(tmp_path: Path) -> None:
+def test_empty_filtered_query_is_repaired_then_fails_verification(tmp_path: Path) -> None:
     core, request = run_request(tmp_path)
     gateway = FakeModelGateway(
         [
             goal_output(),
             plan_output(),
             tool_output("SELECT region, revenue FROM dataset WHERE revenue > 1000"),
+            tool_output("SELECT region, revenue FROM dataset WHERE revenue > 2000"),
+            tool_output("SELECT region, revenue FROM dataset WHERE revenue > 3000"),
         ]
     )
     agent = AgentOrchestrator(gateway, core, checkpointer=InMemorySaver())
@@ -699,7 +701,11 @@ def test_empty_query_result_fails_deterministic_verification(tmp_path: Path) -> 
     failed = agent.resume(request.session_id, True)
 
     assert failed["status"] == AgentRunStatus.FAILED
-    assert "verification rejected" in failed["error"]
+    assert "Tool repair budget exceeded" in failed["error"]
+    assert "returned no rows for filters: revenue > 3000" in failed["error"]
+    # Each empty filter is sent back with a hint to copy values from the profile samples.
+    assert "sample_values" in gateway.requests[3].prompt
+    assert len(failed["tool_actions"]) == 3
     verification = failed["tool_actions"][0]["verification_results"][0]
     assert verification["status"] == "failed"
 
@@ -966,7 +972,7 @@ def test_unaliased_calculated_sql_output_is_repaired_before_execution(tmp_path: 
         [
             goal_output(),
             plan_output(),
-            tool_output("SELECT region, SUM(revenue) FROM dataset GROUP BY region"),
+            tool_output('SELECT region, SUM(revenue) AS "Doanh số" FROM dataset GROUP BY region'),
             tool_output(),
             insight_output(),
         ]

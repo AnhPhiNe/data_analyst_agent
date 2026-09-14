@@ -75,3 +75,13 @@ the outstanding Must-tier flows and reliability gates.
 - Holdout v2 (2026-09-14): 5 cases on an unseen 30-column, single-sheet XLSX shipments table
   (synonym field, date-range filter, derived ratio, unavailable metric beside a similar field, and
   missing-value profile), computed with pandas and committed before any live run.
+- First live holdout run (2026-09-14, 8 rotated keys, no provider errors): clean holdout 38/45
+  runs passed (84.4%; 12 of 15 cases passed all 3 runs); contaminated holdout 4/6. Clean-run
+  check rates: outcome 91%, calculations 83%, insight coverage 80%, chart 81%; schema grounding,
+  forbidden claims, and profile facts 100%. Failures traced to garbled field names during goal
+  interpretation, t-test field mismatches without detail, a translated filter value, a repeated
+  unaliased expression, text month values rejected by line charts, and an ambiguous
+  month-to-month question answered with differences (left unchanged to avoid tuning to one case).
+- The fixes above were derived from these holdout failures, so later runs on these holdout sets
+  are development evidence only. An unbiased post-fix score needs a new holdout set committed
+  before its first run.

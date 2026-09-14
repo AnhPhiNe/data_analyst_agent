@@ -146,10 +146,9 @@ def test_query_inspection_reports_unaliased_outputs_and_filters(tmp_path: Path) 
     plain = core.inspect_query(handle, 'SELECT region, revenue AS "Doanh thu" FROM dataset')
     result = core.query(handle, "SELECT COUNT(*) AS row_count FROM dataset WHERE revenue >= 100")
 
-    assert [item.split(" AS ")[0] for item in inspection.unaliased_outputs] == [
-        "AVG(revenue)",
-        "COUNT(*)",
-    ]
+    # Unaliased calculations get a deterministic alias; a non-ASCII explicit alias is reported.
+    assert "AVG(revenue) AS avg_1" in inspection.normalized_sql
+    assert [item.split(" AS ")[0] for item in inspection.unaliased_outputs] == ["COUNT(*)"]
     assert inspection.filters == ("revenue >= 100", "COUNT(*) > 0")
     assert plain.unaliased_outputs == ()
     assert plain.filters == ()

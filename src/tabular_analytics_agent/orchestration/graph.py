@@ -227,7 +227,9 @@ def _tool_payload_guidance(step: PlanStep, handle: DatasetHandle) -> str:
         "Write one DuckDB SELECT query. The only table is named exactly "
         f"{handle.table_name} (write FROM {handle.table_name}); no other table exists. The "
         "step's required_fields are the only source columns allowed, including in filters and "
-        "grouping. Give every calculated column a short ASCII snake_case alias, for example "
+        "grouping. Copy filter values exactly from the field's sample_values in the dataset "
+        "metadata; never translate them. Give every calculated column a short ASCII snake_case "
+        "alias, for example "
         "AVG(x) AS avg_x or COUNT(*) AS row_count; aliases are not source columns. Keep plain "
         "source columns, including grouping keys, unaliased so results keep their original "
         "names. For a row "
@@ -305,20 +307,40 @@ def build_agent_graph(
             timeout_seconds=_model_call_timeout_seconds(state, budget, clock()),
         )
         trace: ModelCallTrace | None = None
+        traces: list[ModelCallTrace] = []
         try:
             response = model_gateway.generate_structured(request)
             trace = response.trace
+            traces.append(response.trace)
+            try:
+                metric_mappings = _canonicalize_requested_metric_mappings(
+                    profile, response.output.requested_metric_mappings
+                )
+            except _UnknownFieldError as exc:
+                if budget.max_repairs_per_action < 1:
+                    raise
+                # Models can garble non-ASCII field names; retry once with the exact error.
+                response = model_gateway.generate_structured(
+                    replace(
+                        request,
+                        prompt=(
+                            f"{request.prompt}\n{exc}. Copy field names character for character "
+                            "from the dataset metadata; never substitute another field."
+                        ),
+                    )
+                )
+                trace = response.trace
+                traces.append(response.trace)
+                metric_mappings = _canonicalize_requested_metric_mappings(
+                    profile, response.output.requested_metric_mappings
+                )
         except ModelGatewayError as exc:
-            return _with_failure_trace(_failed_state(state, exc, clock()), state, exc)
-        if _run_budget_exceeded(state, budget, clock()):
-            return _failed_state(state, _budget_error(budget), clock())
-        try:
-            interpretation = response.output
-            metric_mappings = _canonicalize_requested_metric_mappings(
-                profile, interpretation.requested_metric_mappings
-            )
+            return _with_failure_trace(_failed_state(state, exc, clock()), state, exc, trace)
         except (ValidationError, ValueError) as exc:
             return _with_failure_trace(_failed_state(state, exc, clock()), state, exc, trace)
+        if _run_budget_exceeded(state, budget, clock()):
+            return _failed_state(state, _budget_error(budget), clock())
+        interpretation = response.output
 
         unavailable_metric = any(
             mapping.status is RequestedMetricStatus.UNAVAILABLE for mapping in metric_mappings
@@ -352,7 +374,10 @@ def build_agent_graph(
             ],
             "clarification_question": clarification_question,
             "answered_from_profile": status == AgentRunStatus.COMPLETED,
-            "model_traces": _append_trace(state, response.trace.model_dump(mode="json")),
+            "model_traces": [
+                *state.get("model_traces", []),
+                *(item.model_dump(mode="json") for item in traces),
+            ],
             "status": status,
             "refusal_code": "",
             "refusal_reason": "",
@@ -633,7 +658,7 @@ def build_agent_graph(
                 else StatisticalToolRequestDraft
             ),
             system_instruction=_SYSTEM_INSTRUCTION,
-            prompt_template_version="tool-request-v8",
+            prompt_template_version="tool-request-v9",
             timeout_seconds=_model_call_timeout_seconds(state, plan.budget, clock()),
         )
         trace: ModelCallTrace | None = None
@@ -827,6 +852,17 @@ def build_agent_graph(
                 if has_next_step
                 else AgentRunStatus.SYNTHESIZING.value
             )
+        elif isinstance(result, QueryResult) and result.row_count == 0 and result.filters:
+            # A filter that matches nothing usually used a value that is not in the data.
+            empty_filter_error = ValueError(
+                f"The query returned no rows for filters: {'; '.join(result.filters)}. Copy "
+                "filter values exactly from sample_values in the dataset metadata."
+            )
+            return {
+                "tool_actions": [*state.get("tool_actions", []), action.model_dump(mode="json")],
+                "attempted_action_signatures": attempted,
+                **_retry_or_fail(state, empty_filter_error, clock()),
+            }
         else:
             status = AgentRunStatus.FAILED.value
         serialized_result = result.model_dump(mode="json")
@@ -1185,7 +1221,11 @@ def _thread_config(thread_id: str) -> dict[str, dict[str, str]]:
     return {"configurable": {"thread_id": thread_id}}
 
 
+_MAX_PROMPT_SAMPLE_VALUES = 10
+
+
 def _profile_prompt(profile: DataProfile) -> str:
+    pii_fields = set(profile.pii_candidates)
     metadata = {
         "row_count": profile.row_count,
         "fields": [
@@ -1195,6 +1235,15 @@ def _profile_prompt(profile: DataProfile) -> str:
                 "missing_rate": field.missing_rate,
                 "unique_count": field.unique_count,
                 "warnings": field.warnings,
+                # Exact frequent values let filters match the data instead of a translation.
+                "sample_values": (
+                    []
+                    if field.name in pii_fields
+                    else [
+                        _bounded_prompt_text(str(item.value))
+                        for item in field.top_values[:_MAX_PROMPT_SAMPLE_VALUES]
+                    ]
+                ),
             }
             for field in profile.fields
         ],
@@ -1506,7 +1555,7 @@ def _bind_tool_request_to_step(
     data_core: TabularDataCore,
 ) -> BoundToolRequest:
 
-    approved_fields = {field.casefold() for field in step.required_fields}
+    approved_fields = {_field_key(field) for field in step.required_fields}
     if step.expected_tool == "statistical_analysis":
         if not isinstance(request, StatisticalToolRequestDraft):
             raise ValueError("Statistical plan step requires statistical parameters")
@@ -1533,9 +1582,13 @@ def _bind_tool_request_to_step(
                 }
             )
         statistical_request = StatisticalRequest.model_validate(statistical_request_data)
-        requested_fields = {field.casefold() for field in statistical_request.source_fields}
+        requested_fields = {_field_key(field) for field in statistical_request.source_fields}
         if requested_fields != approved_fields:
-            raise ValueError("Statistical fields do not match the approved plan step")
+            raise ValueError(
+                "Statistical fields do not match the approved plan step: requested "
+                f"{sorted(statistical_request.source_fields)}, approved "
+                f"{sorted(step.required_fields)}"
+            )
         return BoundToolRequest(
             tool_name="statistical_analysis",
             purpose=step.description,
@@ -1558,14 +1611,15 @@ def _bind_tool_request_to_step(
             + "; ".join(inspection.unaliased_outputs)
         )
 
-    known_fields = {field.name.casefold() for field in profile.fields}
-    referenced_source_fields = {
-        field.casefold()
-        for field in inspection.referenced_columns
-        if field.casefold() in known_fields
-    }
-    if referenced_source_fields != approved_fields:
-        raise ValueError("SQL source fields do not match the approved plan step")
+    known_fields = {_field_key(field.name) for field in profile.fields}
+    referenced_fields = [
+        field for field in inspection.referenced_columns if _field_key(field) in known_fields
+    ]
+    if {_field_key(field) for field in referenced_fields} != approved_fields:
+        raise ValueError(
+            "SQL source fields do not match the approved plan step: the query reads "
+            f"{sorted(referenced_fields)}, the step approves {sorted(step.required_fields)}"
+        )
     return BoundToolRequest(
         tool_name="read_only_sql",
         purpose=step.description,
@@ -1577,17 +1631,17 @@ def _bind_tool_request_to_step(
 def _canonicalize_statistical_fields(
     request: dict[str, Any], profile: DataProfile
 ) -> dict[str, Any]:
-    canonical_fields = {field.name.casefold(): field.name for field in profile.fields}
+    canonical_fields = {_field_key(field.name): field.name for field in profile.fields}
     field_names = ("value_fields", "value_field", "group_field", "x_field", "y_field")
     for name in field_names:
         value = request[name]
         if isinstance(value, list):
             request[name] = [
-                canonical_fields.get(field.casefold(), field) if isinstance(field, str) else field
+                canonical_fields.get(_field_key(field), field) if isinstance(field, str) else field
                 for field in value
             ]
         elif isinstance(value, str):
-            request[name] = canonical_fields.get(value.casefold(), value)
+            request[name] = canonical_fields.get(_field_key(value), value)
     return request
 
 

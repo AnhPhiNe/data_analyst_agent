@@ -223,7 +223,7 @@ Row-level values are described by their SQL `GROUP BY` keys (for example `year =
 - The agent proposes a structured Chart Intent rather than frontend code.
 - A deterministic chart tool validates the intent and produces a Plotly-compatible specification.
 - Must-tier artifacts are KPI card, table, histogram, bar chart, line chart, and scatter plot. Box plot, heatmap, stacked bar chart, and missing-value chart are Should-tier.
-- A KPI shows exactly one value from a one-row result, with every significant digit rather than a rounded display. Bar charts use a categorical axis, so numeric keys such as months are not drawn as a continuous scale. A table renders every result column, so encodings supplied for a table are ignored.
+- A KPI shows exactly one value from a one-row result, with every significant digit rather than a rounded display. Bar charts use a categorical axis, so numeric keys such as months are not drawn as a continuous scale. Line charts accept text x values such as `2026-01` or `Q1` as ordered categories in result order. A table renders every result column, so encodings supplied for a table are ignored.
 - Chart selection considers analytical goal, field types, cardinality, sample size, and readability.
 - Pie charts are not selected by default.
 - Candidate Artifacts appear separately from Pinned Artifacts.
@@ -432,6 +432,7 @@ Before an insight or artifact is published, deterministic checks must verify:
 ### 14.1 Untrusted dataset content
 
 - Treat filenames, sheet names, headers, and cell values as untrusted data rather than instructions.
+- Model metadata includes up to 10 frequent values of each non-PII field, inside the delimited dataset metadata, so filters use exact dataset values instead of translations. PII candidate fields contribute no values.
 - Delimit and label data samples sent to the model.
 - Never execute instructions discovered inside dataset content.
 
@@ -478,7 +479,8 @@ Limits must be configurable and visible in failure messages.
 - Show users a plain-language failure message with a next step; keep technical details in a collapsed view and in the audit trail.
 - Classify terminal failures as provider errors (quota, overload, timeout) or analysis errors so that evaluation does not count provider outages as agent mistakes.
 - A new request in the same Analysis Session must not inherit errors or per-run results from an earlier request; confirmed Semantic Annotations persist.
-- An Analysis Plan that references unknown field names is regenerated with the exact error, within the repair budget of Section 14.3. Field names are compared after Unicode NFC normalization and case folding; the agent never guesses a different field. A SQL step that lists no required fields is regenerated the same way.
+- An Analysis Plan that references unknown field names is regenerated with the exact error, within the repair budget of Section 14.3. Field names are compared after Unicode NFC normalization and case folding; the agent never guesses a different field. A SQL step that lists no required fields is regenerated the same way, and a goal interpretation whose metric mapping names an unknown field is regenerated once.
+- A filtered SQL result with no rows is repaired within the tool repair budget, with a hint to copy filter values from the profile's sample values. Field mismatches between a tool request and its approved plan step name both field lists.
 - An insight draft that references metric identifiers absent from its evidence is regenerated once with those identifiers; drafts that still fail become Unsupported Claims. A query rejected by a Verification Gate reports which gate failed and why.
 
 ## 16. Observability and Reproducibility
@@ -703,6 +705,7 @@ Amendments from the first manual Streamlit acceptance session. A Vietnamese head
 - Too few usable values for a statistical test become a typed `insufficient_sample` refusal instead of a failure, and evaluation credits it as a refusal (Sections 15 and 17.3).
 - Row listings publish a deterministic row-count claim when no drafted claim survives and may number source rows (FR-10); KPIs are not rounded and bar charts use categorical axes (FR-11); CSV exports carry a UTF-8 byte-order mark (FR-13); the Audit view contents are defined (Section 16); contaminated holdouts are reported separately (Section 17.3).
 - The Gemini gateway rotates several API keys with a per-key minute budget and a 65-second cooldown, and evaluation pacing scales with the key count (Sections 11.2 and 25.3).
+- After the first holdout run: interpretation repairs unknown field names, filters use exact profile sample values with a repair for empty filtered results, calculated SQL outputs are aliased deterministically, and line charts accept text periods (Sections 14.1, 15, 25.1, and FR-11).
 
 ## 25. Implementation Contracts
 
@@ -710,7 +713,7 @@ Amendments from the first manual Streamlit acceptance session. A Vietnamese head
 
 | Tool | Input | Output | Constraints |
 |---|---|---|---|
-| `read_only_sql` | One DuckDB `SELECT` or `WITH ... SELECT` over the single table named `dataset`; its source columns must equal the approved step's `required_fields`; every calculated output column needs a short ASCII identifier alias such as `avg_salary` | `QueryResult`: columns, rows, row count, truncation flag, normalized SQL, `GROUP BY` output columns, and `WHERE`/`HAVING` filters | No wildcard projections, schema catalogs, external-access functions, or other tables |
+| `read_only_sql` | One DuckDB `SELECT` or `WITH ... SELECT` over the single table named `dataset`; its source columns must equal the approved step's `required_fields`; an unaliased calculated output receives a deterministic ASCII alias such as `sum_1`, and an explicit alias that is not a short ASCII identifier is repaired | `QueryResult`: columns, rows, row count, truncation flag, normalized SQL, `GROUP BY` output columns, and `WHERE`/`HAVING` filters | No wildcard projections, schema catalogs, external-access functions, or other tables |
 | `statistical_analysis` | The approved operation plus the parameters its rule requires (the operation rule table in `statistics.models`) | `StatisticalResult`: estimates, test statistic, p-value, adjusted alpha, effect size, assumption checks, and warnings | Runs on a deterministic reservoir sample of at most the configured query row limit |
 
 Questions fully covered by the Data Profile are answered without a tool (Section 6, step 7).

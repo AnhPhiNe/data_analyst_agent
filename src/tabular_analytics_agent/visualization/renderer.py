@@ -47,7 +47,6 @@ _NUMERIC_TYPE_MARKERS = (
     "DECIMAL",
     "REAL",
 )
-_TEMPORAL_TYPE_MARKERS = ("DATE", "TIME", "TIMESTAMP")
 _MAX_TABLE_ROWS = 500
 _MAX_BAR_CATEGORIES = 50
 _MAX_COLOR_GROUPS = 12
@@ -271,10 +270,6 @@ def _type_errors(intent: ChartIntent, column_types: dict[str, str]) -> tuple[str
     invalid_numeric = [field for field in numeric_fields if not _is_numeric(column_types[field])]
     if invalid_numeric:
         errors.append("Numeric encodings required for: " + ", ".join(invalid_numeric))
-    if intent.artifact_type is ArtifactType.LINE and intent.x_field:
-        x_type = column_types[intent.x_field]
-        if not (_is_numeric(x_type) or _is_temporal(x_type)):
-            errors.append("Line chart x field must be numeric or temporal")
     return tuple(errors)
 
 
@@ -372,7 +367,12 @@ def _render_bar(intent: ChartIntent, rows: list[dict[str, Any]]) -> go.Figure:
 
 
 def _render_line(intent: ChartIntent, rows: list[dict[str, Any]]) -> go.Figure:
-    return _render_xy(intent, rows, lambda **kwargs: go.Scatter(mode="lines+markers", **kwargs))
+    figure = _render_xy(intent, rows, lambda **kwargs: go.Scatter(mode="lines+markers", **kwargs))
+    x_field = _required(intent.x_field)
+    if any(isinstance(row[x_field], str) for row in rows):
+        # Text periods such as "2026-01" or "Q1" are ordered labels kept in result order.
+        figure.update_xaxes(type="category")
+    return figure
 
 
 def _render_scatter(intent: ChartIntent, rows: list[dict[str, Any]]) -> go.Figure:
@@ -450,11 +450,6 @@ def _is_verified_source_action(action: ToolAction, result: QueryResult) -> bool:
 def _is_numeric(data_type: str) -> bool:
     normalized = data_type.upper()
     return any(normalized.startswith(marker) for marker in _NUMERIC_TYPE_MARKERS)
-
-
-def _is_temporal(data_type: str) -> bool:
-    normalized = data_type.upper()
-    return any(normalized.startswith(marker) for marker in _TEMPORAL_TYPE_MARKERS)
 
 
 def _required(value: str | None) -> str:

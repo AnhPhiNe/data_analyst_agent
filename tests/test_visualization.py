@@ -137,7 +137,17 @@ def test_bar_uses_a_category_axis_and_kpi_shows_every_digit() -> None:
         verified_action(single),
     )
 
+    text_months = source.model_copy(
+        update={"columns": (QueryColumn(name="month", data_type="VARCHAR"), *source.columns[1:])}
+    )
+    line = render_chart(
+        intent(text_months, ArtifactType.LINE, x_field="month", y_fields=("revenue",)),
+        text_months,
+        verified_action(text_months),
+    )
+
     assert bar.plotly_spec["layout"]["xaxis"]["type"] == "category"
+    assert line.plotly_spec["layout"]["xaxis"]["type"] == "category"
     assert kpi.plotly_spec["data"][0]["number"]["valueformat"] == ",.12~g"
 
 

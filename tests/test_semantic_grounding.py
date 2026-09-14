@@ -385,25 +385,24 @@ def test_plan_cannot_bypass_mapping_but_can_include_dimensions(tmp_path: Path) -
 def test_invalid_mapping_source_fails_closed_without_crashing(tmp_path: Path) -> None:
     request = _request(tmp_path)
     core = _core_for_request(request)
-    gateway = FakeModelGateway(
+    invalid_goal = _goal_output(
         [
-            _goal_output(
-                [
-                    {
-                        "requested_label": "sales",
-                        "status": "direct",
-                        "source_fields": ["not_a_column"],
-                    }
-                ]
-            )
+            {
+                "requested_label": "sales",
+                "status": "direct",
+                "source_fields": ["not_a_column"],
+            }
         ]
     )
+    gateway = FakeModelGateway([invalid_goal, invalid_goal])
 
     failed = AgentOrchestrator(gateway, core, checkpointer=InMemorySaver()).start(request)
 
     assert failed["status"] == AgentRunStatus.FAILED
     assert "Unknown fields requested" in failed["error"]
-    assert len(gateway.requests) == 1
+    # The garbled or unknown field name is sent back once before failing closed.
+    assert len(gateway.requests) == 2
+    assert "Unknown fields requested: not_a_column" in gateway.requests[1].prompt
 
 
 def test_grader_recognizes_only_typed_refusal_and_keeps_crash_failed() -> None:
