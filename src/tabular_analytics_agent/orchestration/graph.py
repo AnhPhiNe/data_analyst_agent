@@ -32,8 +32,6 @@ from tabular_analytics_agent.domain import (
     ChartIntent,
     DataProfile,
     ExecutionBudget,
-    InsightAssertion,
-    InsightOperator,
     PlanStatus,
     PlanStep,
     SemanticAnnotation,
@@ -229,12 +227,10 @@ def _tool_payload_guidance(step: PlanStep, handle: DatasetHandle) -> str:
         f"{handle.table_name} (write FROM {handle.table_name}); no other table exists. The "
         "step's required_fields are the only source columns allowed, including in filters and "
         "grouping. Copy filter values exactly from the field's sample_values in the dataset "
-        "metadata; never translate them. Give every calculated column a short ASCII snake_case "
-        "alias, for example "
-        "AVG(x) AS avg_x or COUNT(*) AS row_count; aliases are not source columns. Keep plain "
-        "source columns, including grouping keys, unaliased so results keep their original "
-        "names. For a row "
-        "count use COUNT(*) without adding an unapproved identifier column. To show which "
+        "metadata; never translate them. Alias calculated columns with short ASCII snake_case "
+        "names (aliases are not source columns) and keep plain source columns, including "
+        "grouping keys, unaliased. For a row count use COUNT(*) without adding an unapproved "
+        "identifier column. To show which "
         "uploaded rows match, select rowid + 1 AS row_number; rowid is the row's zero-based "
         "position in the uploaded file, not a source column."
     )
@@ -311,33 +307,12 @@ def build_agent_graph(
             timeout_seconds=_model_call_timeout_seconds(state, budget, clock()),
         )
         trace: ModelCallTrace | None = None
-        traces: list[ModelCallTrace] = []
         try:
             response = model_gateway.generate_structured(request)
             trace = response.trace
-            traces.append(response.trace)
-            try:
-                metric_mappings = _canonicalize_requested_metric_mappings(
-                    profile, response.output.requested_metric_mappings
-                )
-            except _UnknownFieldError as exc:
-                if budget.max_repairs_per_action < 1:
-                    raise
-                # Models can garble non-ASCII field names; retry once with the exact error.
-                response = model_gateway.generate_structured(
-                    replace(
-                        request,
-                        prompt=(
-                            f"{request.prompt}\n{exc}. Copy field names character for character "
-                            "from the dataset metadata; never substitute another field."
-                        ),
-                    )
-                )
-                trace = response.trace
-                traces.append(response.trace)
-                metric_mappings = _canonicalize_requested_metric_mappings(
-                    profile, response.output.requested_metric_mappings
-                )
+            metric_mappings = _canonicalize_requested_metric_mappings(
+                profile, response.output.requested_metric_mappings
+            )
         except ModelGatewayError as exc:
             return _with_failure_trace(_failed_state(state, exc, clock()), state, exc, trace)
         except (ValidationError, ValueError) as exc:
@@ -378,10 +353,7 @@ def build_agent_graph(
             ],
             "clarification_question": clarification_question,
             "answered_from_profile": status == AgentRunStatus.COMPLETED,
-            "model_traces": [
-                *state.get("model_traces", []),
-                *(item.model_dump(mode="json") for item in traces),
-            ],
+            "model_traces": _append_trace(state, response.trace.model_dump(mode="json")),
             "status": status,
             "refusal_code": "",
             "refusal_reason": "",
@@ -662,7 +634,7 @@ def build_agent_graph(
                 else StatisticalToolRequestDraft
             ),
             system_instruction=_SYSTEM_INSTRUCTION,
-            prompt_template_version="tool-request-v10",
+            prompt_template_version="tool-request-v11",
             timeout_seconds=_model_call_timeout_seconds(state, plan.budget, clock()),
         )
         trace: ModelCallTrace | None = None
@@ -1002,38 +974,6 @@ def build_agent_graph(
                         semantic_annotations=annotations,
                     )
                 )
-            pii_fields = {field.casefold() for field in profile.pii_candidates}
-            has_verified_claim = any(isinstance(item, VerifiedInsight) for item in publications)
-            for action in () if has_verified_claim else tuple(actions.values()):
-                result = _evidence_result_for_action(state, action)
-                source_fields = {
-                    str(field).casefold() for field in action.inputs.get("required_fields", ())
-                }
-                if (
-                    not isinstance(result, QueryResult)
-                    or result.truncated
-                    # An aggregated result is a summary, not a row listing; its row count says
-                    # nothing about the answer (COUNT(*) returns one row whatever it counts).
-                    or result.aggregated
-                    or source_fields & pii_fields
-                ):
-                    continue
-                # When no drafted claim survives, a row listing is still answered by its table;
-                # state its verified size from evidence.
-                publications.append(
-                    publish_insight(
-                        assertion=InsightAssertion(
-                            operator=InsightOperator.REPORTS, left_metric="result.row_count"
-                        ),
-                        evidence_metrics=("result.row_count",),
-                        caveats=(),
-                        profile=profile,
-                        action=action,
-                        result=result,
-                        current_working_dataset_version=current_version,
-                        semantic_annotations=annotations,
-                    )
-                )
         except (ModelGatewayError, ValidationError, ValueError) as exc:
             return _with_failure_trace(_failed_state(state, exc, clock()), state, exc, trace)
         verified = [
@@ -1163,6 +1103,8 @@ def build_agent_graph(
                     "artifact_error": _safe_error(exc),
                     "status": AgentRunStatus.COMPLETED.value,
                     "error": "",
+                    # A quota or overload failure is not an analysis defect.
+                    "error_kind": "provider" if isinstance(exc, ModelProviderError) else "",
                 },
                 state,
                 exc,

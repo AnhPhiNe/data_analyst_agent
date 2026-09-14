@@ -397,6 +397,9 @@ def render_completed_analysis(
     insights = state.get("verified_insights", [])
     if insights:
         st.success("Analysis completed with deterministic verification.")
+    elif not state.get("unsupported_claims") and (state.get("query_result") or {}).get("rows"):
+        # A row listing is answered by its verified table; no separate claim is required.
+        st.info("The verified result table below answers this request.")
     else:
         st.warning(
             "The analysis ran, but no claim passed deterministic verification. "

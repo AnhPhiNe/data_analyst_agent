@@ -956,7 +956,6 @@ def test_agent_records_unverifiable_draft_as_unsupported_claim(tmp_path: Path) -
     completed = agent.resume(request.session_id, True)
 
     assert completed["status"] == AgentRunStatus.COMPLETED
-    # A grouped summary gets no automatic row-count claim when every drafted claim fails.
     assert completed["verified_insights"] == []
     assert completed["unsupported_claims"][0]["status"] == "unsupported"
     assert "Missing deterministic evidence metrics" in completed["unsupported_claims"][0]["reason"]
@@ -1047,14 +1046,15 @@ def test_sql_may_read_a_subset_of_the_approved_fields(tmp_path: Path) -> None:
     assert completed["verified_insights"][0]["claim"].endswith("is 2.")
 
 
-def test_aggregate_result_gets_no_automatic_row_count_claim(tmp_path: Path) -> None:
+def test_chart_provider_error_is_classified_as_a_provider_error(tmp_path: Path) -> None:
     core, request = run_request(tmp_path)
     gateway = FakeModelGateway(
         [
             goal_output(),
             plan_output(),
-            tool_output("SELECT COUNT(*) AS north_rows FROM dataset WHERE region = 'North'"),
-            {"insights": []},
+            tool_output(),
+            insight_output(),
+            ModelProviderError("quota exhausted"),
         ]
     )
     agent = AgentOrchestrator(gateway, core, checkpointer=InMemorySaver())
@@ -1062,9 +1062,11 @@ def test_aggregate_result_gets_no_automatic_row_count_claim(tmp_path: Path) -> N
     agent.start(request)
     completed = agent.resume(request.session_id, True)
 
-    # COUNT(*) returns one row, so "result row count is 1" would misstate the answer (2).
+    # The verified analysis stands; evaluation treats the chart outage like any provider error.
     assert completed["status"] == AgentRunStatus.COMPLETED
-    assert completed["verified_insights"] == []
+    assert completed["verified_insights"]
+    assert completed["error_kind"] == "provider"
+    assert "quota exhausted" in completed["artifact_error"]
 
 
 def test_ascii_field_ids_stand_in_for_vietnamese_names_end_to_end(tmp_path: Path) -> None:
@@ -1375,7 +1377,6 @@ def test_insight_synthesis_omits_large_row_level_results(tmp_path: Path) -> None
 
     agent.start(request)
     completed = agent.resume(request.session_id, True)
-    # The verified row-count claim leads to a chart proposal after synthesis.
     synthesis_prompt = next(
         item.prompt for item in gateway.requests if item.task.value == "insight_draft"
     )
@@ -1386,7 +1387,7 @@ def test_insight_synthesis_omits_large_row_level_results(tmp_path: Path) -> None
     assert '"metric": "row[0].label"' not in synthesis_prompt
     assert "more than 50 rows" in synthesis_prompt
     assert "row-59" not in synthesis_prompt
-    assert [item["claim"] for item in completed["verified_insights"]] == ["Result row count is 60."]
+    assert completed["verified_insights"] == []
 
 
 def test_insight_synthesis_bounds_large_assumption_catalogs(tmp_path: Path) -> None:

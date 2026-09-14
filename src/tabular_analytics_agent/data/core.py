@@ -246,7 +246,6 @@ class TabularDataCore:
             group_by_columns=analysis.group_by_columns,
             unaliased_outputs=analysis.unaliased_outputs,
             filters=analysis.filters,
-            aggregated=analysis.aggregated,
         )
 
     def query(
@@ -315,7 +314,6 @@ class TabularDataCore:
                 if any(column.name == name for column in columns)
             ),
             filters=inspection.filters,
-            aggregated=inspection.aggregated,
         )
 
     def _inspect_xlsx(self, path: Path) -> tuple[str, ...]:

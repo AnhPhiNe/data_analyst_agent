@@ -60,7 +60,6 @@ class QueryInspection(DataModel):
     group_by_columns: tuple[str, ...] = ()
     unaliased_outputs: tuple[str, ...] = ()
     filters: tuple[str, ...] = ()
-    aggregated: bool = False
 
 
 class QueryResult(DataModel):
@@ -75,7 +74,6 @@ class QueryResult(DataModel):
     duration_ms: int = Field(ge=0)
     group_by_columns: tuple[str, ...] = ()
     filters: tuple[str, ...] = ()
-    aggregated: bool = False
 
     @model_validator(mode="after")
     def validate_shape(self) -> QueryResult:

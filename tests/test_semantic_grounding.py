@@ -394,15 +394,13 @@ def test_invalid_mapping_source_fails_closed_without_crashing(tmp_path: Path) ->
             }
         ]
     )
-    gateway = FakeModelGateway([invalid_goal, invalid_goal])
+    gateway = FakeModelGateway([invalid_goal])
 
     failed = AgentOrchestrator(gateway, core, checkpointer=InMemorySaver()).start(request)
 
     assert failed["status"] == AgentRunStatus.FAILED
     assert "Unknown fields requested" in failed["error"]
-    # The garbled or unknown field name is sent back once before failing closed.
-    assert len(gateway.requests) == 2
-    assert "Unknown fields requested: not_a_column" in gateway.requests[1].prompt
+    assert len(gateway.requests) == 1
 
 
 def test_grader_recognizes_only_typed_refusal_and_keeps_crash_failed() -> None:

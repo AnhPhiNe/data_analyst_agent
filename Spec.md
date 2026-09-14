@@ -216,7 +216,7 @@ Every Verified Insight contains:
 
 If required evidence is missing or validation fails, the conclusion is an Unsupported Claim and must not be displayed as a Verified Insight. A malformed insight draft becomes an Unsupported Claim without discarding the other drafts of the same run.
 
-Row-level values are described by their SQL `GROUP BY` keys (for example `year = 2024`); ungrouped results fall back to their text columns, and single-row results omit row positions. Claims about filtered query results name the SQL `WHERE`/`HAVING` conditions, which are also recorded as Evidence Trail filters, and statistics that relate two fields name both fields. When no drafted claim passes verification, each complete (untruncated), non-aggregated (no `GROUP BY` or aggregate function outside a window), non-PII query result publishes its row count as a deterministic claim, because a row listing is answered by its table. Row listings may select `rowid + 1 AS row_number` to identify rows of the uploaded file.
+Row-level values are described by their SQL `GROUP BY` keys (for example `year = 2024`); ungrouped results fall back to their text columns, and single-row results omit row positions. Claims about filtered query results name the SQL `WHERE`/`HAVING` conditions, which are also recorded as Evidence Trail filters, and statistics that relate two fields name both fields. When the model drafts no claim about a verified row listing, the verified result table itself is presented as the answer. Row listings may select `rowid + 1 AS row_number` to identify rows of the uploaded file.
 
 ### FR-11 — Charts and dashboard
 
@@ -477,9 +477,9 @@ Limits must be configurable and visible in failure messages.
 - Allow users to resume from a safe checkpoint.
 - Explain when the requested analysis cannot be supported because of missing fields, inadequate sample size, unresolved semantics, unsupported causal claims, or an exceeded budget. Too few usable values for a statistical test end the run as a typed `insufficient_sample` refusal that names the affected group or field.
 - Show users a plain-language failure message with a next step; keep technical details in a collapsed view and in the audit trail.
-- Classify terminal failures as provider errors (quota, overload, timeout) or analysis errors so that evaluation does not count provider outages as agent mistakes.
+- Classify terminal failures as provider errors (quota, overload, timeout) or analysis errors so that evaluation does not count provider outages as agent mistakes. A provider error while proposing a chart is classified the same way.
 - A new request in the same Analysis Session must not inherit errors or per-run results from an earlier request; confirmed Semantic Annotations persist.
-- An Analysis Plan that references unknown field names is regenerated with the exact error, within the repair budget of Section 14.3. Field names are compared after Unicode NFC normalization and case folding; the agent never guesses a different field. A SQL step that lists no required fields is regenerated the same way, and a goal interpretation whose metric mapping names an unknown field is regenerated once. Model outputs may reference dataset fields by stable ASCII ids (`c1`, `c2`, …) and query result columns by `r1`, `r2`, …, so non-ASCII names never need to be copied; ids map to exact names deterministically, and a real field name that equals an id always wins.
+- An Analysis Plan that references unknown field names is regenerated with the exact error, within the repair budget of Section 14.3. Field names are compared after Unicode NFC normalization and case folding; the agent never guesses a different field. A SQL step that lists no required fields is regenerated the same way. Model outputs may reference dataset fields by stable ASCII ids (`c1`, `c2`, …) and query result columns by `r1`, `r2`, …, so non-ASCII names never need to be copied; ids map to exact names deterministically, and a real field name that equals an id always wins.
 - A filtered SQL result with no rows is repaired within the tool repair budget, with a hint to copy filter values from the profile's sample values. Field mismatches between a tool request and its approved plan step name both field lists.
 - An insight draft that references metric identifiers absent from its evidence is regenerated once with those identifiers; drafts that still fail become Unsupported Claims. A query rejected by a Verification Gate reports which gate failed and why.
 
@@ -708,6 +708,7 @@ Amendments from the first manual Streamlit acceptance session. A Vietnamese head
 - After the first holdout run: interpretation repairs unknown field names, filters use exact profile sample values with a repair for empty filtered results, calculated SQL outputs are aliased deterministically, and line charts accept text periods (Sections 14.1, 15, 25.1, and FR-11).
 - After rechecking those fixes: grading version 3 matches grouped query values by group and value instead of alias lists, and ASCII field ids replace copied non-ASCII names in model outputs (Sections 15, 17.3, and 25.1).
 - After holdout v3: SQL may read a subset of the approved fields, duplicate-row questions are answered from the Data Profile, and rejected API keys leave the rotation (Sections 6, 11.2, and 25.1).
+- Simplification: the automatic row-count claim and the goal-interpretation field repair were removed (field ids address the cause), SQL alias guidance was shortened, and a provider error during chart proposal is classified as a provider error (FR-10 and Section 15).
 
 ## 25. Implementation Contracts
 
