@@ -40,6 +40,14 @@ class GoalInterpretation(GenerationSchema):
         default=None,
         description=("Required only when semantic_annotations is non-empty; otherwise return null"),
     )
+    answer_from_profile: bool = Field(
+        default=False,
+        description=(
+            "True only when the request asks about dataset structure already in the Data Profile: "
+            "column names, field types, row count, missing values, unique counts, or quality "
+            "warnings. False for any calculation over data values."
+        ),
+    )
 
     @model_validator(mode="after")
     def clarification_matches_annotations(self) -> Self:

@@ -165,6 +165,7 @@ class AgentOrchestrator:
             "proposed_annotations": [],
             "query_result": {},
             "statistical_result": {},
+            "answered_from_profile": False,
             "status": AgentRunStatus.INTERPRETING.value,
         }
         return cast(
@@ -254,11 +255,14 @@ def build_agent_graph(
                 "needed by this request. If semantic_annotations is non-empty, "
                 "clarification_question must "
                 "be a non-empty question asking the user to choose or confirm the exact blocking "
-                "interpretation. Otherwise return null clarification_question."
+                "interpretation. Otherwise return null clarification_question. Set "
+                "answer_from_profile to true only when the request can be answered entirely from "
+                "the dataset metadata above, such as column names, field kinds, row count, "
+                "missing rates, unique counts, or warnings; otherwise false."
             ),
             response_schema=GoalInterpretation,
             system_instruction=_SYSTEM_INSTRUCTION,
-            prompt_template_version="semantic-v3",
+            prompt_template_version="semantic-v4",
             timeout_seconds=_model_call_timeout_seconds(state, budget, clock()),
         )
         try:
@@ -268,11 +272,13 @@ def build_agent_graph(
         if _run_budget_exceeded(state, budget, clock()):
             return _failed_state(state, _budget_error(budget), clock())
         interpretation = response.output
-        status = (
-            AgentRunStatus.AWAITING_SEMANTIC_REVIEW.value
-            if interpretation.semantic_annotations or interpretation.clarification_question
-            else AgentRunStatus.PLANNING.value
-        )
+        if interpretation.semantic_annotations or interpretation.clarification_question:
+            status = AgentRunStatus.AWAITING_SEMANTIC_REVIEW.value
+        elif interpretation.answer_from_profile:
+            # Structural questions are answered from the deterministic Data Profile, not tools.
+            status = AgentRunStatus.COMPLETED.value
+        else:
+            status = AgentRunStatus.PLANNING.value
         update: AgentState = {
             "goal": {
                 "text": interpretation.goal_text,
@@ -282,10 +288,11 @@ def build_agent_graph(
                 item.model_dump(mode="json") for item in interpretation.semantic_annotations
             ],
             "clarification_question": interpretation.clarification_question or "",
+            "answered_from_profile": status == AgentRunStatus.COMPLETED,
             "model_traces": _append_trace(state, response.trace.model_dump(mode="json")),
             "status": status,
         }
-        if status == AgentRunStatus.AWAITING_SEMANTIC_REVIEW:
+        if status != AgentRunStatus.PLANNING:
             update.update(_pause_execution_budget(state, clock()))
         return update
 
@@ -360,11 +367,14 @@ def build_agent_graph(
                 "allowlisted tool: read_only_sql or statistical_analysis. Statistical analysis "
                 "supports descriptive, correlation, confidence_interval, t_test, mann_whitney, "
                 "chi_square, anova, kruskal_wallis, linear_regression, and logistic_regression. "
-                "Reference only listed fields."
+                "Reference only listed fields. SQL reads rows of the dataset table only; schema "
+                "catalogs such as information_schema are unavailable. Set requires_approval to "
+                "true only for a step the user should review before it runs; ordinary read-only "
+                "calculations use false."
             ),
             response_schema=PlanDraft,
             system_instruction=_SYSTEM_INSTRUCTION,
-            prompt_template_version="plan-v2",
+            prompt_template_version="plan-v3",
             timeout_seconds=_model_call_timeout_seconds(state, budget, clock()),
         )
         trace: ModelCallTrace | None = None
@@ -399,13 +409,24 @@ def build_agent_graph(
                 raise _budget_error(plan.budget)
         except (ModelGatewayError, ValidationError, ValueError) as exc:
             return _with_failure_trace(_failed_state(state, exc, clock()), state, exc, trace)
-        return {
+        update: AgentState = {
             "plan": plan.model_dump(mode="json"),
             "current_step_index": 0,
             "model_traces": _append_trace(state, response.trace.model_dump(mode="json")),
-            "status": AgentRunStatus.AWAITING_PLAN_APPROVAL.value,
             "error": "",
-            **_pause_execution_budget(state, clock()),
+        }
+        if any(step.requires_approval for step in plan.steps):
+            return {
+                **update,
+                "status": AgentRunStatus.AWAITING_PLAN_APPROVAL.value,
+                **_pause_execution_budget(state, clock()),
+            }
+        # Read-only plans run immediately; only steps flagged for review pause for approval.
+        approved_plan = plan.model_copy(update={"status": PlanStatus.APPROVED})
+        return {
+            **update,
+            "plan": approved_plan.model_dump(mode="json"),
+            "status": AgentRunStatus.REQUESTING_TOOL.value,
         }
 
     def approve_plan(state: AgentState) -> AgentState:
@@ -895,7 +916,7 @@ def build_agent_graph(
     builder.add_conditional_edges(
         "create_plan",
         _route_after_plan,
-        {"approval": "approve_plan", "end": END},
+        {"approval": "approve_plan", "tool": "request_tool", "end": END},
     )
     builder.add_conditional_edges(
         "approve_plan",
@@ -1385,8 +1406,12 @@ def _route_after_review(state: AgentState) -> Literal["review", "plan", "end"]:
     return "plan" if state["status"] == AgentRunStatus.PLANNING else "end"
 
 
-def _route_after_plan(state: AgentState) -> Literal["approval", "end"]:
-    return "approval" if state["status"] == AgentRunStatus.AWAITING_PLAN_APPROVAL else "end"
+def _route_after_plan(state: AgentState) -> Literal["approval", "tool", "end"]:
+    if state["status"] == AgentRunStatus.AWAITING_PLAN_APPROVAL:
+        return "approval"
+    if state["status"] == AgentRunStatus.REQUESTING_TOOL:
+        return "tool"
+    return "end"
 
 
 def _route_after_approval(state: AgentState) -> Literal["tool", "plan", "end"]:

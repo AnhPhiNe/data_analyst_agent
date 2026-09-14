@@ -31,7 +31,7 @@ def model_outputs() -> list[dict[str, object]]:
                     "required_fields": ["region", "revenue"],
                     "intended_output": "One total per region",
                     "caveats": [],
-                    "requires_approval": False,
+                    "requires_approval": True,
                 }
             ]
         },

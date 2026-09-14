@@ -78,7 +78,7 @@ def plan_output(*, required_fields: list[str] | None = None) -> dict[str, object
                 "required_fields": required_fields or ["region", "revenue"],
                 "intended_output": "A result table with one total per region",
                 "caveats": ["Missing revenue values are ignored by SUM"],
-                "requires_approval": False,
+                "requires_approval": True,
             }
         ]
     }
@@ -223,7 +223,7 @@ def test_statistical_prompt_lists_parameters_and_sample_error_is_readable(
                 "required_fields": ["region", "revenue"],
                 "intended_output": "Welch t-test statistics",
                 "caveats": [],
-                "requires_approval": False,
+                "requires_approval": True,
             }
         ]
     }
@@ -306,7 +306,7 @@ def test_statistics_only_insight_completes_without_chart_instead_of_crashing(
                 "required_fields": ["revenue", "quantity"],
                 "intended_output": "Revenue and quantity rows",
                 "caveats": [],
-                "requires_approval": False,
+                "requires_approval": True,
             },
             {
                 "step_id": "correlation",
@@ -316,7 +316,7 @@ def test_statistics_only_insight_completes_without_chart_instead_of_crashing(
                 "required_fields": ["revenue", "quantity"],
                 "intended_output": "Correlation statistics",
                 "caveats": [],
-                "requires_approval": False,
+                "requires_approval": True,
             },
         ]
     }
@@ -348,6 +348,41 @@ def test_statistics_only_insight_completes_without_chart_instead_of_crashing(
         "No Verified Insight is backed by a chartable Query Result" in (completed["artifact_error"])
     )
     assert len(gateway.requests) == 5
+
+
+def test_structure_question_is_answered_from_profile_without_tools(tmp_path: Path) -> None:
+    core, request = run_request(tmp_path)
+    gateway = FakeModelGateway([{**goal_output(), "answer_from_profile": True}])
+    agent = AgentOrchestrator(gateway, core, checkpointer=InMemorySaver())
+
+    completed = agent.start(request)
+
+    assert completed["status"] == AgentRunStatus.COMPLETED
+    assert completed["answered_from_profile"] is True
+    assert completed["tool_actions"] == []
+    assert len(gateway.requests) == 1
+    assert "answer_from_profile" in gateway.requests[0].prompt
+
+
+def test_read_only_plan_runs_without_waiting_for_approval(tmp_path: Path) -> None:
+    core, request = run_request(tmp_path)
+    plan = plan_output()
+    steps = plan["steps"]
+    assert isinstance(steps, list)
+    step = steps[0]
+    assert isinstance(step, dict)
+    step["requires_approval"] = False
+    gateway = FakeModelGateway(
+        [goal_output(), plan, tool_output(), insight_output(), chart_output()]
+    )
+    agent = AgentOrchestrator(gateway, core, checkpointer=InMemorySaver())
+
+    completed = agent.start(request)
+
+    assert completed["status"] == AgentRunStatus.COMPLETED
+    assert completed["plan"]["status"] == "approved"
+    assert completed["answered_from_profile"] is False
+    assert len(completed["verified_insights"]) == 1
 
 
 def test_graph_pauses_for_plan_approval_then_executes_verified_query(tmp_path: Path) -> None:
@@ -626,7 +661,7 @@ def test_multi_step_plan_executes_every_approved_step(tmp_path: Path) -> None:
             "required_fields": ["revenue"],
             "intended_output": "An ordered revenue series",
             "caveats": [],
-            "requires_approval": False,
+            "requires_approval": True,
         }
     )
     gateway = FakeModelGateway(
@@ -672,7 +707,7 @@ def test_agent_executes_statistical_tool_and_publishes_verified_insight(
                 "required_fields": ["revenue"],
                 "intended_output": "Descriptive revenue statistics",
                 "caveats": [],
-                "requires_approval": False,
+                "requires_approval": True,
             }
         ]
     }
@@ -714,7 +749,7 @@ def test_unsupported_statistical_data_fails_without_model_repair_retry(
                 "required_fields": ["region"],
                 "intended_output": "A numeric regional summary",
                 "caveats": [],
-                "requires_approval": False,
+                "requires_approval": True,
             }
         ]
     }
@@ -744,7 +779,7 @@ def test_statistical_request_binds_approved_operation_and_fields(tmp_path: Path)
                 "required_fields": ["revenue", "quantity"],
                 "intended_output": "Correlation statistics",
                 "caveats": [],
-                "requires_approval": False,
+                "requires_approval": True,
             }
         ]
     }
@@ -788,7 +823,7 @@ def test_multiple_testing_count_is_derived_from_the_approved_plan(tmp_path: Path
                 "required_fields": ["revenue", "quantity"],
                 "intended_output": "Correlation statistics",
                 "caveats": [],
-                "requires_approval": False,
+                "requires_approval": True,
             },
             {
                 "step_id": "linear-fit",
@@ -798,7 +833,7 @@ def test_multiple_testing_count_is_derived_from_the_approved_plan(tmp_path: Path
                 "required_fields": ["revenue", "quantity"],
                 "intended_output": "Linear regression statistics",
                 "caveats": [],
-                "requires_approval": False,
+                "requires_approval": True,
             },
         ]
     }
@@ -1108,7 +1143,7 @@ def test_insight_synthesis_omits_large_row_level_results(tmp_path: Path) -> None
                 "required_fields": ["label", "value"],
                 "intended_output": "A row-level result",
                 "caveats": [],
-                "requires_approval": False,
+                "requires_approval": True,
             }
         ]
     }
@@ -1156,7 +1191,7 @@ def test_insight_synthesis_bounds_large_assumption_catalogs(tmp_path: Path) -> N
                 "required_fields": ["value", "group"],
                 "intended_output": "ANOVA result",
                 "caveats": [],
-                "requires_approval": False,
+                "requires_approval": True,
             }
         ]
     }

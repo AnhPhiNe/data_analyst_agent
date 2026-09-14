@@ -78,6 +78,21 @@ def set_agent_state(
     st.session_state.workspace = application.sync_workspace(workspace, state)
 
 
+def profile_table(workspace: AnalysisWorkspace) -> pd.DataFrame:
+    return pd.DataFrame(
+        [
+            {
+                "field": field.name,
+                "kind": field.kind.value,
+                "missing": field.missing_count,
+                "unique": field.unique_count,
+                "warnings": "; ".join(field.warnings),
+            }
+            for field in workspace.data_profile.fields
+        ]
+    )
+
+
 def render_dataset_summary(workspace: AnalysisWorkspace) -> None:
     profile = workspace.data_profile
     missing_cells = sum(field.missing_count for field in profile.fields)
@@ -88,22 +103,7 @@ def render_dataset_summary(workspace: AnalysisWorkspace) -> None:
     columns[3].metric("Duplicate rows", f"{profile.duplicate_row_count:,}")
 
     with st.expander("Dataset profile", expanded=False):
-        st.dataframe(
-            pd.DataFrame(
-                [
-                    {
-                        "field": field.name,
-                        "kind": field.kind.value,
-                        "missing": field.missing_count,
-                        "unique": field.unique_count,
-                        "warnings": "; ".join(field.warnings),
-                    }
-                    for field in profile.fields
-                ]
-            ),
-            hide_index=True,
-            width="stretch",
-        )
+        st.dataframe(profile_table(workspace), hide_index=True, width="stretch")
         if profile.pii_candidates:
             st.warning(
                 "Possible PII fields are excluded from model evidence: "
@@ -111,10 +111,10 @@ def render_dataset_summary(workspace: AnalysisWorkspace) -> None:
             )
 
 
-def render_plan(state: AgentState) -> None:
+def render_plan(state: AgentState, title: str = "Proposed analysis plan") -> None:
     plan = state.get("plan", {})
     steps = plan.get("steps", []) if isinstance(plan, dict) else []
-    st.subheader("Proposed analysis plan")
+    st.subheader(title)
     for index, step in enumerate(steps, start=1):
         if not isinstance(step, dict):
             continue
@@ -198,7 +198,14 @@ def render_completed_analysis(
     workspace: AnalysisWorkspace,
     state: AgentState,
 ) -> None:
+    if state.get("answered_from_profile"):
+        st.info("Answered directly from the Data Profile; no analysis tools were needed.")
+        st.dataframe(profile_table(workspace), hide_index=True, width="stretch")
+        return
     st.success("Analysis completed with deterministic verification.")
+    if state.get("plan"):
+        with st.expander("Executed analysis plan", expanded=False):
+            render_plan(state, title="Analysis plan")
     insights = state.get("verified_insights", [])
     if insights:
         st.subheader("Verified insights")
@@ -267,8 +274,15 @@ def render_analyze_tab(
         render_approval(application, workspace, state)
         if state.get("status") == AgentRunStatus.COMPLETED:
             render_completed_analysis(application, workspace, state)
-        elif state.get("status") in {AgentRunStatus.FAILED, AgentRunStatus.REJECTED}:
-            st.error(state.get("error", "The agent run stopped safely."))
+        elif state.get("status") == AgentRunStatus.REJECTED:
+            st.warning(state.get("error") or "The analysis plan was rejected.")
+        elif state.get("status") == AgentRunStatus.FAILED:
+            st.error(
+                "The agent could not complete this request safely. Try rephrasing the question "
+                "or naming the columns to analyze."
+            )
+            with st.expander("Technical details"):
+                st.code(state.get("error") or "No error detail was recorded.", language=None)
 
     waiting = bool(
         state

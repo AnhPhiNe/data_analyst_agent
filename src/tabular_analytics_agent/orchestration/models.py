@@ -88,6 +88,7 @@ class AgentState(TypedDict, total=False):
     user_request: str
     dataset_handle: dict[str, Any]
     data_profile: dict[str, Any]
+    answered_from_profile: bool
     goal: dict[str, Any]
     clarification_question: str
     proposed_annotations: list[dict[str, Any]]
