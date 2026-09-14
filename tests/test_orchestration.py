@@ -151,6 +151,149 @@ class ManualClock:
         self.now += timedelta(**kwargs)
 
 
+def test_new_request_does_not_reuse_previous_error_or_query_result(tmp_path: Path) -> None:
+    core, request = run_request(tmp_path)
+    gateway = FakeModelGateway(
+        [
+            goal_output(),
+            plan_output(),
+            tool_output(),
+            insight_output(),
+            chart_output(),
+            goal_output(),
+            plan_output(),
+            goal_output(),
+            plan_output(),
+        ]
+    )
+    agent = AgentOrchestrator(gateway, core, checkpointer=InMemorySaver())
+
+    agent.start(request)
+    completed = agent.resume(request.session_id, True)
+    assert completed["query_result"]["rows"]
+
+    follow_up = agent.start(request)
+    assert follow_up["status"] == AgentRunStatus.AWAITING_PLAN_APPROVAL
+    assert follow_up["query_result"] == {}
+    rejected = agent.resume(request.session_id, {"approved": False, "reason": "Use median instead"})
+    assert rejected["error"] == "Use median instead"
+
+    agent.start(request)
+    assert gateway.requests[-1].task.value == "plan"
+    assert 'Requested plan revision: ""' in gateway.requests[-1].prompt
+
+
+def test_sql_table_name_is_explicit_and_failed_attempt_is_traced(tmp_path: Path) -> None:
+    core, request = run_request(tmp_path)
+    gateway = FakeModelGateway(
+        [
+            goal_output(),
+            plan_output(),
+            tool_output("SELECT region, SUM(revenue) AS revenue FROM data GROUP BY region"),
+            tool_output(),
+            insight_output(),
+            chart_output(),
+        ]
+    )
+    agent = AgentOrchestrator(gateway, core, checkpointer=InMemorySaver())
+
+    agent.start(request)
+    completed = agent.resume(request.session_id, True)
+
+    assert completed["status"] == AgentRunStatus.COMPLETED
+    assert "The only table is named exactly dataset" in gateway.requests[2].prompt
+    assert "The only available table is named 'dataset'" in gateway.requests[3].prompt
+    assert len(completed["model_traces"]) == 6
+    failed_trace = completed["model_traces"][2]
+    assert failed_trace["task"] == "tool_request"
+    assert "outside this session" in failed_trace["error"]
+    assert completed["model_traces"][3]["error"] is None
+
+
+def test_statistical_prompt_lists_parameters_and_sample_error_is_readable(
+    tmp_path: Path,
+) -> None:
+    core, request = run_request(tmp_path)
+    statistical_plan = {
+        "steps": [
+            {
+                "step_id": "revenue-by-region",
+                "description": "Compare revenue between regions",
+                "expected_tool": "statistical_analysis",
+                "statistical_operation": "t_test",
+                "required_fields": ["region", "revenue"],
+                "intended_output": "Welch t-test statistics",
+                "caveats": [],
+                "requires_approval": False,
+            }
+        ]
+    }
+    gateway = FakeModelGateway(
+        [
+            goal_output(),
+            statistical_plan,
+            {"value_field": "revenue", "group_field": "region", "group_order": ["North", "South"]},
+        ]
+    )
+    agent = AgentOrchestrator(gateway, core, checkpointer=InMemorySaver())
+
+    agent.start(request)
+    failed = agent.resume(request.session_id, True)
+
+    assert "t_test requires: value_field, group_field, group_order" in gateway.requests[2].prompt
+    assert failed["status"] == AgentRunStatus.FAILED
+    assert "group 'North' of 'region' has only 2 usable values" in failed["error"]
+    assert "str:" not in failed["error"]
+
+
+def test_malformed_insight_draft_becomes_unsupported_without_failing_run(
+    tmp_path: Path,
+) -> None:
+    core, request = run_request(tmp_path)
+    drafts = {
+        "insights": [
+            {
+                "plan_step_id": "regional-totals",
+                "assertion": {
+                    "operator": "reports",
+                    "left_metric": "row[0].revenue",
+                    "right_metric": "row[1].revenue",
+                },
+                "evidence_metrics": ["row[0].revenue", "row[1].revenue"],
+                "caveats": [],
+            },
+            {
+                "plan_step_id": "regional-totals",
+                "assertion": {
+                    "operator": "equals",
+                    "left_metric": "row[0].revenue",
+                    "right_metric": "row[1].revenue",
+                },
+                "evidence_metrics": ["row[0].revenue", "row[1].revenue"],
+                "caveats": [],
+            },
+        ]
+    }
+    gateway = FakeModelGateway(
+        [goal_output(), plan_output(), tool_output(), drafts, chart_output()]
+    )
+    agent = AgentOrchestrator(gateway, core, checkpointer=InMemorySaver())
+
+    agent.start(request)
+    completed = agent.resume(request.session_id, True)
+
+    assert completed["status"] == AgentRunStatus.COMPLETED
+    assert [item["claim"] for item in completed["verified_insights"]] == [
+        "Revenue for region = North equals revenue for region = South (150 versus 150)."
+    ]
+    assert (
+        "unary insight assertions cannot include right_metric"
+        in (completed["unsupported_claims"][0]["reason"])
+    )
+    assert '"region"' in gateway.requests[-1].prompt
+    assert "Allowed column names" in gateway.requests[-1].prompt
+
+
 def test_graph_pauses_for_plan_approval_then_executes_verified_query(tmp_path: Path) -> None:
     core, request = run_request(tmp_path)
     gateway = FakeModelGateway(

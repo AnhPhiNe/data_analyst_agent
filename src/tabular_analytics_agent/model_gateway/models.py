@@ -43,6 +43,7 @@ class ModelCallTrace(GatewayModel):
     validation_repair_count: NonNegativeInt = 0
     usage: ModelUsage = Field(default_factory=ModelUsage)
     estimated_cost_usd: Annotated[float, Field(ge=0.0)] | None = None
+    error: str | None = None
     created_at: datetime
 
 

@@ -19,6 +19,7 @@ from tabular_analytics_agent.model_gateway.models import (
 from tabular_analytics_agent.model_gateway.schemas import (
     ChartIntentDraft,
     GoalInterpretation,
+    InsightAssertionDraft,
     InsightDraft,
     InsightDraftBatch,
     PlanDraft,
@@ -35,6 +36,7 @@ __all__ = [
     "GeminiModelGateway",
     "GeminiSettings",
     "GoalInterpretation",
+    "InsightAssertionDraft",
     "InsightDraft",
     "InsightDraftBatch",
     "ModelCallTrace",

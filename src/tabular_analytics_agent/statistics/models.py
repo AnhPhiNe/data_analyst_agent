@@ -89,19 +89,7 @@ class StatisticalRequest(StatisticsModel):
 
     @model_validator(mode="after")
     def fields_match_operation(self) -> Self:
-        required: dict[StatisticalOperation, tuple[str, ...]] = {
-            StatisticalOperation.DESCRIPTIVE: ("value_fields",),
-            StatisticalOperation.CONFIDENCE_INTERVAL: ("value_field",),
-            StatisticalOperation.T_TEST: ("value_field", "group_field"),
-            StatisticalOperation.MANN_WHITNEY: ("value_field", "group_field"),
-            StatisticalOperation.ANOVA: ("value_field", "group_field"),
-            StatisticalOperation.KRUSKAL_WALLIS: ("value_field", "group_field"),
-            StatisticalOperation.CORRELATION: ("x_field", "y_field"),
-            StatisticalOperation.CHI_SQUARE: ("x_field", "y_field"),
-            StatisticalOperation.LINEAR_REGRESSION: ("x_field", "y_field"),
-            StatisticalOperation.LOGISTIC_REGRESSION: ("x_field", "y_field"),
-        }
-        missing = [name for name in required[self.operation] if not getattr(self, name)]
+        missing = [name for name in _REQUIRED_FIELDS[self.operation] if not getattr(self, name)]
         if missing:
             raise ValueError(f"{self.operation.value} requires: {', '.join(missing)}")
         if self.operation is StatisticalOperation.DESCRIPTIVE and len(
@@ -113,11 +101,7 @@ class StatisticalRequest(StatisticsModel):
             and self.positive_class is None
         ):
             raise ValueError("logistic_regression requires positive_class")
-        two_group_operations = {
-            StatisticalOperation.T_TEST,
-            StatisticalOperation.MANN_WHITNEY,
-        }
-        if self.operation in two_group_operations:
+        if self.operation in _TWO_GROUP_OPERATIONS:
             if len(self.group_order) != 2:
                 raise ValueError(f"{self.operation.value} requires two ordered group identities")
             left, right = self.group_order
@@ -125,15 +109,9 @@ class StatisticalRequest(StatisticsModel):
                 raise ValueError("ordered group identities must be distinct")
         elif self.group_order:
             raise ValueError("group_order applies only to two-group tests")
-        one_sided_operations = {
-            StatisticalOperation.CORRELATION,
-            StatisticalOperation.T_TEST,
-            StatisticalOperation.MANN_WHITNEY,
-            StatisticalOperation.LINEAR_REGRESSION,
-        }
         if (
             self.alternative is not AlternativeHypothesis.TWO_SIDED
-            and self.operation not in one_sided_operations
+            and self.operation not in _ONE_SIDED_OPERATIONS
         ):
             raise ValueError(f"{self.operation.value} supports only a two-sided alternative")
         return self
@@ -186,3 +164,68 @@ class StatisticalResult(StatisticsModel):
         if not self.estimates:
             raise ValueError("statistical results require computed estimates")
         return self
+
+
+_REQUIRED_FIELDS: dict[StatisticalOperation, tuple[str, ...]] = {
+    StatisticalOperation.DESCRIPTIVE: ("value_fields",),
+    StatisticalOperation.CONFIDENCE_INTERVAL: ("value_field",),
+    StatisticalOperation.T_TEST: ("value_field", "group_field"),
+    StatisticalOperation.MANN_WHITNEY: ("value_field", "group_field"),
+    StatisticalOperation.ANOVA: ("value_field", "group_field"),
+    StatisticalOperation.KRUSKAL_WALLIS: ("value_field", "group_field"),
+    StatisticalOperation.CORRELATION: ("x_field", "y_field"),
+    StatisticalOperation.CHI_SQUARE: ("x_field", "y_field"),
+    StatisticalOperation.LINEAR_REGRESSION: ("x_field", "y_field"),
+    StatisticalOperation.LOGISTIC_REGRESSION: ("x_field", "y_field"),
+}
+_ADDITIONAL_REQUIRED_PARAMETERS: dict[StatisticalOperation, tuple[str, ...]] = {
+    StatisticalOperation.T_TEST: ("group_order",),
+    StatisticalOperation.MANN_WHITNEY: ("group_order",),
+    StatisticalOperation.LOGISTIC_REGRESSION: ("positive_class",),
+}
+_TWO_GROUP_OPERATIONS = {StatisticalOperation.T_TEST, StatisticalOperation.MANN_WHITNEY}
+_ONE_SIDED_OPERATIONS = {
+    StatisticalOperation.CORRELATION,
+    StatisticalOperation.T_TEST,
+    StatisticalOperation.MANN_WHITNEY,
+    StatisticalOperation.LINEAR_REGRESSION,
+}
+_TWO_GROUP_NOTE = (
+    "value_field is the numeric measure and group_field defines exactly two groups; "
+    "group_order lists those two group values exactly as they appear in the data."
+)
+_MULTI_GROUP_NOTE = "value_field is the numeric measure and group_field defines two or more groups."
+_PARAMETER_NOTES: dict[StatisticalOperation, str] = {
+    StatisticalOperation.DESCRIPTIVE: "value_fields lists the numeric fields to summarize.",
+    StatisticalOperation.CONFIDENCE_INTERVAL: "value_field is the single numeric field.",
+    StatisticalOperation.T_TEST: _TWO_GROUP_NOTE,
+    StatisticalOperation.MANN_WHITNEY: _TWO_GROUP_NOTE,
+    StatisticalOperation.ANOVA: _MULTI_GROUP_NOTE,
+    StatisticalOperation.KRUSKAL_WALLIS: _MULTI_GROUP_NOTE,
+    StatisticalOperation.CORRELATION: "x_field and y_field are the two numeric fields.",
+    StatisticalOperation.CHI_SQUARE: "x_field and y_field are the two categorical fields.",
+    StatisticalOperation.LINEAR_REGRESSION: (
+        "x_field is the numeric predictor and y_field is the numeric outcome."
+    ),
+    StatisticalOperation.LOGISTIC_REGRESSION: (
+        "x_field is the numeric predictor, y_field is the binary outcome, and positive_class "
+        "is the outcome value counted as the event."
+    ),
+}
+
+
+def parameter_guide(operation: StatisticalOperation) -> str:
+    """Describe the exact parameters a model must supply for one statistical operation."""
+    required = (
+        *_REQUIRED_FIELDS[operation],
+        *_ADDITIONAL_REQUIRED_PARAMETERS.get(operation, ()),
+    )
+    alternative = (
+        "alternative stays two-sided unless the approved step explicitly requires a one-sided test."
+        if operation in _ONE_SIDED_OPERATIONS
+        else "alternative must stay two-sided."
+    )
+    return (
+        f"{operation.value} requires: {', '.join(required)}. {_PARAMETER_NOTES[operation]} "
+        f"{alternative} Leave every other parameter null, empty, or at its default."
+    )

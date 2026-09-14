@@ -39,9 +39,12 @@ from tabular_analytics_agent.domain import (
 from tabular_analytics_agent.model_gateway import (
     ChartIntentDraft,
     GoalInterpretation,
+    InsightDraft,
     InsightDraftBatch,
+    ModelCallTrace,
     ModelGateway,
     ModelGatewayError,
+    ModelOutputValidationError,
     ModelProviderError,
     ModelTask,
     PlanDraft,
@@ -63,10 +66,13 @@ from tabular_analytics_agent.statistics import (
     StatisticalRequest,
     StatisticalResult,
     StatisticalTool,
+    parameter_guide,
 )
 from tabular_analytics_agent.verification import (
+    InsightPublication,
     available_evidence_values,
     publish_insight,
+    reject_insight_draft,
     verify_query_evidence,
 )
 from tabular_analytics_agent.visualization import (
@@ -151,6 +157,13 @@ class AgentOrchestrator:
             "unsupported_claims": [],
             "chart_renders": [],
             "artifact_error": "",
+            # A new request must not inherit per-run outputs or errors from an earlier request;
+            # confirmed semantic annotations intentionally persist within the session.
+            "error": "",
+            "clarification_question": "",
+            "proposed_annotations": [],
+            "query_result": {},
+            "statistical_result": {},
             "status": AgentRunStatus.INTERPRETING.value,
         }
         return cast(
@@ -170,6 +183,49 @@ class AgentOrchestrator:
     def get_state(self, thread_id: str) -> AgentState:
         snapshot = self._graph.get_state(_thread_config(thread_id))
         return cast(AgentState, snapshot.values)
+
+
+def _with_failure_trace(
+    update: AgentState,
+    state: AgentState,
+    error: Exception,
+    trace: ModelCallTrace | None = None,
+) -> AgentState:
+    """Keep the model call behind a failed or retried step visible in the audit trail."""
+    if trace is None and isinstance(error, ModelOutputValidationError):
+        trace = error.trace
+    if trace is None:
+        return update
+    failed = trace.model_copy(update={"error": _safe_error(error)})
+    return {**update, "model_traces": _append_trace(state, failed.model_dump(mode="json"))}
+
+
+def _tool_payload_guidance(step: PlanStep, handle: DatasetHandle) -> str:
+    if step.expected_tool == "statistical_analysis" and step.statistical_operation:
+        return (
+            "Return only operation parameters; the operation and allowed source fields are "
+            "fixed by the approved step. "
+            f"{parameter_guide(StatisticalOperation(step.statistical_operation))}"
+        )
+    return (
+        "Write one DuckDB SELECT query. The only table is named exactly "
+        f"{handle.table_name} (write FROM {handle.table_name}); no other table exists. The "
+        "step's required_fields are the only source columns allowed, including in filters and "
+        "grouping. Output aliases and calculated metrics are not source columns. For a row "
+        "count use COUNT(*) without adding an unapproved identifier column."
+    )
+
+
+def _draft_claim_text(draft: InsightDraft) -> str:
+    assertion = draft.assertion
+    right = assertion.right_metric or ""
+    return f"{assertion.left_metric} {assertion.operator.value} {right}".strip()
+
+
+def _validation_message(error: ValueError) -> str:
+    if isinstance(error, ValidationError):
+        return "; ".join(str(item["msg"]) for item in error.errors(include_url=False))
+    return str(error) or type(error).__name__
 
 
 def build_agent_graph(
@@ -213,7 +269,7 @@ def build_agent_graph(
         try:
             response = model_gateway.generate_structured(request)
         except ModelGatewayError as exc:
-            return _failed_state(state, exc, clock())
+            return _with_failure_trace(_failed_state(state, exc, clock()), state, exc)
         if _run_budget_exceeded(state, budget, clock()):
             return _failed_state(state, _budget_error(budget), clock())
         interpretation = response.output
@@ -316,8 +372,10 @@ def build_agent_graph(
             prompt_template_version="plan-v2",
             timeout_seconds=_model_call_timeout_seconds(state, budget, clock()),
         )
+        trace: ModelCallTrace | None = None
         try:
             response = model_gateway.generate_structured(request)
+            trace = response.trace
             goal = AnalyticalGoal.model_validate(state["goal"])
             plan = AnalysisPlan(
                 plan_id=uuid4(),
@@ -345,7 +403,7 @@ def build_agent_graph(
             if _run_budget_exceeded(state, plan.budget, clock()):
                 raise _budget_error(plan.budget)
         except (ModelGatewayError, ValidationError, ValueError) as exc:
-            return _failed_state(state, exc, clock())
+            return _with_failure_trace(_failed_state(state, exc, clock()), state, exc, trace)
         return {
             "plan": plan.model_dump(mode="json"),
             "current_step_index": 0,
@@ -408,13 +466,8 @@ def build_agent_graph(
                 f"{_json_for_prompt(state.get('error', 'none'))}"
                 "</untrusted_tool_error>\n"
                 "Return only the calculation payload for this already-approved step; do not repeat "
-                "its tool name, operation, purpose, or allowed-column list. For SQL, query the "
-                "dataset table. The step's required_fields are the only source columns allowed, "
-                "including in filters and grouping. Output aliases and calculated metrics are not "
-                "source columns. For a row count use COUNT(*) without adding an unapproved "
-                "identifier "
-                "column. For statistical analysis, return only operation parameters; the operation "
-                "and allowed source fields are fixed by the approved step."
+                "its tool name, operation, purpose, or allowed-column list. "
+                f"{_tool_payload_guidance(step, handle)}"
             ),
             response_schema=(
                 SQLToolRequestDraft
@@ -422,11 +475,13 @@ def build_agent_graph(
                 else StatisticalToolRequestDraft
             ),
             system_instruction=_SYSTEM_INSTRUCTION,
-            prompt_template_version="tool-request-v4",
+            prompt_template_version="tool-request-v5",
             timeout_seconds=_model_call_timeout_seconds(state, plan.budget, clock()),
         )
+        trace: ModelCallTrace | None = None
         try:
             response = model_gateway.generate_structured(request)
+            trace = response.trace
             if _run_budget_exceeded(state, plan.budget, clock()):
                 return _failed_state(state, _budget_error(plan.budget), clock())
             tool_request = _bind_tool_request_to_step(
@@ -450,7 +505,7 @@ def build_agent_graph(
             ValidationError,
             ValueError,
         ) as exc:
-            return _retry_or_fail(state, exc, clock())
+            return _with_failure_trace(_retry_or_fail(state, exc, clock()), state, exc, trace)
         return {
             "tool_request": tool_request.model_dump(mode="json"),
             "model_traces": _append_trace(state, response.trace.model_dump(mode="json")),
@@ -644,16 +699,22 @@ def build_agent_graph(
                 f"{_json_for_prompt(_insight_evidence_catalog(state, profile))}\n"
                 "Select structured insight assertions using only exact metric identifiers from "
                 "the catalog. Final claim text is rendered deterministically from evidence. "
-                "Include material caveats; never infer causation from association."
+                "When the goal compares groups, periods, or values, prefer greater_than, "
+                "less_than, or equals between the compared metrics; use reports only for a "
+                "single value. The reports, positive, negative, and significance operators take "
+                "a null right_metric. Include material caveats; never infer causation from "
+                "association."
             ),
             response_schema=InsightDraftBatch,
             system_instruction=_SYSTEM_INSTRUCTION,
-            prompt_template_version="insight-v1",
+            prompt_template_version="insight-v2",
             max_output_tokens=2048,
             timeout_seconds=_model_call_timeout_seconds(state, plan.budget, clock()),
         )
+        trace: ModelCallTrace | None = None
         try:
             response = model_gateway.generate_structured(request)
+            trace = response.trace
             if _run_budget_exceeded(state, plan.budget, clock()):
                 return _failed_state(state, _budget_error(plan.budget), clock())
             actions = {
@@ -667,28 +728,45 @@ def build_agent_graph(
                 SemanticAnnotation.model_validate(value)
                 for value in state.get("semantic_annotations", [])
             )
-            publications = []
+            current_version = DatasetHandle.model_validate(
+                state["dataset_handle"]
+            ).working_dataset_version
+            publications: list[InsightPublication] = []
             for draft in response.output.insights:
+                # A malformed draft is recorded as unsupported instead of voiding the whole run.
                 action = actions.get(draft.plan_step_id)
                 if action is None:
-                    raise ValueError("Insight draft references an unknown Tool Action")
-                result = _evidence_result_for_action(state, action)
+                    publications.append(
+                        reject_insight_draft(
+                            claim=_draft_claim_text(draft),
+                            reason="Insight draft references an unknown plan step.",
+                        )
+                    )
+                    continue
+                try:
+                    assertion = draft.validated_assertion()
+                except ValueError as exc:
+                    publications.append(
+                        reject_insight_draft(
+                            claim=_draft_claim_text(draft),
+                            reason=_validation_message(exc),
+                        )
+                    )
+                    continue
                 publications.append(
                     publish_insight(
-                        assertion=draft.assertion,
+                        assertion=assertion,
                         evidence_metrics=draft.evidence_metrics,
                         caveats=draft.caveats,
                         profile=profile,
                         action=action,
-                        result=result,
-                        current_working_dataset_version=DatasetHandle.model_validate(
-                            state["dataset_handle"]
-                        ).working_dataset_version,
+                        result=_evidence_result_for_action(state, action),
+                        current_working_dataset_version=current_version,
                         semantic_annotations=annotations,
                     )
                 )
         except (ModelGatewayError, ValidationError, ValueError) as exc:
-            return _failed_state(state, exc, clock())
+            return _with_failure_trace(_failed_state(state, exc, clock()), state, exc, trace)
         verified = [
             item.model_dump(mode="json") for item in publications if item.status.value == "verified"
         ]
@@ -731,6 +809,9 @@ def build_agent_graph(
                 f"{_json_for_prompt(state['goal'])}\n"
                 "Verified query result metadata (schema only; no cell values): "
                 f"{_json_for_prompt(_chart_result_metadata(result, profile))}\n"
+                "Allowed column names for x_field, y_fields, color_field, and label keys: "
+                f"{_json_for_prompt([column.name for column in result.columns])}. "
+                "Never use placeholder names such as x or y.\n"
                 "Propose one readable chart using only these supported artifact types: "
                 "kpi, table, histogram, bar, line, scatter. Choose based on the analytical goal, "
                 "field types, cardinality, and row count. Use only exact result column names in "
@@ -739,14 +820,14 @@ def build_agent_graph(
             ),
             response_schema=ChartIntentDraft,
             system_instruction=_SYSTEM_INSTRUCTION,
-            prompt_template_version="chart-intent-v1",
+            prompt_template_version="chart-intent-v2",
             max_output_tokens=1024,
             timeout_seconds=_model_call_timeout_seconds(state, plan.budget, clock()),
         )
-        trace: dict[str, Any] | None = None
+        trace: ModelCallTrace | None = None
         try:
             response = model_gateway.generate_structured(request)
-            trace = response.trace.model_dump(mode="json")
+            trace = response.trace
             if _run_budget_exceeded(state, plan.budget, clock()):
                 return _failed_state(state, _budget_error(plan.budget), clock())
             draft = response.output
@@ -769,19 +850,22 @@ def build_agent_graph(
             update: AgentState = {
                 "chart_renders": [rendered.model_dump(mode="json")],
                 "artifact_error": "",
-                "model_traces": _append_trace(state, trace),
+                "model_traces": _append_trace(state, trace.model_dump(mode="json")),
                 "status": AgentRunStatus.COMPLETED.value,
                 "error": "",
             }
         except (ChartValidationError, ModelGatewayError, ValidationError, ValueError) as exc:
-            update = {
-                "chart_renders": [],
-                "artifact_error": _safe_error(exc),
-                "status": AgentRunStatus.COMPLETED.value,
-                "error": "",
-            }
-            if trace is not None:
-                update["model_traces"] = _append_trace(state, trace)
+            update = _with_failure_trace(
+                {
+                    "chart_renders": [],
+                    "artifact_error": _safe_error(exc),
+                    "status": AgentRunStatus.COMPLETED.value,
+                    "error": "",
+                },
+                state,
+                exc,
+                trace,
+            )
         update.update(_pause_execution_budget(state, clock()))
         return update
 

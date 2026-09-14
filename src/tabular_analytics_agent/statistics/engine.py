@@ -84,7 +84,7 @@ def _descriptive(frame: pd.DataFrame, request: StatisticalRequest) -> dict[str, 
     for field in request.value_fields:
         values = _numeric(frame[field], field)
         clean = np.asarray(values.dropna().to_numpy(), dtype=np.float64)
-        _require_sample(clean, field)
+        _require_sample(clean, f"field {field!r}")
         sample_sizes.append(len(clean))
         metrics = {
             "count": float(len(clean)),
@@ -445,9 +445,24 @@ def _numeric(series: pd.Series[Any], field: str) -> pd.Series[float]:
     return converted.astype(float)
 
 
-def _require_sample(values: NDArray[np.float64], label: str) -> None:
+def _require_sample(values: NDArray[np.float64], subject: str) -> None:
     if len(values) < _MIN_SAMPLE_SIZE:
-        raise StatisticalAnalysisError(f"{label!r} requires at least {_MIN_SAMPLE_SIZE} values")
+        raise StatisticalAnalysisError(
+            f"{subject} has only {len(values)} usable values; "
+            f"at least {_MIN_SAMPLE_SIZE} are required"
+        )
+
+
+def display_group_label(label: str) -> str:
+    """Return the original group value encoded in a collision-safe group label."""
+    _, separator, encoded = label.partition(":")
+    if not separator:
+        return label
+    try:
+        decoded = json.loads(encoded)
+    except json.JSONDecodeError:
+        return label
+    return str(decoded)
 
 
 def _require_rows(frame: pd.DataFrame) -> None:
@@ -460,7 +475,7 @@ def _require_rows(frame: pd.DataFrame) -> None:
 def _one_numeric(frame: pd.DataFrame, field: str) -> tuple[NDArray[np.float64], int]:
     values = _numeric(frame[field], field)
     clean = np.asarray(values.dropna().to_numpy(), dtype=np.float64)
-    _require_sample(clean, field)
+    _require_sample(clean, f"field {field!r}")
     return clean, int(values.isna().sum())
 
 
@@ -484,7 +499,7 @@ def _grouped(
         for name, values in complete.groupby(group_field, sort=False)
     }
     for name, values in groups.items():
-        _require_sample(values, name)
+        _require_sample(values, f"group {display_group_label(name)!r} of {group_field!r}")
     return groups, len(frame) - len(complete)
 
 

@@ -16,7 +16,33 @@ from tabular_analytics_agent.statistics import (
     StatisticalRequest,
     StatisticalResult,
     analyze,
+    parameter_guide,
 )
+
+
+def test_insufficient_group_size_reports_the_readable_group_value() -> None:
+    frame = pd.DataFrame({"value": [1.0, 2.0, 3.0, 4.0, 5.0], "group": ["A", "B", "A", "B", "A"]})
+
+    with pytest.raises(
+        StatisticalAnalysisError, match="group 'B' of 'group' has only 2 usable values"
+    ):
+        analyze(
+            frame,
+            StatisticalRequest(
+                operation=StatisticalOperation.T_TEST,
+                value_field="value",
+                group_field="group",
+                group_order=("A", "B"),
+            ),
+        )
+
+
+def test_parameter_guide_names_operation_specific_parameters() -> None:
+    assert "t_test requires: value_field, group_field, group_order" in parameter_guide(
+        StatisticalOperation.T_TEST
+    )
+    assert "positive_class" in parameter_guide(StatisticalOperation.LOGISTIC_REGRESSION)
+    assert "alternative must stay two-sided" in parameter_guide(StatisticalOperation.ANOVA)
 
 
 def analysis_frame() -> pd.DataFrame:

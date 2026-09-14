@@ -69,29 +69,20 @@ class BaseModelGateway(ABC):
                 )
                 continue
 
-            usage = ModelUsage(
-                prompt_tokens=sum(item.prompt_tokens for item in responses),
-                output_tokens=sum(item.output_tokens for item in responses),
-                total_tokens=sum(item.total_tokens for item in responses),
-            )
-            trace = ModelCallTrace(
-                model_id=raw.model_id,
-                task=request.task,
-                prompt_template_version=request.prompt_template_version,
-                temperature=request.temperature,
-                max_output_tokens=request.max_output_tokens,
-                timeout_seconds=request.timeout_seconds,
-                latency_ms=max(0, round((time.perf_counter() - started) * 1000)),
-                provider_retry_count=sum(item.provider_retry_count for item in responses),
-                validation_repair_count=repair_count,
-                usage=usage,
-                created_at=datetime.now(UTC),
-            )
+            trace = _call_trace(request, responses, started, repair_count=repair_count)
             return StructuredModelResponse(output=output, trace=trace)
 
         detail = _safe_validation_detail(last_error)
+        message = f"Model output failed schema validation after one repair: {detail}"
         raise ModelOutputValidationError(
-            f"Model output failed schema validation after one repair: {detail}"
+            message,
+            trace=_call_trace(
+                request,
+                responses,
+                started,
+                repair_count=self._max_validation_repairs,
+                error=message,
+            ),
         )
 
     @abstractmethod
@@ -99,6 +90,35 @@ class BaseModelGateway(ABC):
         self, request: StructuredModelRequest[ResponseT]
     ) -> RawModelResponse:
         """Return one raw provider response; subclasses own transport retries."""
+
+
+def _call_trace[ResponseT: BaseModel](
+    request: StructuredModelRequest[ResponseT],
+    responses: list[RawModelResponse],
+    started: float,
+    *,
+    repair_count: int,
+    error: str | None = None,
+) -> ModelCallTrace:
+    usage = ModelUsage(
+        prompt_tokens=sum(item.prompt_tokens for item in responses),
+        output_tokens=sum(item.output_tokens for item in responses),
+        total_tokens=sum(item.total_tokens for item in responses),
+    )
+    return ModelCallTrace(
+        model_id=responses[-1].model_id,
+        task=request.task,
+        prompt_template_version=request.prompt_template_version,
+        temperature=request.temperature,
+        max_output_tokens=request.max_output_tokens,
+        timeout_seconds=request.timeout_seconds,
+        latency_ms=max(0, round((time.perf_counter() - started) * 1000)),
+        provider_retry_count=sum(item.provider_retry_count for item in responses),
+        validation_repair_count=repair_count,
+        usage=usage,
+        error=error,
+        created_at=datetime.now(UTC),
+    )
 
 
 def _validate_payload[ResponseT: BaseModel](schema: type[ResponseT], payload: object) -> ResponseT:
@@ -110,9 +130,9 @@ def _validate_payload[ResponseT: BaseModel](schema: type[ResponseT], payload: ob
 def _repair_prompt(original_prompt: str, payload: object, error: Exception) -> str:
     rendered = (
         json.dumps(payload, default=str, ensure_ascii=True)
-        .replace("<", r"\u003c")
-        .replace(">", r"\u003e")
-        .replace("&", r"\u0026")
+        .replace("<", r"<")
+        .replace(">", r">")
+        .replace("&", r"&")
     )[:8_000]
     return (
         f"{original_prompt}\n\n"
@@ -126,7 +146,7 @@ def _repair_prompt(original_prompt: str, payload: object, error: Exception) -> s
 def _safe_validation_detail(error: Exception | None) -> str:
     if isinstance(error, ValidationError):
         return "; ".join(
-            f"{'.'.join(str(part) for part in item['loc'])}: {item['type']}"
+            f"{'.'.join(str(part) for part in item['loc'])}: {item['msg']}"
             for item in error.errors(include_input=False, include_url=False)
         )
     if error is None:

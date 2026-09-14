@@ -9,6 +9,11 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from tabular_analytics_agent.domain import GoalFamily, InsightAssertion, InsightOperator
 from tabular_analytics_agent.statistics import AlternativeHypothesis, StatisticalOperation
 
+_SIGNIFICANCE_OPERATORS = {
+    InsightOperator.STATISTICALLY_SIGNIFICANT,
+    InsightOperator.NOT_STATISTICALLY_SIGNIFICANT,
+}
+
 
 class GenerationSchema(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, str_strip_whitespace=True)
@@ -96,27 +101,52 @@ class StatisticalToolRequestDraft(GenerationSchema):
     positive_class: str | int | float | bool | None = None
 
 
+class InsightAssertionDraft(GenerationSchema):
+    """Loosely validated assertion so one malformed draft cannot discard the whole batch."""
+
+    operator: InsightOperator
+    left_metric: str = Field(
+        min_length=1,
+        description="Exact metric identifier from the evidence catalog",
+    )
+    right_metric: str | None = Field(
+        default=None,
+        description=(
+            "Exact metric identifier; required for equals, greater_than, and less_than, and null "
+            "for every other operator"
+        ),
+    )
+
+
 class InsightDraft(GenerationSchema):
     plan_step_id: str = Field(min_length=1)
-    assertion: InsightAssertion
-    evidence_metrics: tuple[str, ...] = Field(min_length=1)
+    assertion: InsightAssertionDraft
+    evidence_metrics: tuple[str, ...] = Field(
+        min_length=1,
+        description=(
+            "Every metric used by the assertion; significance assertions use p_value as "
+            "left_metric and must also include adjusted_alpha"
+        ),
+    )
     caveats: tuple[str, ...] = ()
 
-    @model_validator(mode="after")
-    def assertion_metrics_are_selected_evidence(self) -> Self:
-        assertion_metrics = {self.assertion.left_metric}
-        if self.assertion.right_metric:
-            assertion_metrics.add(self.assertion.right_metric)
-        if self.assertion.operator in {
-            InsightOperator.STATISTICALLY_SIGNIFICANT,
-            InsightOperator.NOT_STATISTICALLY_SIGNIFICANT,
-        }:
-            if self.assertion.left_metric != "p_value":
+    def validated_assertion(self) -> InsightAssertion:
+        """Return the domain assertion, or raise ValueError describing the broken contract."""
+        assertion = InsightAssertion(
+            operator=self.assertion.operator,
+            left_metric=self.assertion.left_metric,
+            right_metric=self.assertion.right_metric or None,
+        )
+        assertion_metrics = {assertion.left_metric}
+        if assertion.right_metric:
+            assertion_metrics.add(assertion.right_metric)
+        if assertion.operator in _SIGNIFICANCE_OPERATORS:
+            if assertion.left_metric != "p_value":
                 raise ValueError("significance assertions require p_value as left_metric")
             assertion_metrics.add("adjusted_alpha")
         if not assertion_metrics.issubset(self.evidence_metrics):
             raise ValueError("insight assertion metrics must be selected evidence")
-        return self
+        return assertion
 
 
 class InsightDraftBatch(GenerationSchema):
@@ -124,14 +154,29 @@ class InsightDraftBatch(GenerationSchema):
 
 
 class ChartIntentDraft(GenerationSchema):
-    artifact_type: str = Field(min_length=1)
+    artifact_type: str = Field(
+        min_length=1,
+        description="One of: kpi, table, histogram, bar, line, scatter",
+    )
     analytical_purpose: str = Field(min_length=1)
     source_result_ref: str = Field(min_length=1)
-    x_field: str | None = None
-    y_fields: tuple[str, ...] = ()
-    color_field: str | None = None
+    x_field: str | None = Field(
+        default=None,
+        description="Exact result column name for the x axis, or null; never a placeholder",
+    )
+    y_fields: tuple[str, ...] = Field(
+        default=(),
+        description="Exact result column names for the plotted values; never placeholders",
+    )
+    color_field: str | None = Field(
+        default=None,
+        description="Exact result column name used for grouping, or null",
+    )
     aggregation: str | None = None
     title: str = Field(min_length=1)
-    labels: dict[str, str] = Field(default_factory=dict)
+    labels: dict[str, str] = Field(
+        default_factory=dict,
+        description="Display labels keyed by exact result column names",
+    )
     formatting_intent: dict[str, Any] = Field(default_factory=dict)
     validation_constraints: tuple[str, ...] = ()

@@ -126,7 +126,7 @@ def test_query_claim_is_published_with_complete_reproducible_evidence() -> None:
 
     assert isinstance(publication, VerifiedInsight)
     assert publication.claim == (
-        "Revenue in result row 1 equals revenue in result row 2 (150 versus 150)."
+        "Revenue for region = North equals revenue for region = South (150 versus 150)."
     )
     assert publication.status is InsightStatus.VERIFIED
     assert [value.value for value in publication.evidence.values] == [150.0, 150.0]

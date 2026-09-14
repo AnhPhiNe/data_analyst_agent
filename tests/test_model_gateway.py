@@ -101,24 +101,43 @@ def test_generation_schemas_reject_unbound_plan_tool_and_insight_contracts() -> 
             {"sql": "SELECT value FROM dataset", "required_fields": ["value"]}
         )
 
+    def draft(
+        operator: InsightOperator,
+        left_metric: str,
+        evidence_metrics: list[str],
+        right_metric: str | None = None,
+    ) -> InsightDraft:
+        # Assertion contracts are checked after parsing so one bad draft cannot void a batch.
+        return InsightDraft.model_validate(
+            {
+                "plan_step_id": "one",
+                "assertion": {
+                    "operator": operator,
+                    "left_metric": left_metric,
+                    "right_metric": right_metric,
+                },
+                "evidence_metrics": evidence_metrics,
+            }
+        )
+
     with pytest.raises(ValueError, match="require p_value"):
-        InsightDraft(
-            plan_step_id="one",
-            assertion=InsightAssertion(
-                operator=InsightOperator.STATISTICALLY_SIGNIFICANT,
-                left_metric="value.mean",
-            ),
-            evidence_metrics=("value.mean", "adjusted_alpha"),
-        )
+        draft(
+            InsightOperator.STATISTICALLY_SIGNIFICANT,
+            "value.mean",
+            ["value.mean", "adjusted_alpha"],
+        ).validated_assertion()
     with pytest.raises(ValueError, match="must be selected evidence"):
-        InsightDraft(
-            plan_step_id="one",
-            assertion=InsightAssertion(
-                operator=InsightOperator.STATISTICALLY_SIGNIFICANT,
-                left_metric="p_value",
-            ),
-            evidence_metrics=("p_value",),
-        )
+        draft(
+            InsightOperator.STATISTICALLY_SIGNIFICANT, "p_value", ["p_value"]
+        ).validated_assertion()
+    with pytest.raises(ValueError, match="unary insight assertions cannot include right_metric"):
+        draft(
+            InsightOperator.REPORTS, "value.mean", ["value.mean", "value.max"], "value.max"
+        ).validated_assertion()
+    assert isinstance(
+        draft(InsightOperator.REPORTS, "value.mean", ["value.mean"], "").validated_assertion(),
+        InsightAssertion,
+    )
 
 
 def test_fake_gateway_returns_validated_output_and_trace() -> None:
@@ -141,15 +160,21 @@ def test_gateway_repairs_malformed_output_once() -> None:
     assert response.trace.validation_repair_count == 1
     assert len(gateway.requests) == 2
     assert "did not satisfy" in gateway.requests[1].prompt
+    assert "goal_family: Field required" in gateway.requests[1].prompt
 
 
 def test_gateway_rejects_output_after_single_repair() -> None:
     gateway = FakeModelGateway([{}, {}])
 
-    with pytest.raises(ModelOutputValidationError, match="after one repair"):
+    with pytest.raises(ModelOutputValidationError, match="after one repair") as raised:
         gateway.generate_structured(goal_request())
 
     assert len(gateway.requests) == 2
+    trace = raised.value.trace
+    assert trace is not None
+    assert trace.validation_repair_count == 1
+    assert trace.error is not None
+    assert "Field required" in trace.error
 
 
 def test_structured_request_rejects_invalid_inference_settings() -> None:

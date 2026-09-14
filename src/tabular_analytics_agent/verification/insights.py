@@ -26,7 +26,11 @@ from tabular_analytics_agent.domain import (
     VerificationStatus,
     VerifiedInsight,
 )
-from tabular_analytics_agent.statistics import AssumptionStatus, StatisticalResult
+from tabular_analytics_agent.statistics import (
+    AssumptionStatus,
+    StatisticalResult,
+    display_group_label,
+)
 
 InsightPublication = VerifiedInsight | UnsupportedClaim
 EvidenceResult = QueryResult | StatisticalResult
@@ -229,6 +233,19 @@ def publish_insight(
     )
 
 
+def reject_insight_draft(*, claim: str, reason: str) -> UnsupportedClaim:
+    """Record a malformed insight draft as unsupported without discarding other drafts."""
+    return UnsupportedClaim(
+        claim_id=uuid4(),
+        claim=claim,
+        reason=reason,
+        verification=VerificationResult(
+            status=VerificationStatus.FAILED,
+            checks=(VerificationCheck(name="draft_contract", passed=False, message=reason),),
+        ),
+    )
+
+
 def invalidate_stale_insight(
     insight: VerifiedInsight,
     *,
@@ -314,7 +331,7 @@ def _evaluate_assertion(
     operator = assertion.operator
     if operator is InsightOperator.REPORTS:
         return (
-            f"{_display_metric(left.metric)} is {_format_evidence_value(left.value)}.",
+            f"{_display_metric(left.metric, result)} is {_format_evidence_value(left.value)}.",
             True,
             "Reported value comes directly from deterministic evidence.",
         )
@@ -332,8 +349,8 @@ def _evaluate_assertion(
             InsightOperator.LESS_THAN: "is less than",
         }[operator]
         claim = (
-            f"{_display_metric(left.metric)} {symbol} "
-            f"{_lower_first(_display_metric(right.metric))} "
+            f"{_display_metric(left.metric, result)} {symbol} "
+            f"{_lower_first(_display_metric(right.metric, result))} "
             f"({_format_evidence_value(left.value)} versus "
             f"{_format_evidence_value(right.value)})."
         )
@@ -353,7 +370,7 @@ def _evaluate_assertion(
         )
         direction = "positive" if operator is InsightOperator.POSITIVE else "negative"
         return (
-            f"{_display_metric(left.metric)} is {direction} "
+            f"{_display_metric(left.metric, result)} is {direction} "
             f"({_format_evidence_value(left.value)}).",
             supported,
             "Direction is confirmed by deterministic evidence."
@@ -422,7 +439,7 @@ def _format_evidence_value(value: str | int | float | bool | None) -> str:
     return str(value)
 
 
-def _display_metric(metric: str) -> str:
+def _display_metric(metric: str, result: EvidenceResult) -> str:
     metric_labels = {
         "adjusted_alpha": "Adjusted alpha",
         "anova_f": "ANOVA F statistic",
@@ -447,12 +464,16 @@ def _display_metric(metric: str) -> str:
         return metric_labels[metric]
     row_match = re.fullmatch(r"row\[(\d+)]\.(.+)", metric)
     if row_match:
-        row_number = int(row_match.group(1)) + 1
-        return f"{_humanize_identifier(row_match.group(2))} in result row {row_number}"
+        row_index = int(row_match.group(1))
+        column = row_match.group(2)
+        context = _row_context(result, row_index, column)
+        if context:
+            return f"{_humanize_identifier(column)} for {context}"
+        return f"{_humanize_identifier(column)} in result row {row_index + 1}"
     group_match = re.fullmatch(r"group\[([^]]+)]\.(mean|median)", metric)
     if group_match:
         statistic = group_match.group(2).capitalize()
-        return f"{statistic} for group {_display_group_identity(group_match.group(1))}"
+        return f"{statistic} for group {display_group_label(group_match.group(1))}"
     field_metric_match = re.fullmatch(
         r"(.+)\.(count|mean|standard_deviation|minimum|first_quartile|median|"
         r"third_quartile|maximum|standard_error)",
@@ -469,15 +490,16 @@ def _humanize_identifier(value: str) -> str:
     return value.replace("_", " ").strip().capitalize()
 
 
-def _display_group_identity(value: str) -> str:
-    _, separator, encoded = value.partition(":")
-    if not separator:
-        return value
-    try:
-        decoded = json.loads(encoded)
-    except json.JSONDecodeError:
-        return value
-    return str(decoded)
+def _row_context(result: EvidenceResult, row_index: int, metric_column: str) -> str:
+    """Describe a result row by its text dimensions, for example ``region = North``."""
+    if not isinstance(result, QueryResult) or row_index >= len(result.rows):
+        return ""
+    labels = [
+        f"{column.name} = {value}"
+        for column, value in zip(result.columns, result.rows[row_index], strict=True)
+        if column.name != metric_column and isinstance(value, str)
+    ]
+    return ", ".join(labels[:3])
 
 
 def _lower_first(value: str) -> str:

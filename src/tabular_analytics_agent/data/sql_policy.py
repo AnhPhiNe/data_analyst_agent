@@ -87,7 +87,10 @@ def analyze_read_only_sql(sql: str, *, allowed_table: str) -> SQLAnalysis:
     disallowed_tables = referenced_tables - allowed_names
     if disallowed_tables:
         names = ", ".join(sorted(disallowed_tables))
-        raise UnsafeQueryError(f"Query references tables outside this session: {names}")
+        raise UnsafeQueryError(
+            f"Query references tables outside this session: {names}. "
+            f"The only available table is named {allowed_table!r}."
+        )
 
     relation_identifiers = {
         table.alias_or_name.casefold()

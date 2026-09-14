@@ -216,7 +216,7 @@ def render_completed_analysis(
         st.warning(f"Unsupported claim: {item.get('reason', 'insufficient evidence')}")
 
     query_result = state.get("query_result")
-    if isinstance(query_result, dict):
+    if isinstance(query_result, dict) and query_result:
         with st.expander("Verified result table", expanded=True):
             render_result_table(query_result)
 
