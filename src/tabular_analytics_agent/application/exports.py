@@ -162,9 +162,7 @@ def export_verified_insights_json(request: ExportRequest) -> bytes:
         ],
         "results": [_result_metadata(result) for result in results],
     }
-    return json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode(
-        "utf-8"
-    )
+    return json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
 
 
 def export_query_result_csv(

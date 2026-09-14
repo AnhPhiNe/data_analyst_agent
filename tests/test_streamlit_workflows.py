@@ -267,7 +267,9 @@ def test_corrected_request_reinterprets_metric_before_approval(
     app.run()
     app.chat_input[0].set_value("Total profit?").run()
     app.text_input(key="semantic-correction").set_value("Total revenue instead").run()
-    next(button for button in app.button if button.label == "Reject and clarify").click().run()
+    next(
+        button for button in app.button if button.label == "Submit corrected question"
+    ).click().run()
     assert not app.exception
     state = app.session_state["agent_state"]
     assert state["status"] == "awaiting_plan_approval"

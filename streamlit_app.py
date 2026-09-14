@@ -303,12 +303,6 @@ def render_approval(
         proposals = state.get("proposed_annotations", [])
         if proposals:
             st.dataframe(pd.DataFrame(proposals), hide_index=True, width="stretch")
-        reason = st.text_input(
-            "Correction if the proposal is wrong",
-            placeholder="Example: revenue means net revenue after returns",
-            key="semantic-correction",
-        )
-        approve, reject = st.columns(2)
         unavailable = (
             any(
                 item.get("status") == "unavailable"
@@ -316,12 +310,32 @@ def render_approval(
             )
             and not proposals
         )
+        if unavailable:
+            st.markdown(
+                "**Choose one:** rewrite the question using the columns below and submit it, "
+                "or accept that this metric cannot be answered from this dataset."
+            )
+            st.caption(
+                "Available columns: "
+                + ", ".join(field.name for field in workspace.data_profile.fields)
+            )
+        reason = st.text_input(
+            "Corrected question" if unavailable else "Correction if the proposal is wrong",
+            placeholder=(
+                "Example: average salary per department"
+                if unavailable
+                else "Example: revenue means net revenue after returns"
+            ),
+            key="semantic-correction",
+        )
+        approve, reject = st.columns(2)
         confirmation = (
             "Accept that this metric is unavailable" if unavailable else "Confirm semantics"
         )
         if approve.button(confirmation, type="primary", width="stretch"):
             resume_agent(application, workspace, {"approved": True})
-        if reject.button("Reject and clarify", width="stretch", disabled=not reason.strip()):
+        submit_label = "Submit corrected question" if unavailable else "Reject and clarify"
+        if reject.button(submit_label, width="stretch", disabled=not reason.strip()):
             resume_agent(
                 application,
                 workspace,
@@ -364,21 +378,36 @@ def render_completed_analysis(
         st.info("Answered directly from the Data Profile; no analysis tools were needed.")
         st.dataframe(profile_table(workspace), hide_index=True, width="stretch")
         return
-    st.success("Analysis completed with deterministic verification.")
+    insights = state.get("verified_insights", [])
+    if insights:
+        st.success("Analysis completed with deterministic verification.")
+    else:
+        st.warning(
+            "The analysis ran, but no claim passed deterministic verification. "
+            "Review the details below or rephrase the question."
+        )
     if state.get("plan"):
         with st.expander("Executed analysis plan", expanded=False):
             render_plan(state, title="Analysis plan")
-    insights = state.get("verified_insights", [])
     if insights:
+        caveat_lists = [list(item.get("evidence", {}).get("caveats", [])) for item in insights]
+        # Result caveats repeat on every insight drawn from the same result; show them once.
+        shared: list[str] = []
+        if len(caveat_lists) > 1:
+            shared = [
+                caveat
+                for caveat in caveat_lists[0]
+                if all(caveat in other for other in caveat_lists[1:])
+            ]
         st.subheader("Verified insights")
-        for item in insights:
+        for item, caveats in zip(insights, caveat_lists, strict=True):
             with st.container(border=True):
                 st.write(item.get("claim", "Verified insight"))
-                caveats = item.get("evidence", {}).get("caveats", [])
-                if caveats:
-                    st.caption("Caveats: " + "; ".join(caveats))
-    else:
-        st.info("The run completed but did not produce a supported verified claim.")
+                own = [caveat for caveat in caveats if caveat not in shared]
+                if own:
+                    st.caption("Caveats: " + "; ".join(own))
+        if shared:
+            st.caption("Caveats for all insights: " + "; ".join(shared))
 
     unsupported = state.get("unsupported_claims", [])
     for item in unsupported:
@@ -398,7 +427,7 @@ def render_completed_analysis(
 
 
 def render_exports(workspace: AnalysisWorkspace, state: AgentState) -> None:
-    if not state.get("query_results") and not state.get("statistical_results"):
+    if not state.get("verified_insights"):
         return
     try:
         request = ExportRequest.from_state(
@@ -493,6 +522,7 @@ def render_analyze_tab(
                 state.get("refusal_reason")
                 or "This request cannot be supported with the current data."
             )
+            st.caption("Ask a new question that uses the available columns.")
         elif state.get("status") == AgentRunStatus.REJECTED:
             st.warning(state.get("error") or "The analysis plan was rejected.")
         elif state.get("status") == AgentRunStatus.FAILED:
