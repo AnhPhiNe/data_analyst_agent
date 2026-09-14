@@ -77,7 +77,13 @@ analysis.
 
 ## Remaining slices
 
-- M5.4: CSV, JSON metadata, and self-contained HTML exports.
+- M5.4: query-result CSV and verified-evidence JSON downloads are implemented and undergoing
+  integration acceptance. Downloads include only results referenced by current Verified Insights,
+  bound to the current session, dataset, Working Dataset version, and semantic annotations; the
+  Verification Gates remain responsible for evidence correctness. CSV text and headers that could
+  execute spreadsheet formulas are neutralized. HTML reports remain Should-tier.
+- Session list/open/delete is implemented; offline safety and restart checks are tracked in
+  `mvp-acceptance.md`. Live model and clean-environment release acceptance remain outstanding.
 
 Heatmap, stacked bar, box plot, and missing-value chart rendering remain outside M5.1 and will be
 added only when required by the dashboard vertical slice.

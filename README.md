@@ -8,6 +8,10 @@ workspace** is implemented and undergoing live integration validation. Product a
 are captured in [Spec.md](./Spec.md), while shared domain language lives in
 [CONTEXT.md](./CONTEXT.md).
 
+Acceptance evidence and remaining Must-tier work are tracked in
+[the MVP acceptance checklist](./docs/mvp-acceptance.md). Implementation and offline tests do not
+replace live model evaluation or clean-environment release verification.
+
 ## Design principles
 
 - The LLM plans and interprets; deterministic tools calculate.

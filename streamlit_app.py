@@ -13,8 +13,16 @@ from dotenv import load_dotenv
 
 from tabular_analytics_agent.application import (
     AnalysisWorkspace,
+    ApplicationError,
     LocalAnalysisApplication,
+    SessionSummary,
     StagedUpload,
+)
+from tabular_analytics_agent.application.exports import (
+    ExportRequest,
+    evidence_query_results,
+    export_query_result_csv,
+    export_verified_insights_json,
 )
 from tabular_analytics_agent.model_gateway import (
     DEFAULT_GEMINI_MODEL,
@@ -68,6 +76,128 @@ def current_workspace() -> AnalysisWorkspace | None:
 def current_state() -> AgentState | None:
     value = st.session_state.get("agent_state")
     return cast(AgentState, value) if isinstance(value, dict) else None
+
+
+_SESSION_WIDGET_KEYS = {
+    "session-selector",
+    "session-open",
+    "session-new",
+    "session-delete-confirm",
+    "session-delete",
+    "dataset-upload",
+    "dataset-sheet",
+    "analysis-question",
+    "semantic-correction",
+    "plan-revision",
+}
+
+
+def reset_session_ui_state() -> None:
+    """Clear workspace, approval, message, and widget state before a session switch."""
+    for key in tuple(st.session_state):
+        if (
+            key in _SESSION_WIDGET_KEYS
+            or key
+            in {
+                "workspace",
+                "agent_state",
+                "messages",
+                "staged_upload",
+            }
+            or str(key).startswith("artifact-")
+        ):
+            st.session_state.pop(key, None)
+
+
+def _reset_session_controls() -> None:
+    for key in (
+        "session-selector",
+        "session-open",
+        "session-delete-confirm",
+        "session-delete",
+    ):
+        st.session_state.pop(key, None)
+
+
+def _session_option_label(summary: SessionSummary) -> str:
+    timestamp = summary.updated_at.astimezone().strftime("%Y-%m-%d %H:%M")
+    return (
+        f"{summary.original_filename} · {summary.status.value} · "
+        f"{timestamp} · {str(summary.session_id)[:8]}"
+    )
+
+
+def clear_delete_confirmation() -> None:
+    st.session_state.pop("session-delete-confirm", None)
+
+
+def render_session_manager(
+    application: LocalAnalysisApplication,
+    workspace: AnalysisWorkspace | None,
+) -> None:
+    """Render the sidebar controls for durable session listing and lifecycle actions."""
+    st.markdown("### Sessions")
+    try:
+        sessions = application.list_sessions()
+    except ApplicationError as exc:
+        st.error(str(exc))
+        sessions = ()
+
+    selected_session_id = None
+    if sessions:
+        session_ids = tuple(summary.session_id for summary in sessions)
+        summaries_by_id = {summary.session_id: summary for summary in sessions}
+        current_id = workspace.session.session_id if workspace else None
+        index = session_ids.index(current_id) if current_id in session_ids else 0
+        selected_session_id = st.selectbox(
+            "Session",
+            session_ids,
+            index=index,
+            format_func=lambda value: _session_option_label(summaries_by_id[value]),
+            key="session-selector",
+            on_change=clear_delete_confirmation,
+        )
+        if st.button("Open session", key="session-open", width="stretch"):
+            try:
+                opened_workspace, state = application.open_session(selected_session_id)
+            except ApplicationError as exc:
+                st.error(str(exc))
+            else:
+                reset_session_ui_state()
+                st.session_state.workspace = opened_workspace
+                st.session_state.agent_state = state or None
+                st.session_state.messages = []
+                st.rerun()
+        confirmed = st.checkbox(
+            f"Permanently delete {summaries_by_id[selected_session_id].original_filename} "
+            f"({str(selected_session_id)[:8]})",
+            key="session-delete-confirm",
+        )
+        if st.button(
+            "Delete session",
+            key="session-delete",
+            disabled=not confirmed,
+            width="stretch",
+        ):
+            try:
+                application.delete_session(selected_session_id)
+            except ApplicationError as exc:
+                st.error(str(exc))
+            else:
+                if workspace and workspace.session.session_id == selected_session_id:
+                    reset_session_ui_state()
+                else:
+                    _reset_session_controls()
+                st.session_state.session_notice = (
+                    "Session and its stored data were permanently deleted."
+                )
+                st.rerun()
+    else:
+        st.caption("No persisted sessions yet.")
+
+    if st.button("New session", key="session-new", width="stretch"):
+        reset_session_ui_state()
+        st.rerun()
 
 
 def set_agent_state(
@@ -140,6 +270,17 @@ def render_plan(state: AgentState, title: str = "Proposed analysis plan") -> Non
                 st.caption("Caveats: " + "; ".join(caveats))
 
 
+def render_metric_mappings(state: AgentState) -> None:
+    mappings = state.get("requested_metric_mappings", [])
+    if mappings:
+        st.caption("Requested metrics and proposed data mapping")
+        st.dataframe(pd.DataFrame(mappings), hide_index=True, width="stretch")
+        st.caption(
+            "Review the meaning of each mapping; source-field checks do not prove "
+            "semantic equivalence."
+        )
+
+
 def resume_agent(
     application: LocalAnalysisApplication,
     workspace: AnalysisWorkspace,
@@ -165,15 +306,26 @@ def render_approval(
         reason = st.text_input(
             "Correction if the proposal is wrong",
             placeholder="Example: revenue means net revenue after returns",
+            key="semantic-correction",
         )
         approve, reject = st.columns(2)
-        if approve.button("Confirm semantics", type="primary", width="stretch"):
+        unavailable = (
+            any(
+                item.get("status") == "unavailable"
+                for item in state.get("requested_metric_mappings", [])
+            )
+            and not proposals
+        )
+        confirmation = (
+            "Accept that this metric is unavailable" if unavailable else "Confirm semantics"
+        )
+        if approve.button(confirmation, type="primary", width="stretch"):
             resume_agent(application, workspace, {"approved": True})
         if reject.button("Reject and clarify", width="stretch", disabled=not reason.strip()):
             resume_agent(
                 application,
                 workspace,
-                {"approved": False, "reason": reason.strip()},
+                {"approved": False, "corrected_request": reason.strip()},
             )
 
     if status == AgentRunStatus.AWAITING_PLAN_APPROVAL:
@@ -181,6 +333,7 @@ def render_approval(
         revision = st.text_input(
             "Optional revision request",
             placeholder="Example: compare medians instead of means",
+            key="plan-revision",
         )
         approve, revise = st.columns(2)
         if approve.button("Approve and run", type="primary", width="stretch"):
@@ -241,6 +394,51 @@ def render_completed_analysis(
         st.info(f"No chart candidate was published: {artifact_error}")
     else:
         application.publish_candidates(workspace, state)
+    render_exports(workspace, state)
+
+
+def render_exports(workspace: AnalysisWorkspace, state: AgentState) -> None:
+    if not state.get("query_results") and not state.get("statistical_results"):
+        return
+    try:
+        request = ExportRequest.from_state(
+            session=workspace.session,
+            profile=workspace.data_profile,
+            state=state,
+        )
+        # Validate the complete evidence binding before offering any download.
+        metadata = export_verified_insights_json(request)
+        csv_results = evidence_query_results(request)
+    except ValueError:
+        st.warning(
+            "Export is unavailable: the saved results do not match the current verified evidence."
+        )
+        return
+    with st.expander("Download verified results"):
+        st.download_button(
+            "Download evidence JSON",
+            metadata,
+            file_name=f"analysis-{workspace.session.session_id}.json",
+            mime="application/json",
+            key=f"export-json-{workspace.session.session_id}",
+        )
+        for result in csv_results:
+            st.download_button(
+                f"Download result CSV ({str(result.query_id)[:8]})",
+                export_query_result_csv(result),
+                file_name=f"result-{result.query_id}.csv",
+                mime="text/csv",
+                key=f"export-csv-{result.query_id}",
+            )
+            if result.truncated:
+                st.warning(
+                    "This CSV contains only the bounded rows returned by the query, "
+                    "not the full dataset."
+                )
+        st.caption(
+            "CSV text cells and headers that could execute spreadsheet formulas are prefixed "
+            "with an apostrophe. JSON excludes model prompts and traces."
+        )
 
 
 def render_artifact(
@@ -275,14 +473,26 @@ def render_analyze_tab(
 ) -> None:
     render_dataset_summary(workspace)
     state = current_state()
+    if state and state.get("session_id") not in (None, str(workspace.session.session_id)):
+        st.error(
+            "The current result belongs to another session. "
+            "Open the session again to restore it safely."
+        )
+        return
     for message in st.session_state.get("messages", []):
         with st.chat_message(message["role"]):
             st.write(message["content"])
 
     if state:
+        render_metric_mappings(state)
         render_approval(application, workspace, state)
         if state.get("status") == AgentRunStatus.COMPLETED:
             render_completed_analysis(application, workspace, state)
+        elif state.get("status") == AgentRunStatus.REFUSED:
+            st.warning(
+                state.get("refusal_reason")
+                or "This request cannot be supported with the current data."
+            )
         elif state.get("status") == AgentRunStatus.REJECTED:
             st.warning(state.get("error") or "The analysis plan was rejected.")
         elif state.get("status") == AgentRunStatus.FAILED:
@@ -304,6 +514,7 @@ def render_analyze_tab(
     prompt = st.chat_input(
         "Ask a question about this dataset",
         disabled=waiting,
+        key="analysis-question",
     )
     if prompt:
         st.session_state.setdefault("messages", []).append({"role": "user", "content": prompt})
@@ -390,7 +601,11 @@ def render_upload(application: LocalAnalysisApplication) -> None:
         "Upload a CSV or XLSX file, approve the analysis plan, and curate verified charts into "
         "your dashboard. Dataset values stay in deterministic local tools."
     )
-    uploaded = st.file_uploader("Upload a dataset", type=["csv", "xlsx"])
+    uploaded = st.file_uploader(
+        "Upload a dataset",
+        type=["csv", "xlsx"],
+        key="dataset-upload",
+    )
     if uploaded and st.button("Inspect file", type="primary"):
         with st.spinner("Inspecting file structure and safety limits…"):
             st.session_state.staged_upload = application.stage_upload(
@@ -410,7 +625,7 @@ def render_upload(application: LocalAnalysisApplication) -> None:
         st.warning(warning)
     sheet_name = None
     if inspection.sheets:
-        sheet_name = st.selectbox("Worksheet", inspection.sheets)
+        sheet_name = st.selectbox("Worksheet", inspection.sheets, key="dataset-sheet")
     if st.button("Ingest and profile", type="primary"):
         with st.spinner("Creating an immutable source and profiling the working dataset…"):
             st.session_state.workspace = application.ingest(staged, sheet_name=sheet_name)
@@ -430,17 +645,16 @@ def main() -> None:
         st.caption("Add GOOGLE_API_KEY to .env, then restart Streamlit.")
         st.stop()
 
+    if notice := st.session_state.pop("session_notice", None):
+        st.info(notice)
     workspace = current_workspace()
     with st.sidebar:
         st.markdown("### Tabular Analytics Agent")
         st.caption(f"Model: {model_id}")
+        render_session_manager(application, workspace)
         if workspace:
             st.caption(f"Session: {str(workspace.session.session_id)[:8]}")
             st.caption(f"Dataset: {workspace.dataset_handle.dataset.original_filename}")
-            if st.button("Start another dataset", width="stretch"):
-                for key in ("workspace", "agent_state", "messages", "staged_upload"):
-                    st.session_state.pop(key, None)
-                st.rerun()
 
     if workspace is None:
         render_upload(application)

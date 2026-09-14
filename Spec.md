@@ -523,7 +523,7 @@ Each case declares its expected outcome — answered with Verified Insights, ans
 
 ### 17.3 Evaluation process
 
-Grading version 2 binds expected query values to a metric (or an explicitly allowed alias) and optional group identity; statistical metrics use their exact metric identifiers. Insight coverage requires a persisted assertion operand and evidence from the same successful Tool Action/result, not merely a matching number elsewhere. Profile cases declare concrete expected facts. Failed runs and rejected insight drafts do not count as safe refusals. Until a typed refusal outcome is persisted, refusal-only cases remain failing rather than receiving credit for an analysis error. Earlier grading reports are not directly comparable with version 2. This deterministic grader does not replace semantic review of metric meaning, filters, or the rendered UI.
+Grading version 2 binds expected query values to a metric (or an explicitly allowed alias) and optional group identity; statistical metrics use their exact metric identifiers. Insight coverage requires a persisted assertion operand and evidence from the same successful Tool Action/result, not merely a matching number elsewhere. Profile cases declare concrete expected facts. Failed runs and rejected insight drafts do not count as safe refusals. The explicit unavailable-metric refusal requires its typed code, reason, and unavailable mapping; other failure categories, including insufficient-sample execution errors, do not receive refusal credit. Earlier grading reports are not directly comparable with version 2. This deterministic grader does not replace semantic review of metric meaning, filters, or the rendered UI.
 
 1. Smoke stage: at least 10 cases across at least 3 datasets, including Vietnamese headers, dirty data with prompt-injection text, and a refusal case, each run 3 times.
 2. Error analysis: read failed runs and their traces, group failures by cause, and fix the most frequent cause first.
@@ -630,7 +630,7 @@ The MVP is complete when:
 8. The user can create, refine, and pin valid dashboard artifacts.
 9. A persisted session can be resumed and completely deleted.
 10. The application safely refuses unsupported or unverifiable requests.
-11. Automated evaluation meets every quality gate in Section 17.3.
+11. Automated evaluation meets every quality gate in Section 17.4.
 12. Docker build, tests, linting, and type checking pass from a clean environment.
 13. No secret or real user dataset is committed.
 14. Product limitations are explicitly documented.
@@ -672,6 +672,10 @@ Targeted amendments based on live Gemini smoke runs. Decisions from v1.0 remain 
 - Added the Tool Catalog, Insight Assertion contract, and Configuration reference (Section 25).
 
 Known gaps at v1.1: session listing, resume, and deletion in the UI; goal suggestions; export; Should-tier charts; extracting SQL filters into Evidence Trails; environment-configurable resource limits and execution budgets; and a quota-aware model gateway.
+
+Implementation follow-up: session listing/open/deletion and verified-result CSV/JSON downloads are
+now implemented, with offline integration acceptance tracked in `docs/mvp-acceptance.md`. This
+does not waive live evaluation, full Streamlit acceptance, or clean-environment release checks.
 
 ## 25. Implementation Contracts
 
