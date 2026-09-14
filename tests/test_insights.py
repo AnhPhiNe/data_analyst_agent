@@ -238,6 +238,44 @@ def test_reporting_a_group_by_label_is_unsupported() -> None:
     assert "GROUP BY label" in publication.reason
 
 
+def test_query_claim_and_evidence_name_sql_filters() -> None:
+    profile, action, _ = context()
+    result = QueryResult(
+        query_id=uuid4(),
+        dataset_id=profile.dataset.dataset_id,
+        working_dataset_version=1,
+        sql="SELECT COUNT(*) AS row_count FROM dataset WHERE revenue >= 100",
+        columns=(QueryColumn(name="row_count", data_type="BIGINT"),),
+        rows=((2,),),
+        row_count=1,
+        truncated=False,
+        duration_ms=1,
+        filters=("revenue >= 100",),
+    )
+    filtered_action = action.model_copy(
+        update={
+            "inputs": {**action.inputs, "required_fields": ["revenue"]},
+            "output_ref": f"query-result:{result.query_id}",
+        }
+    )
+
+    publication = publish_insight(
+        assertion=InsightAssertion(
+            operator=InsightOperator.REPORTS, left_metric="row[0].row_count"
+        ),
+        evidence_metrics=("row[0].row_count",),
+        caveats=(),
+        profile=profile,
+        action=filtered_action,
+        result=result,
+        current_working_dataset_version=1,
+    )
+
+    assert isinstance(publication, VerifiedInsight)
+    assert publication.claim == "Row count where revenue >= 100 is 2."
+    assert publication.evidence.filters == ("revenue >= 100",)
+
+
 def test_missing_metric_and_stale_dataset_become_unsupported_claims() -> None:
     profile, action, result = context()
     publication = publish_insight(
@@ -395,7 +433,7 @@ def test_correlation_p_value_names_its_test_and_preserves_assertion(
     )
 
     assert isinstance(publication, VerifiedInsight)
-    assert "pearson correlation" in publication.claim.lower()
+    assert "pearson correlation between revenue and score" in publication.claim.lower()
     assert "spearman" not in publication.claim.lower()
     assert publication.assertion == assertion
     restored = VerifiedInsight.model_validate_json(publication.model_dump_json())

@@ -58,6 +58,8 @@ class QueryInspection(DataModel):
     referenced_columns: tuple[str, ...]
     has_wildcard: bool = False
     group_by_columns: tuple[str, ...] = ()
+    unaliased_outputs: tuple[str, ...] = ()
+    filters: tuple[str, ...] = ()
 
 
 class QueryResult(DataModel):
@@ -71,6 +73,7 @@ class QueryResult(DataModel):
     truncated: bool
     duration_ms: int = Field(ge=0)
     group_by_columns: tuple[str, ...] = ()
+    filters: tuple[str, ...] = ()
 
     @model_validator(mode="after")
     def validate_shape(self) -> QueryResult:

@@ -937,7 +937,7 @@ def test_agent_records_unverifiable_draft_as_unsupported_claim(tmp_path: Path) -
         right_metric=None,
         evidence_metrics=["row[9].revenue"],
     )
-    gateway = FakeModelGateway([goal_output(), plan_output(), tool_output(), bad_draft])
+    gateway = FakeModelGateway([goal_output(), plan_output(), tool_output(), bad_draft, bad_draft])
     agent = AgentOrchestrator(gateway, core, checkpointer=InMemorySaver())
 
     agent.start(request)
@@ -947,6 +947,51 @@ def test_agent_records_unverifiable_draft_as_unsupported_claim(tmp_path: Path) -
     assert completed["verified_insights"] == []
     assert completed["unsupported_claims"][0]["status"] == "unsupported"
     assert "Missing deterministic evidence metrics" in completed["unsupported_claims"][0]["reason"]
+    # The unknown identifier is sent back once so the model can copy it exactly.
+    assert "not in the catalog" in gateway.requests[4].prompt
+    assert "row[9].revenue" in gateway.requests[4].prompt
+    assert [trace["task"] for trace in completed["model_traces"][-2:]] == [
+        "insight_draft",
+        "insight_draft",
+    ]
+
+
+def test_unaliased_calculated_sql_output_is_repaired_before_execution(tmp_path: Path) -> None:
+    core, request = run_request(tmp_path)
+    gateway = FakeModelGateway(
+        [
+            goal_output(),
+            plan_output(),
+            tool_output("SELECT region, SUM(revenue) FROM dataset GROUP BY region"),
+            tool_output(),
+            insight_output(),
+        ]
+    )
+    agent = AgentOrchestrator(gateway, core, checkpointer=InMemorySaver())
+
+    agent.start(request)
+    completed = agent.resume(request.session_id, True)
+
+    assert completed["status"] == AgentRunStatus.COMPLETED
+    assert completed["tool_repair_count"] == 1
+    assert len(completed["tool_actions"]) == 1
+    assert "snake_case alias" in gateway.requests[3].prompt
+
+
+def test_sql_plan_step_without_fields_is_replanned(tmp_path: Path) -> None:
+    core, request = run_request(tmp_path)
+    empty_plan = plan_output()
+    steps = empty_plan["steps"]
+    assert isinstance(steps, list)
+    assert isinstance(steps[0], dict)
+    steps[0]["required_fields"] = []
+    gateway = FakeModelGateway([goal_output(), empty_plan, plan_output()])
+    agent = AgentOrchestrator(gateway, core, checkpointer=InMemorySaver())
+
+    paused = agent.start(request)
+
+    assert paused["status"] == AgentRunStatus.AWAITING_PLAN_APPROVAL
+    assert "must list the exact dataset fields" in gateway.requests[2].prompt
 
 
 def test_tool_request_cannot_expand_beyond_approved_fields(tmp_path: Path) -> None:
@@ -1060,7 +1105,7 @@ def test_dynamic_column_selector_cannot_bypass_approved_fields(tmp_path: Path) -
             plan_output(required_fields=["revenue"]),
             tool_output("SELECT revenue, COLUMNS('email') FROM dataset"),
             tool_output("SELECT revenue FROM dataset ORDER BY revenue"),
-            insight_output(),
+            insight_output(evidence_metrics=["row[0].revenue", "row[1].revenue"]),
         ]
     )
     agent = AgentOrchestrator(gateway, core, checkpointer=InMemorySaver())

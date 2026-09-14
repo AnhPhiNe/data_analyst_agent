@@ -205,7 +205,7 @@ def publish_insight(
             working_dataset_version=action.working_dataset_version,
             semantic_annotation_fingerprint=semantic_annotation_fingerprint(semantic_annotations),
             source_fields=source_fields,
-            filters=_filters(action),
+            filters=_filters(action, result),
             source_row_count=profile.row_count,
             result_row_count=_result_row_count(result),
             missing_data_handling=_missing_data_handling(result),
@@ -280,7 +280,9 @@ def _source_fields(action: ToolAction, result: EvidenceResult) -> tuple[str, ...
     return tuple(str(field) for field in raw)
 
 
-def _filters(action: ToolAction) -> tuple[str, ...]:
+def _filters(action: ToolAction, result: EvidenceResult) -> tuple[str, ...]:
+    if isinstance(result, QueryResult) and result.filters:
+        return result.filters
     raw = action.inputs.get("filters", ())
     if not isinstance(raw, (list, tuple)):
         return ()
@@ -487,17 +489,20 @@ def _display_metric(metric: str, result: EvidenceResult) -> str:
         "welch_t": "Welch t statistic",
     }
     if metric in metric_labels:
-        return metric_labels[metric]
+        if metric in {"adjusted_alpha", "p_value"}:
+            return metric_labels[metric]
+        return metric_labels[metric] + _statistical_scope(result)
     row_match = re.fullmatch(r"row\[(\d+)]\.(.+)", metric)
     if row_match:
         row_index = int(row_match.group(1))
         column = row_match.group(2)
         context = _row_context(result, row_index, column)
+        scope = _query_scope(result)
         if context:
-            return f"{_humanize_identifier(column)} for {context}"
+            return f"{_humanize_identifier(column)} for {context}{scope}"
         if isinstance(result, QueryResult) and result.row_count == 1:
-            return _humanize_identifier(column)
-        return f"{_humanize_identifier(column)} in result row {row_index + 1}"
+            return f"{_humanize_identifier(column)}{scope}"
+        return f"{_humanize_identifier(column)} in result row {row_index + 1}{scope}"
     group_match = re.fullmatch(r"group\[([^]]+)]\.(mean|median)", metric)
     if group_match:
         statistic = group_match.group(2).capitalize()
@@ -512,6 +517,23 @@ def _display_metric(metric: str, result: EvidenceResult) -> str:
         field = _humanize_identifier(field_metric_match.group(1)).lower()
         return f"{statistic} {field}"
     return _humanize_identifier(metric)
+
+
+def _statistical_scope(result: EvidenceResult) -> str:
+    """Name the two related fields, for example ``between Sleep_Hours and Exam_Score``."""
+    if not isinstance(result, StatisticalResult):
+        return ""
+    x_field, y_field = result.parameters.get("x_field"), result.parameters.get("y_field")
+    if isinstance(x_field, str) and isinstance(y_field, str):
+        return f" between {x_field} and {y_field}"
+    return ""
+
+
+def _query_scope(result: EvidenceResult) -> str:
+    """Name the SQL filters that restrict a query result, for example ``where score >= 60``."""
+    if not isinstance(result, QueryResult) or not result.filters:
+        return ""
+    return f" where {' and '.join(result.filters)}"
 
 
 def _humanize_identifier(value: str) -> str:

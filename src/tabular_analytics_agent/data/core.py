@@ -244,6 +244,8 @@ class TabularDataCore:
             referenced_columns=analysis.referenced_columns,
             has_wildcard=analysis.has_wildcard,
             group_by_columns=analysis.group_by_columns,
+            unaliased_outputs=analysis.unaliased_outputs,
+            filters=analysis.filters,
         )
 
     def query(
@@ -311,6 +313,7 @@ class TabularDataCore:
                 for name in inspection.group_by_columns
                 if any(column.name == name for column in columns)
             ),
+            filters=inspection.filters,
         )
 
     def _inspect_xlsx(self, path: Path) -> tuple[str, ...]:
@@ -506,7 +509,11 @@ class TabularDataCore:
             )
             if max_frequency / non_missing >= 0.95:
                 warnings.append("near-constant field (>=95% same value)")
-        if non_missing and unique_count == non_missing:
+        if (
+            non_missing >= _MIN_IDENTIFIER_ROWS
+            and unique_count == non_missing
+            and (is_text or normalized_type in _INTEGER_TYPES)
+        ):
             warnings.append("identifier-like unique field")
         if row_count and missing_count / row_count >= 0.5:
             warnings.append("high missingness")
@@ -753,6 +760,23 @@ def _normalize_scalar(value: Any) -> str | int | float | bool | None:
     if isinstance(value, (date, datetime)):
         return value.isoformat()
     return str(value)
+
+
+# Uniqueness says little about a tiny table, and continuous measures are naturally unique.
+_MIN_IDENTIFIER_ROWS = 20
+_INTEGER_TYPES = frozenset(
+    {
+        "TINYINT",
+        "SMALLINT",
+        "INTEGER",
+        "BIGINT",
+        "HUGEINT",
+        "UTINYINT",
+        "USMALLINT",
+        "UINTEGER",
+        "UBIGINT",
+    }
+)
 
 
 def _quote_identifier(value: str) -> str:

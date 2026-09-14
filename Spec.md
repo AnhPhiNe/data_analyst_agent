@@ -1,6 +1,6 @@
 # Tabular Analytics Agent — Product and Technical Specification
 
-**Status:** Approved — v1.2 targeted amendments (see Section 24)
+**Status:** Approved — v1.3 targeted amendments (see Section 24)
 **Target:** Local-first MVP and AI Engineer portfolio project
 **Primary interface:** Streamlit
 **Last updated:** 2026-09-14
@@ -216,7 +216,7 @@ Every Verified Insight contains:
 
 If required evidence is missing or validation fails, the conclusion is an Unsupported Claim and must not be displayed as a Verified Insight. A malformed insight draft becomes an Unsupported Claim without discarding the other drafts of the same run.
 
-Row-level values are described by their SQL `GROUP BY` keys (for example `year = 2024`); ungrouped results fall back to their text columns, and single-row results omit row positions.
+Row-level values are described by their SQL `GROUP BY` keys (for example `year = 2024`); ungrouped results fall back to their text columns, and single-row results omit row positions. Claims about filtered query results name the SQL `WHERE`/`HAVING` conditions, which are also recorded as Evidence Trail filters, and statistics that relate two fields name both fields.
 
 ### FR-11 — Charts and dashboard
 
@@ -478,7 +478,8 @@ Limits must be configurable and visible in failure messages.
 - Show users a plain-language failure message with a next step; keep technical details in a collapsed view and in the audit trail.
 - Classify terminal failures as provider errors (quota, overload, timeout) or analysis errors so that evaluation does not count provider outages as agent mistakes.
 - A new request in the same Analysis Session must not inherit errors or per-run results from an earlier request; confirmed Semantic Annotations persist.
-- An Analysis Plan that references unknown field names is regenerated with the exact error, within the repair budget of Section 14.3. Field names are compared after Unicode NFC normalization and case folding; the agent never guesses a different field.
+- An Analysis Plan that references unknown field names is regenerated with the exact error, within the repair budget of Section 14.3. Field names are compared after Unicode NFC normalization and case folding; the agent never guesses a different field. A SQL step that lists no required fields is regenerated the same way.
+- An insight draft that references metric identifiers absent from its evidence is regenerated once with those identifiers; drafts that still fail become Unsupported Claims. A query rejected by a Verification Gate reports which gate failed and why.
 
 ## 16. Observability and Reproducibility
 
@@ -689,13 +690,21 @@ Synchronizes the specification with the implemented metric grounding, session li
 
 Known gaps at v1.2: goal suggestions (Section 6, step 5 — Must-tier, not implemented); live evaluation of the metric-mapping prompt and the Section 17.4 gates; manual Streamlit acceptance; Should-tier charts and HTML report export; extracting SQL filters into Evidence Trails; environment-configurable resource limits and execution budgets; a quota-aware model gateway; Milestone 6 hardening evidence; Docker packaging. Acceptance status is tracked in `docs/mvp-acceptance.md`.
 
+### v1.3 — 2026-09-14
+
+Amendments from the first manual Streamlit acceptance session. A Vietnamese header copied into an unaliased SQL expression was garbled by the model, so a correct result produced no Verified Insight.
+
+- Calculated SQL outputs require ASCII identifier aliases; query results record their filters (Section 25.1).
+- Claims name SQL filters and the two related fields of a statistic (FR-10).
+- SQL steps without required fields are replanned, insight drafts with unknown metric identifiers are regenerated once, and Verification Gate failures name the failed gate (Section 15).
+
 ## 25. Implementation Contracts
 
 ### 25.1 Tool Catalog
 
 | Tool | Input | Output | Constraints |
 |---|---|---|---|
-| `read_only_sql` | One DuckDB `SELECT` or `WITH ... SELECT` over the single table named `dataset`; its source columns must equal the approved step's `required_fields` | `QueryResult`: columns, rows, row count, truncation flag, normalized SQL, and `GROUP BY` output columns | No wildcard projections, schema catalogs, external-access functions, or other tables |
+| `read_only_sql` | One DuckDB `SELECT` or `WITH ... SELECT` over the single table named `dataset`; its source columns must equal the approved step's `required_fields`; every calculated output column needs a short ASCII identifier alias such as `avg_salary` | `QueryResult`: columns, rows, row count, truncation flag, normalized SQL, `GROUP BY` output columns, and `WHERE`/`HAVING` filters | No wildcard projections, schema catalogs, external-access functions, or other tables |
 | `statistical_analysis` | The approved operation plus the parameters its rule requires (the operation rule table in `statistics.models`) | `StatisticalResult`: estimates, test statistic, p-value, adjusted alpha, effect size, assumption checks, and warnings | Runs on a deterministic reservoir sample of at most the configured query row limit |
 
 Questions fully covered by the Data Profile are answered without a tool (Section 6, step 7).

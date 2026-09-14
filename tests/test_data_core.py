@@ -134,6 +134,47 @@ def test_query_result_reports_group_by_output_columns(tmp_path: Path) -> None:
     assert ungrouped.group_by_columns == ()
 
 
+def test_query_inspection_reports_unaliased_outputs_and_filters(tmp_path: Path) -> None:
+    core = TabularDataCore(tmp_path / "session")
+    handle = ingest_tiny_sales(core, tmp_path)
+
+    inspection = core.inspect_query(
+        handle,
+        'SELECT region, AVG(revenue), COUNT(*) AS "Số đơn", SUM(revenue) AS total '
+        "FROM dataset WHERE revenue >= 100 GROUP BY region HAVING COUNT(*) > 0",
+    )
+    plain = core.inspect_query(handle, 'SELECT region, revenue AS "Doanh thu" FROM dataset')
+    result = core.query(handle, "SELECT COUNT(*) AS row_count FROM dataset WHERE revenue >= 100")
+
+    assert [item.split(" AS ")[0] for item in inspection.unaliased_outputs] == [
+        "AVG(revenue)",
+        "COUNT(*)",
+    ]
+    assert inspection.filters == ("revenue >= 100", "COUNT(*) > 0")
+    assert plain.unaliased_outputs == ()
+    assert plain.filters == ()
+    assert result.filters == ("revenue >= 100",)
+
+
+def test_identifier_warning_skips_tiny_tables_and_continuous_measures(tmp_path: Path) -> None:
+    rows = "\n".join(f"{index},{index * 1.5}" for index in range(1, 26))
+    small = write_csv(tmp_path / "small.csv", "code,score\n1,1.5\n2,3.0\n3,4.5\n")
+    large = write_csv(tmp_path / "large.csv", f"code,score\n{rows}\n")
+    small_core = TabularDataCore(tmp_path / "small-session")
+    large_core = TabularDataCore(tmp_path / "large-session")
+
+    small_fields = {
+        field.name: field for field in small_core.profile(small_core.ingest(small)).fields
+    }
+    large_fields = {
+        field.name: field for field in large_core.profile(large_core.ingest(large)).fields
+    }
+
+    assert "identifier-like unique field" not in small_fields["code"].warnings
+    assert "identifier-like unique field" in large_fields["code"].warnings
+    assert "identifier-like unique field" not in large_fields["score"].warnings
+
+
 def test_query_inspection_does_not_treat_ordered_output_alias_as_source_field(
     tmp_path: Path,
 ) -> None:

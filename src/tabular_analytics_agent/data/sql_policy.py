@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 
 import sqlglot
@@ -26,6 +27,7 @@ _DENIED_FUNCTIONS = {
     "read_parquet",
     "sqlite_scan",
 }
+_OUTPUT_ALIAS = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 
 
 @dataclass(frozen=True, slots=True)
@@ -34,6 +36,8 @@ class SQLAnalysis:
     referenced_columns: tuple[str, ...]
     has_wildcard: bool
     group_by_columns: tuple[str, ...] = ()
+    unaliased_outputs: tuple[str, ...] = ()
+    filters: tuple[str, ...] = ()
 
 
 def validate_read_only_sql(sql: str, *, allowed_table: str) -> str:
@@ -136,6 +140,35 @@ def analyze_read_only_sql(sql: str, *, allowed_table: str) -> SQLAnalysis:
             for star in statement.find_all(exp.Star)
         ),
         group_by_columns=_group_by_output_columns(statement),
+        unaliased_outputs=_unaliased_outputs(statement),
+        filters=_filters(statement),
+    )
+
+
+def _unaliased_outputs(statement: exp.Query) -> tuple[str, ...]:
+    """Return calculated outer projections that lack a short ASCII identifier alias.
+
+    Plain source columns keep their names. Models copy long expression or non-ASCII output
+    names unreliably, so calculated outputs need a simple alias to be referenced as evidence.
+    """
+    if not isinstance(statement, exp.Select):
+        return ()
+    return tuple(
+        projection.sql(dialect="duckdb")
+        for projection in statement.expressions
+        if not isinstance(projection.unalias(), (exp.Column, exp.Star))
+        and not (isinstance(projection, exp.Alias) and _OUTPUT_ALIAS.fullmatch(projection.alias))
+    )
+
+
+def _filters(statement: exp.Query) -> tuple[str, ...]:
+    """Return the outer query's WHERE and HAVING conditions as DuckDB SQL."""
+    if not isinstance(statement, exp.Select):
+        return ()
+    return tuple(
+        clause.this.sql(dialect="duckdb")
+        for clause in (statement.args.get("where"), statement.args.get("having"))
+        if isinstance(clause, (exp.Where, exp.Having))
     )
 
 

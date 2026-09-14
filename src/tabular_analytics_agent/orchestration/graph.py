@@ -6,6 +6,7 @@ import hashlib
 import json
 import unicodedata
 from collections.abc import Callable
+from dataclasses import replace
 from datetime import UTC, datetime
 from typing import Any, Literal, cast
 from uuid import UUID, uuid4
@@ -223,7 +224,8 @@ def _tool_payload_guidance(step: PlanStep, handle: DatasetHandle) -> str:
         "Write one DuckDB SELECT query. The only table is named exactly "
         f"{handle.table_name} (write FROM {handle.table_name}); no other table exists. The "
         "step's required_fields are the only source columns allowed, including in filters and "
-        "grouping. Output aliases and calculated metrics are not source columns. For a row "
+        "grouping. Give every calculated column a short ASCII snake_case alias, for example "
+        "AVG(x) AS avg_x or COUNT(*) AS row_count; aliases are not source columns. For a row "
         "count use COUNT(*) without adding an unapproved identifier column."
     )
 
@@ -273,12 +275,15 @@ def build_agent_graph(
                 "deviation, minimum, quartiles, median, maximum), for example 'which columns are "
                 "there', 'mean of each column', or 'which columns have missing values'. Use false "
                 "for filtered, grouped, or derived calculations such as 'average revenue by "
-                "region'. "
+                "region'. If the request names a column that does not exist, return a "
+                "clarification_question listing the available columns. "
                 "For every metric the user explicitly requests, add one requested_metric_mappings "
                 "entry with the user's original requested_label and a status: direct when "
                 "source_fields are the exact fields that measure it, derived when source_fields "
                 "list every field used and derivation states a reproducible formula, or "
                 "unavailable when no field measures it (empty source_fields, optional reason). "
+                "Aggregating one field (average, sum, count, minimum, or maximum) is direct; use "
+                "derived only for a formula that combines or transforms fields. "
                 "Never map a requested metric to a field that measures something else, even when "
                 "it is the closest available field. When a metric is unavailable or ambiguous and "
                 "the user could resolve it, also return a clarification_question naming that "
@@ -289,7 +294,7 @@ def build_agent_graph(
             ),
             response_schema=GoalInterpretation,
             system_instruction=_SYSTEM_INSTRUCTION,
-            prompt_template_version="semantic-v8",
+            prompt_template_version="semantic-v9",
             timeout_seconds=_model_call_timeout_seconds(state, budget, clock()),
         )
         trace: ModelCallTrace | None = None
@@ -509,6 +514,7 @@ def build_agent_graph(
                 )
                 for step in response.output.steps
             )
+            _require_sql_step_fields(canonical_steps)
             _validate_plan_metric_grounding(canonical_steps, metric_mappings)
             plan = AnalysisPlan(
                 plan_id=uuid4(),
@@ -521,8 +527,8 @@ def build_agent_graph(
                 raise _budget_error(plan.budget)
         except (ModelGatewayError, ValidationError, ValueError) as exc:
             repairs = state.get("plan_repair_count", 0)
-            if isinstance(exc, _UnknownFieldError) and repairs < budget.max_repairs_per_action:
-                # A misspelled field name is repaired by replanning with the exact error.
+            if isinstance(exc, _PlanRepairError) and repairs < budget.max_repairs_per_action:
+                # A misspelled or missing field list is repaired by replanning with the exact error.
                 feedback = (
                     f"{exc}. Use field names exactly as listed in the dataset metadata; if a "
                     "requested measure does not exist, do not substitute another field."
@@ -620,7 +626,7 @@ def build_agent_graph(
                 else StatisticalToolRequestDraft
             ),
             system_instruction=_SYSTEM_INSTRUCTION,
-            prompt_template_version="tool-request-v5",
+            prompt_template_version="tool-request-v6",
             timeout_seconds=_model_call_timeout_seconds(state, plan.budget, clock()),
         )
         trace: ModelCallTrace | None = None
@@ -825,7 +831,14 @@ def build_agent_graph(
             update["tool_repair_count"] = 0
             update["error"] = ""
         if status == AgentRunStatus.FAILED:
-            update["error"] = "Deterministic verification rejected the query evidence"
+            failed_checks = "; ".join(
+                f"{check.name}: {check.message}"
+                for check in verification.checks
+                if not check.passed
+            )
+            update["error"] = (
+                f"Deterministic verification rejected the tool evidence: {failed_checks}"
+            )
         if status == AgentRunStatus.FAILED:
             update.update(_pause_execution_budget(state, clock()))
         return update
@@ -856,16 +869,12 @@ def build_agent_graph(
             ),
             response_schema=InsightDraftBatch,
             system_instruction=_SYSTEM_INSTRUCTION,
-            prompt_template_version="insight-v4",
+            prompt_template_version="insight-v5",
             max_output_tokens=2048,
             timeout_seconds=_model_call_timeout_seconds(state, plan.budget, clock()),
         )
         trace: ModelCallTrace | None = None
         try:
-            response = model_gateway.generate_structured(request)
-            trace = response.trace
-            if _run_budget_exceeded(state, plan.budget, clock()):
-                return _failed_state(state, _budget_error(plan.budget), clock())
             actions = {
                 str(action.inputs.get("plan_step_id", "")): action
                 for action in (
@@ -873,6 +882,27 @@ def build_agent_graph(
                 )
                 if action.status is ActionStatus.SUCCEEDED
             }
+            response = model_gateway.generate_structured(request)
+            trace = response.trace
+            traces = [response.trace]
+            unknown_metrics = _unknown_insight_metrics(response.output, actions, state)
+            if unknown_metrics and budget.max_repairs_per_action > 0:
+                # Models can garble long or non-ASCII identifiers; retry once with the exact error.
+                response = model_gateway.generate_structured(
+                    replace(
+                        request,
+                        prompt=(
+                            f"{request.prompt}\nYour previous draft used metric identifiers "
+                            "that are not in the catalog: "
+                            f"{_json_for_prompt(unknown_metrics)}. Copy every identifier "
+                            "character for character from the catalog values."
+                        ),
+                    )
+                )
+                trace = response.trace
+                traces.append(response.trace)
+            if _run_budget_exceeded(state, plan.budget, clock()):
+                return _failed_state(state, _budget_error(plan.budget), clock())
             annotations = tuple(
                 SemanticAnnotation.model_validate(value)
                 for value in state.get("semantic_annotations", [])
@@ -925,10 +955,16 @@ def build_agent_graph(
             if item.status.value == "unsupported"
         ]
         should_propose_artifact = bool(verified and state.get("query_results", []))
+        traced_state: AgentState = state
+        for item in traces:
+            traced_state = {
+                **traced_state,
+                "model_traces": _append_trace(traced_state, item.model_dump(mode="json")),
+            }
         update: AgentState = {
             "verified_insights": verified,
             "unsupported_claims": unsupported,
-            "model_traces": _append_trace(state, response.trace.model_dump(mode="json")),
+            "model_traces": traced_state.get("model_traces", []),
             "status": (
                 AgentRunStatus.PROPOSING_ARTIFACT.value
                 if should_propose_artifact
@@ -1252,8 +1288,49 @@ def _annotation_draft(value: dict[str, Any]) -> SemanticAnnotationDraft:
     return SemanticAnnotationDraft.model_validate(value)
 
 
-class _UnknownFieldError(ValueError):
+class _PlanRepairError(ValueError):
+    """A plan defect that replanning with the exact error can fix."""
+
+
+class _UnknownFieldError(_PlanRepairError):
     """A model referenced a field name that is not in the Data Profile."""
+
+
+def _require_sql_step_fields(steps: tuple[PlanStep, ...]) -> None:
+    empty = [
+        step.step_id
+        for step in steps
+        if step.expected_tool == "read_only_sql" and not step.required_fields
+    ]
+    if empty:
+        raise _PlanRepairError(
+            f"SQL plan steps must list the exact dataset fields they read: {', '.join(empty)}"
+        )
+
+
+def _unknown_insight_metrics(
+    batch: InsightDraftBatch,
+    actions: dict[str, ToolAction],
+    state: AgentState,
+) -> list[str]:
+    """Return draft metric identifiers that do not exist in their step's evidence."""
+    unknown: set[str] = set()
+    for draft in batch.insights:
+        action = actions.get(draft.plan_step_id)
+        if action is None:
+            continue
+        known = {
+            value.metric
+            for value in available_evidence_values(_evidence_result_for_action(state, action))
+        }
+        assertion = draft.assertion
+        referenced = {
+            metric
+            for metric in (assertion.left_metric, assertion.right_metric, *draft.evidence_metrics)
+            if metric
+        }
+        unknown |= referenced - known
+    return sorted(unknown)
 
 
 def _field_key(name: str) -> str:
@@ -1421,6 +1498,12 @@ def _bind_tool_request_to_step(
     inspection = data_core.inspect_query(handle, sql)
     if inspection.has_wildcard:
         raise ValueError("Wildcard projections are not allowed for approved Tool Actions")
+    if inspection.unaliased_outputs:
+        raise ValueError(
+            "Give every calculated output column a short ASCII snake_case alias, for example "
+            'AVG("Unit Price") AS avg_unit_price. Missing or invalid aliases: '
+            + "; ".join(inspection.unaliased_outputs)
+        )
 
     known_fields = {field.name.casefold() for field in profile.fields}
     referenced_source_fields = {
