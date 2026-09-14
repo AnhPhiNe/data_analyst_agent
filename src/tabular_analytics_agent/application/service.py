@@ -393,7 +393,8 @@ class LocalAnalysisApplication:
 
     @contextmanager
     def _open_orchestrator(self, workspace: AnalysisWorkspace) -> Iterator[AgentOrchestrator]:
-        self._validate_workspace(workspace, workspace.session.session_id)
+        # Workspaces are validated where they enter from disk (load_workspace); paths used
+        # here are derived from the session id and stay confined by _session_path.
         session_directory = self._session_directory(workspace.session.session_id)
         checkpoint_path = self._session_path(
             workspace.session.session_id,
@@ -407,7 +408,6 @@ class LocalAnalysisApplication:
             )
 
     def _save_workspace(self, workspace: AnalysisWorkspace) -> None:
-        self._validate_workspace(workspace, workspace.session.session_id)
         path = self._workspace_path(workspace.session.session_id)
         path.parent.mkdir(parents=True, exist_ok=True)
         temporary = path.with_name(f".workspace-{uuid4().hex[:8]}.tmp")
