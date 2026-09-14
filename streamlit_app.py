@@ -319,7 +319,7 @@ def render_approval(
             choice = (
                 "accept that this metric cannot be answered from this dataset"
                 if unavailable
-                else "continue with the original question"
+                else "dismiss this question"
             )
             st.markdown(
                 "**Choose one:** rewrite the question using the columns below and submit it, "
@@ -339,14 +339,17 @@ def render_approval(
             key="semantic-correction",
         )
         approve, reject = st.columns(2)
-        if unavailable:
-            confirmation = "Accept that this metric is unavailable"
-        elif asks_for_question:
-            confirmation = "Continue with the original question"
+        if asks_for_question and not unavailable:
+            # Continuing would make the agent guess a column the user never named.
+            if approve.button("Dismiss this question", width="stretch"):
+                st.session_state.agent_state = None
+                st.rerun()
         else:
-            confirmation = "Confirm semantics"
-        if approve.button(confirmation, type="primary", width="stretch"):
-            resume_agent(application, workspace, {"approved": True})
+            confirmation = (
+                "Accept that this metric is unavailable" if unavailable else "Confirm semantics"
+            )
+            if approve.button(confirmation, type="primary", width="stretch"):
+                resume_agent(application, workspace, {"approved": True})
         submit_label = "Submit corrected question" if asks_for_question else "Reject and clarify"
         if reject.button(submit_label, width="stretch", disabled=not reason.strip()):
             resume_agent(

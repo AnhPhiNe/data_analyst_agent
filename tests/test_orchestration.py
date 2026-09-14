@@ -947,8 +947,8 @@ def test_agent_records_unverifiable_draft_as_unsupported_claim(tmp_path: Path) -
     completed = agent.resume(request.session_id, True)
 
     assert completed["status"] == AgentRunStatus.COMPLETED
-    # The result table still answers with its verified size when no drafted claim survives.
-    assert [item["claim"] for item in completed["verified_insights"]] == ["Result row count is 2."]
+    # A grouped summary gets no automatic row-count claim when every drafted claim fails.
+    assert completed["verified_insights"] == []
     assert completed["unsupported_claims"][0]["status"] == "unsupported"
     assert "Missing deterministic evidence metrics" in completed["unsupported_claims"][0]["reason"]
     # The unknown identifier is sent back once so the model can copy it exactly.
@@ -996,6 +996,20 @@ def test_sql_plan_step_without_fields_is_replanned(tmp_path: Path) -> None:
 
     assert paused["status"] == AgentRunStatus.AWAITING_PLAN_APPROVAL
     assert "must list the exact dataset fields" in gateway.requests[2].prompt
+
+
+def test_new_request_replaces_a_pending_clarification(tmp_path: Path) -> None:
+    core, request = run_request(tmp_path)
+    gateway = FakeModelGateway([goal_output(with_semantics=True), goal_output(), plan_output()])
+    agent = AgentOrchestrator(gateway, core, checkpointer=InMemorySaver())
+
+    paused = agent.start(request)
+    restarted = agent.start(request)
+
+    assert paused["status"] == AgentRunStatus.AWAITING_SEMANTIC_REVIEW
+    assert restarted["status"] == AgentRunStatus.AWAITING_PLAN_APPROVAL
+    assert restarted["clarification_question"] == ""
+    assert len(gateway.requests) == 3
 
 
 def test_tool_request_cannot_expand_beyond_approved_fields(tmp_path: Path) -> None:

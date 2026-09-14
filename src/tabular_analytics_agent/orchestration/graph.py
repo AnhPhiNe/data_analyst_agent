@@ -228,7 +228,9 @@ def _tool_payload_guidance(step: PlanStep, handle: DatasetHandle) -> str:
         f"{handle.table_name} (write FROM {handle.table_name}); no other table exists. The "
         "step's required_fields are the only source columns allowed, including in filters and "
         "grouping. Give every calculated column a short ASCII snake_case alias, for example "
-        "AVG(x) AS avg_x or COUNT(*) AS row_count; aliases are not source columns. For a row "
+        "AVG(x) AS avg_x or COUNT(*) AS row_count; aliases are not source columns. Keep plain "
+        "source columns, including grouping keys, unaliased so results keep their original "
+        "names. For a row "
         "count use COUNT(*) without adding an unapproved identifier column. To show which "
         "uploaded rows match, select rowid + 1 AS row_number; rowid is the row's zero-based "
         "position in the uploaded file, not a source column."
@@ -631,7 +633,7 @@ def build_agent_graph(
                 else StatisticalToolRequestDraft
             ),
             system_instruction=_SYSTEM_INSTRUCTION,
-            prompt_template_version="tool-request-v7",
+            prompt_template_version="tool-request-v8",
             timeout_seconds=_model_call_timeout_seconds(state, plan.budget, clock()),
         )
         trace: ModelCallTrace | None = None
@@ -970,6 +972,8 @@ def build_agent_graph(
                 if (
                     not isinstance(result, QueryResult)
                     or result.truncated
+                    # A grouped table is a summary, not a row listing; its row count says little.
+                    or result.group_by_columns
                     or source_fields & pii_fields
                 ):
                     continue

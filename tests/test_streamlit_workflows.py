@@ -281,6 +281,36 @@ def test_corrected_request_reinterprets_metric_before_approval(
     assert len(gateway.requests) == 3
 
 
+def test_column_clarification_can_be_dismissed_without_guessing_a_column(
+    ui_workspace: tuple[AppTest, AnalysisWorkspace, LocalAnalysisApplication, FakeModelGateway],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app, _, _, _ = ui_workspace
+    gateway = FakeModelGateway(
+        [
+            {
+                "goal_text": "Show values of a column",
+                "goal_family": "summary",
+                "requested_metric_mappings": [],
+                "semantic_annotations": [],
+                "clarification_question": "Column 'field' does not exist. Which column?",
+            }
+        ]
+    )
+    monkeypatch.setattr(gateway_module, "GeminiModelGateway", lambda settings: gateway)
+    st.cache_resource.clear()
+    app.run()
+    app.chat_input[0].set_value("Which values are in column field?").run()
+    assert app.session_state["agent_state"]["status"] == "awaiting_semantic_review"
+    assert not any(button.label == "Continue with the original question" for button in app.button)
+
+    next(button for button in app.button if button.label == "Dismiss this question").click().run()
+
+    assert not app.exception
+    assert app.session_state["agent_state"] is None
+    assert len(gateway.requests) == 1
+
+
 def test_deleting_current_session_returns_to_upload_and_clears_state(
     ui_workspace: tuple[AppTest, AnalysisWorkspace, LocalAnalysisApplication, FakeModelGateway],
 ) -> None:
