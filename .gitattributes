@@ -1,0 +1,2 @@
+# Evaluation cases pin fixture SHA-256 hashes, so fixture bytes must not be line-ending converted.
+tests/fixtures/** -text
