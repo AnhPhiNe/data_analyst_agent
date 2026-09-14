@@ -1,0 +1,27 @@
+{
+  "case_id": "holdout-sensor-temperature-vibration-correlation-v1",
+  "dataset_path": "tests/fixtures/eval_holdout/sensor_dirty.csv",
+  "dataset_sha256": "ccfb23dbc7fec0a8dfb6388c4234b21eefec9a150fe7587eed3fe203f3c8efb3",
+  "user_request": "Is temperature correlated with vibration?",
+  "goal_family": "relationship",
+  "required_calculations": [
+    {
+      "metric": "pearson_r",
+      "expected": 0.5863913348210765,
+      "absolute_tolerance": 0.001
+    }
+  ],
+  "allowed_fields": [
+    "temperature_c",
+    "vibration"
+  ],
+  "supported_conclusions": [
+    "Temperature and vibration show a moderate positive association that does not establish causation."
+  ],
+  "forbidden_claims": [
+    "cause",
+    "is 99",
+    "of 99",
+    "= 99"
+  ]
+}

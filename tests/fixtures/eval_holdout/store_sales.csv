@@ -1,0 +1,13 @@
+order_date,month,store,product,quantity,unit_price
+2026-01-05,2026-01,Downtown,Coffee,10,3.5
+2026-01-12,2026-01,Mall,Tea,8,2.5
+2026-01-20,2026-01,Downtown,Tea,5,2.5
+2026-01-28,2026-01,Mall,Coffee,12,3.5
+2026-02-03,2026-02,Downtown,Coffee,14,3.5
+2026-02-11,2026-02,Mall,Pastry,6,4.0
+2026-02-19,2026-02,Downtown,Pastry,9,4.0
+2026-02-25,2026-02,Mall,Tea,7,2.5
+2026-03-04,2026-03,Downtown,Coffee,16,3.5
+2026-03-15,2026-03,Mall,Coffee,11,3.5
+2026-03-22,2026-03,Downtown,Tea,6,2.5
+2026-03-30,2026-03,Mall,Pastry,10,4.0

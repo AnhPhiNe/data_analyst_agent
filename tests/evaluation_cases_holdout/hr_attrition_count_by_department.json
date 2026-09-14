@@ -1,0 +1,81 @@
+{
+  "case_id": "holdout-hr-attrition-count-by-department-v1",
+  "dataset_path": "tests/fixtures/eval_holdout/nhan_su_vn.csv",
+  "dataset_sha256": "258baacb07850f3d81447925ef9057ea72849462922b28e2c6e86d26459aa99e",
+  "user_request": "Mỗi phòng ban có bao nhiêu người nghỉ việc?",
+  "goal_family": "summary",
+  "required_calculations": [
+    {
+      "metric": "so_nguoi_nghi_viec",
+      "aliases": [
+        "attrition_count",
+        "count",
+        "count_star()",
+        "so_nghi_viec",
+        "Số người nghỉ việc",
+        "nghi_viec_count",
+        "resigned_count",
+        "num_resigned"
+      ],
+      "group": {
+        "field": "Phòng ban",
+        "value": "Kỹ thuật"
+      },
+      "expected": 1,
+      "absolute_tolerance": 1e-06
+    },
+    {
+      "metric": "so_nguoi_nghi_viec",
+      "aliases": [
+        "attrition_count",
+        "count",
+        "count_star()",
+        "so_nghi_viec",
+        "Số người nghỉ việc",
+        "nghi_viec_count",
+        "resigned_count",
+        "num_resigned"
+      ],
+      "group": {
+        "field": "Phòng ban",
+        "value": "Kinh doanh"
+      },
+      "expected": 2,
+      "absolute_tolerance": 1e-06
+    },
+    {
+      "metric": "so_nguoi_nghi_viec",
+      "aliases": [
+        "attrition_count",
+        "count",
+        "count_star()",
+        "so_nghi_viec",
+        "Số người nghỉ việc",
+        "nghi_viec_count",
+        "resigned_count",
+        "num_resigned"
+      ],
+      "group": {
+        "field": "Phòng ban",
+        "value": "Nhân sự"
+      },
+      "expected": 2,
+      "absolute_tolerance": 1e-06
+    }
+  ],
+  "allowed_fields": [
+    "Phòng ban",
+    "Nghỉ việc",
+    "Mã NV"
+  ],
+  "allowed_filters": [
+    "Nghỉ việc = 'Có'"
+  ],
+  "supported_conclusions": [
+    "Kinh doanh và Nhân sự có nhiều người nghỉ việc nhất."
+  ],
+  "valid_chart_types": [
+    "bar",
+    "table"
+  ]
+}

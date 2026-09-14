@@ -1,0 +1,19 @@
+{
+  "case_id": "holdout-sensor-quality-profile-v1",
+  "dataset_path": "tests/fixtures/eval_holdout/sensor_dirty.csv",
+  "dataset_sha256": "ccfb23dbc7fec0a8dfb6388c4234b21eefec9a150fe7587eed3fe203f3c8efb3",
+  "user_request": "Are there duplicate rows or missing vibration values in this data?",
+  "goal_family": "data_quality",
+  "expected_outcome": "profile",
+  "required_profile_facts": [
+    {
+      "fact": "duplicate_row_count",
+      "expected": 1
+    },
+    {
+      "fact": "missing_count",
+      "field": "vibration",
+      "expected": 2
+    }
+  ]
+}

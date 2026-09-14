@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 from typing import Any
@@ -21,6 +22,7 @@ from tabular_analytics_agent.orchestration import AgentState
 
 ROOT = Path(__file__).resolve().parents[1]
 CASES = ROOT / "tests" / "evaluation_cases"
+HOLDOUT_CASES = ROOT / "tests" / "evaluation_cases_holdout"
 
 
 def load_case(filename: str) -> GoldenCase:
@@ -82,11 +84,18 @@ def grouped_query_state(
 
 
 def test_every_committed_case_is_bound_to_its_dataset() -> None:
-    cases = load_cases(CASES)
+    development = load_cases(CASES)
+    holdout = load_cases(HOLDOUT_CASES)
+    cases = (*development, *holdout)
 
-    assert cases
+    assert development
+    assert holdout
     assert len({case.case_id for case in cases}) == len(cases)
-    assert all((ROOT / case.dataset_path).is_file() for case in cases)
+    for case in cases:
+        content = (ROOT / case.dataset_path).read_bytes()
+        assert hashlib.sha256(content).hexdigest() == case.dataset_sha256, case.case_id
+    # Holdout datasets stay unseen by development cases.
+    assert not {case.dataset_path for case in development} & {case.dataset_path for case in holdout}
 
 
 def test_suite_runs_a_case_through_the_application_and_grades_it(tmp_path: Path) -> None:

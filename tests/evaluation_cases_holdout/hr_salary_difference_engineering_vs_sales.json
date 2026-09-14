@@ -1,0 +1,32 @@
+{
+  "case_id": "holdout-hr-salary-difference-engineering-vs-sales-v1",
+  "dataset_path": "tests/fixtures/eval_holdout/nhan_su_vn.csv",
+  "dataset_sha256": "258baacb07850f3d81447925ef9057ea72849462922b28e2c6e86d26459aa99e",
+  "user_request": "Lương giữa phòng Kỹ thuật và phòng Kinh doanh có khác biệt có ý nghĩa thống kê không?",
+  "goal_family": "comparison",
+  "required_calculations": [
+    {
+      "metric": "group[str:\"K\\u1ef9 thu\\u1eadt\"].mean",
+      "expected": 30.8,
+      "absolute_tolerance": 1e-06
+    },
+    {
+      "metric": "group[str:\"Kinh doanh\"].mean",
+      "expected": 23.8,
+      "absolute_tolerance": 1e-06
+    }
+  ],
+  "allowed_fields": [
+    "Phòng ban",
+    "Lương (triệu)"
+  ],
+  "allowed_filters": [
+    "Phòng ban IN ('Kỹ thuật', 'Kinh doanh')"
+  ],
+  "supported_conclusions": [
+    "Engineering has a higher mean salary, but with five employees per group the difference is not statistically significant at 0.05 (Welch p ≈ 0.12)."
+  ],
+  "forbidden_claims": [
+    "cause"
+  ]
+}

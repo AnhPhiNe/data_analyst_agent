@@ -1,0 +1,69 @@
+{
+  "case_id": "holdout-sales-monthly-quantity-trend-v1",
+  "dataset_path": "tests/fixtures/eval_holdout/store_sales.csv",
+  "dataset_sha256": "e0346e20f692d045105a06352d0e35a623082901d830e530c09c53995f7a6319",
+  "user_request": "How did the total quantity sold change from month to month?",
+  "goal_family": "trend",
+  "required_calculations": [
+    {
+      "metric": "quantity",
+      "aliases": [
+        "total_quantity",
+        "sum_quantity",
+        "quantity_sold",
+        "total_quantity_sold"
+      ],
+      "group": {
+        "field": "month",
+        "value": "2026-01"
+      },
+      "expected": 35,
+      "absolute_tolerance": 1e-06
+    },
+    {
+      "metric": "quantity",
+      "aliases": [
+        "total_quantity",
+        "sum_quantity",
+        "quantity_sold",
+        "total_quantity_sold"
+      ],
+      "group": {
+        "field": "month",
+        "value": "2026-02"
+      },
+      "expected": 36,
+      "absolute_tolerance": 1e-06
+    },
+    {
+      "metric": "quantity",
+      "aliases": [
+        "total_quantity",
+        "sum_quantity",
+        "quantity_sold",
+        "total_quantity_sold"
+      ],
+      "group": {
+        "field": "month",
+        "value": "2026-03"
+      },
+      "expected": 43,
+      "absolute_tolerance": 1e-06
+    }
+  ],
+  "allowed_fields": [
+    "month",
+    "quantity"
+  ],
+  "supported_conclusions": [
+    "Total quantity sold increased each month."
+  ],
+  "forbidden_claims": [
+    "cause"
+  ],
+  "valid_chart_types": [
+    "line",
+    "bar",
+    "table"
+  ]
+}

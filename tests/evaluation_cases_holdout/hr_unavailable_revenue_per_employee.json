@@ -1,0 +1,15 @@
+{
+  "case_id": "holdout-hr-unavailable-revenue-per-employee-v1",
+  "dataset_path": "tests/fixtures/eval_holdout/nhan_su_vn.csv",
+  "dataset_sha256": "258baacb07850f3d81447925ef9057ea72849462922b28e2c6e86d26459aa99e",
+  "user_request": "Doanh thu bình quân mỗi nhân viên của từng phòng ban là bao nhiêu?",
+  "goal_family": "summary",
+  "expected_outcome": "clarification",
+  "acceptable_outcomes": [
+    "refused"
+  ],
+  "forbidden_claims": [
+    "doanh thu",
+    "revenue"
+  ]
+}

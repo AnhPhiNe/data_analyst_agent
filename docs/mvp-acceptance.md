@@ -63,3 +63,7 @@ the outstanding Must-tier flows and reliability gates.
   passed (2 skipped), branch-inclusive coverage 90.14%, Ruff, formatting, and mypy passed. The
   semantic-v8 interpretation prompt has not been evaluated live, and no manual Streamlit
   acceptance has been performed yet; no release acceptance is claimed.
+- Holdout set (2026-09-14): 12 cases on 3 unseen datasets (Vietnamese workforce, English sales
+  with a derived metric, dirty sensor data with prompt-injection text) in
+  `tests/evaluation_cases_holdout/`. Expectations were computed independently with pandas and
+  SciPy and committed before any live run; they must not be edited after model output is seen.

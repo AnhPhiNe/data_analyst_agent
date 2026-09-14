@@ -1,0 +1,19 @@
+{
+  "case_id": "holdout-hr-missing-rating-profile-v1",
+  "dataset_path": "tests/fixtures/eval_holdout/nhan_su_vn.csv",
+  "dataset_sha256": "258baacb07850f3d81447925ef9057ea72849462922b28e2c6e86d26459aa99e",
+  "user_request": "Cột nào đang bị thiếu dữ liệu và thiếu bao nhiêu ô?",
+  "goal_family": "data_quality",
+  "expected_outcome": "profile",
+  "required_profile_facts": [
+    {
+      "fact": "missing_count",
+      "field": "Điểm đánh giá",
+      "expected": 1
+    },
+    {
+      "fact": "row_count",
+      "expected": 14
+    }
+  ]
+}

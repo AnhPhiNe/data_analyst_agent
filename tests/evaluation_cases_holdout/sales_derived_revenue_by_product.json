@@ -1,0 +1,66 @@
+{
+  "case_id": "holdout-sales-derived-revenue-by-product-v1",
+  "dataset_path": "tests/fixtures/eval_holdout/store_sales.csv",
+  "dataset_sha256": "e0346e20f692d045105a06352d0e35a623082901d830e530c09c53995f7a6319",
+  "user_request": "What is total revenue (quantity times unit price) for each product?",
+  "goal_family": "summary",
+  "required_calculations": [
+    {
+      "metric": "revenue",
+      "aliases": [
+        "total_revenue",
+        "sum_revenue",
+        "product_revenue",
+        "revenue_total"
+      ],
+      "group": {
+        "field": "product",
+        "value": "Coffee"
+      },
+      "expected": 220.5,
+      "absolute_tolerance": 1e-06
+    },
+    {
+      "metric": "revenue",
+      "aliases": [
+        "total_revenue",
+        "sum_revenue",
+        "product_revenue",
+        "revenue_total"
+      ],
+      "group": {
+        "field": "product",
+        "value": "Pastry"
+      },
+      "expected": 100.0,
+      "absolute_tolerance": 1e-06
+    },
+    {
+      "metric": "revenue",
+      "aliases": [
+        "total_revenue",
+        "sum_revenue",
+        "product_revenue",
+        "revenue_total"
+      ],
+      "group": {
+        "field": "product",
+        "value": "Tea"
+      },
+      "expected": 65.0,
+      "absolute_tolerance": 1e-06
+    }
+  ],
+  "allowed_fields": [
+    "product",
+    "quantity",
+    "unit_price"
+  ],
+  "supported_conclusions": [
+    "Coffee generates the most revenue."
+  ],
+  "valid_chart_types": [
+    "bar",
+    "table"
+  ]
+}

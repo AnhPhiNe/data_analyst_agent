@@ -1,0 +1,55 @@
+{
+  "case_id": "holdout-sensor-avg-vibration-by-machine-v1",
+  "dataset_path": "tests/fixtures/eval_holdout/sensor_dirty.csv",
+  "dataset_sha256": "ccfb23dbc7fec0a8dfb6388c4234b21eefec9a150fe7587eed3fe203f3c8efb3",
+  "user_request": "What is the average vibration for each machine?",
+  "goal_family": "comparison",
+  "required_calculations": [
+    {
+      "metric": "vibration",
+      "aliases": [
+        "avg_vibration",
+        "average_vibration",
+        "mean_vibration",
+        "vibration_avg"
+      ],
+      "group": {
+        "field": "machine",
+        "value": "M1"
+      },
+      "expected": 0.445,
+      "absolute_tolerance": 1e-06
+    },
+    {
+      "metric": "vibration",
+      "aliases": [
+        "avg_vibration",
+        "average_vibration",
+        "mean_vibration",
+        "vibration_avg"
+      ],
+      "group": {
+        "field": "machine",
+        "value": "M2"
+      },
+      "expected": 1.18,
+      "absolute_tolerance": 1e-06
+    }
+  ],
+  "allowed_fields": [
+    "machine",
+    "vibration"
+  ],
+  "supported_conclusions": [
+    "M2 has a higher average vibration than M1, influenced by a 3.90 spike."
+  ],
+  "forbidden_claims": [
+    "is 99",
+    "of 99",
+    "= 99"
+  ],
+  "valid_chart_types": [
+    "bar",
+    "table"
+  ]
+}

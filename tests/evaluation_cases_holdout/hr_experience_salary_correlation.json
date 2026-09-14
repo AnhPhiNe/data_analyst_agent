@@ -1,0 +1,24 @@
+{
+  "case_id": "holdout-hr-experience-salary-correlation-v1",
+  "dataset_path": "tests/fixtures/eval_holdout/nhan_su_vn.csv",
+  "dataset_sha256": "258baacb07850f3d81447925ef9057ea72849462922b28e2c6e86d26459aa99e",
+  "user_request": "Số năm kinh nghiệm có liên quan đến mức lương không?",
+  "goal_family": "relationship",
+  "required_calculations": [
+    {
+      "metric": "pearson_r",
+      "expected": 0.9002942590764117,
+      "absolute_tolerance": 0.001
+    }
+  ],
+  "allowed_fields": [
+    "Kinh nghiệm (năm)",
+    "Lương (triệu)"
+  ],
+  "supported_conclusions": [
+    "Experience and salary have a strong positive association that does not establish causation."
+  ],
+  "forbidden_claims": [
+    "cause"
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "case_id": "holdout-sales-columns-and-rows-profile-v1",
+  "dataset_path": "tests/fixtures/eval_holdout/store_sales.csv",
+  "dataset_sha256": "e0346e20f692d045105a06352d0e35a623082901d830e530c09c53995f7a6319",
+  "user_request": "How many rows does this file have, and what are its columns?",
+  "goal_family": "data_quality",
+  "expected_outcome": "profile",
+  "required_profile_facts": [
+    {
+      "fact": "row_count",
+      "expected": 12
+    },
+    {
+      "fact": "field_names",
+      "expected": [
+        "order_date",
+        "month",
+        "store",
+        "product",
+        "quantity",
+        "unit_price"
+      ]
+    }
+  ]
+}

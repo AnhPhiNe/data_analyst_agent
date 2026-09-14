@@ -1,0 +1,71 @@
+{
+  "case_id": "holdout-hr-avg-salary-by-department-v1",
+  "dataset_path": "tests/fixtures/eval_holdout/nhan_su_vn.csv",
+  "dataset_sha256": "258baacb07850f3d81447925ef9057ea72849462922b28e2c6e86d26459aa99e",
+  "user_request": "Lương trung bình của mỗi phòng ban là bao nhiêu?",
+  "goal_family": "comparison",
+  "required_calculations": [
+    {
+      "metric": "Lương (triệu)",
+      "aliases": [
+        "avg_salary",
+        "average_salary",
+        "luong_trung_binh",
+        "Lương trung bình",
+        "avg_luong"
+      ],
+      "group": {
+        "field": "Phòng ban",
+        "value": "Kỹ thuật"
+      },
+      "expected": 30.8,
+      "absolute_tolerance": 1e-06
+    },
+    {
+      "metric": "Lương (triệu)",
+      "aliases": [
+        "avg_salary",
+        "average_salary",
+        "luong_trung_binh",
+        "Lương trung bình",
+        "avg_luong"
+      ],
+      "group": {
+        "field": "Phòng ban",
+        "value": "Kinh doanh"
+      },
+      "expected": 23.8,
+      "absolute_tolerance": 1e-06
+    },
+    {
+      "metric": "Lương (triệu)",
+      "aliases": [
+        "avg_salary",
+        "average_salary",
+        "luong_trung_binh",
+        "Lương trung bình",
+        "avg_luong"
+      ],
+      "group": {
+        "field": "Phòng ban",
+        "value": "Nhân sự"
+      },
+      "expected": 20.5,
+      "absolute_tolerance": 1e-06
+    }
+  ],
+  "allowed_fields": [
+    "Phòng ban",
+    "Lương (triệu)"
+  ],
+  "supported_conclusions": [
+    "Kỹ thuật có lương trung bình cao nhất."
+  ],
+  "forbidden_claims": [
+    "cause"
+  ],
+  "valid_chart_types": [
+    "bar",
+    "table"
+  ]
+}
