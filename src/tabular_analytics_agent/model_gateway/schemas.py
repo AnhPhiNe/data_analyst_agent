@@ -43,9 +43,10 @@ class GoalInterpretation(GenerationSchema):
     answer_from_profile: bool = Field(
         default=False,
         description=(
-            "True only when the request asks about dataset structure already in the Data Profile: "
-            "column names, field types, row count, missing values, unique counts, or quality "
-            "warnings. False for any calculation over data values."
+            "True only when the request asks about facts already in the Data Profile: column "
+            "names, field types, row count, missing values, unique counts, quality warnings, or "
+            "whole-column descriptive statistics (count, mean, standard deviation, minimum, "
+            "quartiles, median, maximum). False for filtered, grouped, or derived calculations."
         ),
     )
 

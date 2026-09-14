@@ -291,6 +291,8 @@ def test_malformed_insight_draft_becomes_unsupported_without_failing_run(
     )
     assert '"region"' in gateway.requests[-1].prompt
     assert "Allowed column names" in gateway.requests[-1].prompt
+    assert "every value or comparison the analytical goal asks for" in gateway.requests[3].prompt
+    assert "exactly one y field" in gateway.requests[-1].prompt
 
 
 def test_statistics_only_insight_completes_without_chart_instead_of_crashing(
@@ -362,6 +364,7 @@ def test_structure_question_is_answered_from_profile_without_tools(tmp_path: Pat
     assert completed["tool_actions"] == []
     assert len(gateway.requests) == 1
     assert "answer_from_profile" in gateway.requests[0].prompt
+    assert "whole-column descriptive statistics" in gateway.requests[0].prompt
 
 
 def test_read_only_plan_runs_without_waiting_for_approval(tmp_path: Path) -> None:
@@ -383,6 +386,21 @@ def test_read_only_plan_runs_without_waiting_for_approval(tmp_path: Path) -> Non
     assert completed["plan"]["status"] == "approved"
     assert completed["answered_from_profile"] is False
     assert len(completed["verified_insights"]) == 1
+
+
+def test_table_chart_ignores_encodings_that_tables_do_not_use(tmp_path: Path) -> None:
+    core, request = run_request(tmp_path)
+    table_chart = {**chart_output(), "artifact_type": "table", "color_field": "region"}
+    gateway = FakeModelGateway(
+        [goal_output(), plan_output(), tool_output(), insight_output(), table_chart]
+    )
+    agent = AgentOrchestrator(gateway, core, checkpointer=InMemorySaver())
+
+    agent.start(request)
+    completed = agent.resume(request.session_id, True)
+
+    assert completed["artifact_error"] == ""
+    assert completed["chart_renders"][0]["plotly_spec"]["data"][0]["type"] == "table"
 
 
 def test_graph_pauses_for_plan_approval_then_executes_verified_query(tmp_path: Path) -> None:

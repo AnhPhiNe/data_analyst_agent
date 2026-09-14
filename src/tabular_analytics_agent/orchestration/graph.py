@@ -257,12 +257,14 @@ def build_agent_graph(
                 "be a non-empty question asking the user to choose or confirm the exact blocking "
                 "interpretation. Otherwise return null clarification_question. Set "
                 "answer_from_profile to true only when the request can be answered entirely from "
-                "the dataset metadata above, such as column names, field kinds, row count, "
-                "missing rates, unique counts, or warnings; otherwise false."
+                "the Data Profile: column names, field kinds, row count, missing values, unique "
+                "counts, warnings, or whole-column descriptive statistics (count, mean, standard "
+                "deviation, minimum, quartiles, median, maximum). Use false for filtered, "
+                "grouped, or derived calculations."
             ),
             response_schema=GoalInterpretation,
             system_instruction=_SYSTEM_INSTRUCTION,
-            prompt_template_version="semantic-v4",
+            prompt_template_version="semantic-v5",
             timeout_seconds=_model_call_timeout_seconds(state, budget, clock()),
         )
         try:
@@ -718,12 +720,13 @@ def build_agent_graph(
                 "When the goal compares groups, periods, or values, prefer greater_than, "
                 "less_than, or equals between the compared metrics; use reports only for a "
                 "single value. The reports, positive, negative, and significance operators take "
-                "a null right_metric. Include material caveats; never infer causation from "
-                "association."
+                "a null right_metric. Create an assertion for every value or comparison the "
+                "analytical goal asks for, not only the first one. Include material caveats; "
+                "never infer causation from association."
             ),
             response_schema=InsightDraftBatch,
             system_instruction=_SYSTEM_INSTRUCTION,
-            prompt_template_version="insight-v2",
+            prompt_template_version="insight-v3",
             max_output_tokens=2048,
             timeout_seconds=_model_call_timeout_seconds(state, plan.budget, clock()),
         )
@@ -839,14 +842,15 @@ def build_agent_graph(
                 f"{_json_for_prompt([column.name for column in result.columns])}. "
                 "Never use placeholder names such as x or y.\n"
                 "Propose one readable chart using only these supported artifact types: "
-                "kpi, table, histogram, bar, line, scatter. Choose based on the analytical goal, "
-                "field types, cardinality, and row count. Use only exact result column names in "
-                "encodings and labels. Set aggregation to null because aggregation already "
-                "happened in verified SQL."
+                "kpi, table, histogram, bar, line, scatter. A kpi needs exactly one result row "
+                "and exactly one y field; for one row with several values, use table with no "
+                "encodings. Choose based on the analytical goal, field types, cardinality, and "
+                "row count. Use only exact result column names in encodings and labels. Set "
+                "aggregation to null because aggregation already happened in verified SQL."
             ),
             response_schema=ChartIntentDraft,
             system_instruction=_SYSTEM_INSTRUCTION,
-            prompt_template_version="chart-intent-v3",
+            prompt_template_version="chart-intent-v4",
             max_output_tokens=1024,
             timeout_seconds=_model_call_timeout_seconds(state, plan.budget, clock()),
         )
@@ -857,13 +861,16 @@ def build_agent_graph(
             if _run_budget_exceeded(state, plan.budget, clock()):
                 return _failed_state(state, _budget_error(plan.budget), clock())
             draft = response.output
+            artifact_type = ArtifactType(draft.artifact_type)
+            # A table always renders every result column, so stray encodings carry no meaning.
+            is_table = artifact_type is ArtifactType.TABLE
             intent = ChartIntent(
-                artifact_type=ArtifactType(draft.artifact_type),
+                artifact_type=artifact_type,
                 analytical_purpose=draft.analytical_purpose,
                 source_result_ref=make_query_result_reference(result, annotations),
-                x_field=draft.x_field,
-                y_fields=draft.y_fields,
-                color_field=draft.color_field,
+                x_field=None if is_table else draft.x_field,
+                y_fields=() if is_table else draft.y_fields,
+                color_field=None if is_table else draft.color_field,
                 aggregation=draft.aggregation,
                 title=draft.title,
                 labels=draft.labels,

@@ -469,6 +469,8 @@ def _display_metric(metric: str, result: EvidenceResult) -> str:
         context = _row_context(result, row_index, column)
         if context:
             return f"{_humanize_identifier(column)} for {context}"
+        if isinstance(result, QueryResult) and result.row_count == 1:
+            return _humanize_identifier(column)
         return f"{_humanize_identifier(column)} in result row {row_index + 1}"
     group_match = re.fullmatch(r"group\[([^]]+)]\.(mean|median)", metric)
     if group_match:

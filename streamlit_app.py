@@ -79,18 +79,26 @@ def set_agent_state(
 
 
 def profile_table(workspace: AnalysisWorkspace) -> pd.DataFrame:
-    return pd.DataFrame(
-        [
+    rows = []
+    for field in workspace.data_profile.fields:
+        summary = field.numeric_summary
+        rows.append(
             {
                 "field": field.name,
                 "kind": field.kind.value,
                 "missing": field.missing_count,
                 "unique": field.unique_count,
+                "mean": summary.mean if summary else None,
+                "std": summary.standard_deviation if summary else None,
+                "min": summary.minimum if summary else None,
+                "q1": summary.first_quartile if summary else None,
+                "median": summary.median if summary else None,
+                "q3": summary.third_quartile if summary else None,
+                "max": summary.maximum if summary else None,
                 "warnings": "; ".join(field.warnings),
             }
-            for field in workspace.data_profile.fields
-        ]
-    )
+        )
+    return pd.DataFrame(rows)
 
 
 def render_dataset_summary(workspace: AnalysisWorkspace) -> None:

@@ -183,6 +183,42 @@ def test_row_claim_uses_numeric_group_by_keys_as_context() -> None:
     )
 
 
+def test_single_row_claim_omits_row_position() -> None:
+    profile, action, _ = context()
+    result = QueryResult(
+        query_id=uuid4(),
+        dataset_id=profile.dataset.dataset_id,
+        working_dataset_version=1,
+        sql="SELECT AVG(revenue) AS avg_revenue FROM dataset",
+        columns=(QueryColumn(name="avg_revenue", data_type="DOUBLE"),),
+        rows=((110.0,),),
+        row_count=1,
+        truncated=False,
+        duration_ms=1,
+    )
+    single_row_action = action.model_copy(
+        update={
+            "inputs": {**action.inputs, "required_fields": ["revenue"]},
+            "output_ref": f"query-result:{result.query_id}",
+        }
+    )
+
+    publication = publish_insight(
+        assertion=InsightAssertion(
+            operator=InsightOperator.REPORTS, left_metric="row[0].avg_revenue"
+        ),
+        evidence_metrics=("row[0].avg_revenue",),
+        caveats=(),
+        profile=profile,
+        action=single_row_action,
+        result=result,
+        current_working_dataset_version=1,
+    )
+
+    assert isinstance(publication, VerifiedInsight)
+    assert publication.claim == "Avg revenue is 110."
+
+
 def test_missing_metric_and_stale_dataset_become_unsupported_claims() -> None:
     profile, action, result = context()
     publication = publish_insight(
