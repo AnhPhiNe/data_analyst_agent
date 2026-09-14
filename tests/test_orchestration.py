@@ -294,6 +294,63 @@ def test_malformed_insight_draft_becomes_unsupported_without_failing_run(
     assert "Allowed column names" in gateway.requests[-1].prompt
 
 
+def test_statistics_only_insight_completes_without_chart_instead_of_crashing(
+    tmp_path: Path,
+) -> None:
+    core, request = run_request(tmp_path)
+    plan = {
+        "steps": [
+            {
+                "step_id": "raw-values",
+                "description": "Return revenue and quantity values",
+                "expected_tool": "read_only_sql",
+                "required_fields": ["revenue", "quantity"],
+                "intended_output": "Revenue and quantity rows",
+                "caveats": [],
+                "requires_approval": False,
+            },
+            {
+                "step_id": "correlation",
+                "description": "Measure the revenue-quantity correlation",
+                "expected_tool": "statistical_analysis",
+                "statistical_operation": "correlation",
+                "required_fields": ["revenue", "quantity"],
+                "intended_output": "Correlation statistics",
+                "caveats": [],
+                "requires_approval": False,
+            },
+        ]
+    }
+    statistical_insight = insight_output(
+        plan_step_id="correlation",
+        operator="reports",
+        left_metric="pearson_r",
+        right_metric=None,
+        evidence_metrics=["pearson_r"],
+    )
+    gateway = FakeModelGateway(
+        [
+            goal_output(),
+            plan,
+            tool_output("SELECT revenue, quantity FROM dataset"),
+            {"x_field": "revenue", "y_field": "quantity"},
+            statistical_insight,
+        ]
+    )
+    agent = AgentOrchestrator(gateway, core, checkpointer=InMemorySaver())
+
+    agent.start(request)
+    completed = agent.resume(request.session_id, True)
+
+    assert completed["status"] == AgentRunStatus.COMPLETED
+    assert len(completed["verified_insights"]) == 1
+    assert completed["chart_renders"] == []
+    assert (
+        "No Verified Insight is backed by a chartable Query Result" in (completed["artifact_error"])
+    )
+    assert len(gateway.requests) == 5
+
+
 def test_graph_pauses_for_plan_approval_then_executes_verified_query(tmp_path: Path) -> None:
     core, request = run_request(tmp_path)
     gateway = FakeModelGateway(

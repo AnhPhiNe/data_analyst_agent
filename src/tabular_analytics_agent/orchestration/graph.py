@@ -797,7 +797,17 @@ def build_agent_graph(
         if _run_budget_exceeded(state, plan.budget, clock()):
             return _failed_state(state, _budget_error(plan.budget), clock())
 
-        result, source_action = _chart_source_for_verified_insight(state)
+        try:
+            result, source_action = _chart_source_for_verified_insight(state)
+        except ValueError as exc:
+            # Insights backed only by statistical results have no verified query table to chart.
+            return {
+                "chart_renders": [],
+                "artifact_error": _safe_error(exc),
+                "status": AgentRunStatus.COMPLETED.value,
+                "error": "",
+                **_pause_execution_budget(state, clock()),
+            }
         annotations = tuple(
             SemanticAnnotation.model_validate(value)
             for value in state.get("semantic_annotations", [])
