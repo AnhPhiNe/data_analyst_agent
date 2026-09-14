@@ -12,6 +12,5 @@
   "allowed_fields": ["category", "amount"],
   "supported_conclusions": ["Electronics có amount trung bình cao nhất."],
   "forbidden_claims": ["1000000", "1,000,000"],
-  "valid_chart_types": ["bar", "table"],
-  "clarification_required": false
+  "valid_chart_types": ["bar", "table"]
 }

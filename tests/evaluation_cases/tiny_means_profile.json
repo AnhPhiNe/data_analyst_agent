@@ -4,6 +4,5 @@
   "dataset_sha256": "cda4f9b4c6a72ac4b49a1897aab4924bb5e2a9badbb78d88a13025406537b710",
   "user_request": "giá trị trung bình mỗi cột",
   "goal_family": "summary",
-  "expected_outcome": "profile",
-  "clarification_required": false
+  "expected_outcome": "profile"
 }

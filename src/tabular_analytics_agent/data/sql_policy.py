@@ -50,7 +50,15 @@ def analyze_read_only_sql(sql: str, *, allowed_table: str) -> SQLAnalysis:
     try:
         statements = sqlglot.parse(candidate, read="duckdb")
     except sqlglot.errors.ParseError as exc:
-        raise UnsafeQueryError(f"SQL could not be parsed: {exc}") from exc
+        # sqlglot's full message embeds terminal highlighting; its structured errors do not.
+        detail = "; ".join(
+            f"{error.get('description')} (line {error.get('line')}, column {error.get('col')})"
+            for error in exc.errors
+        )
+        raise UnsafeQueryError(
+            f"SQL could not be parsed: {detail or type(exc).__name__}. Quote column names that "
+            'contain spaces or non-ASCII letters with double quotes, for example "Unit Price".'
+        ) from exc
 
     if len(statements) != 1 or statements[0] is None:
         raise UnsafeQueryError("Exactly one SQL statement is allowed")

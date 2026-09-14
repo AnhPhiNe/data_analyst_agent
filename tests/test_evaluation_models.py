@@ -34,7 +34,6 @@ def answered_case_payload() -> dict[str, object]:
         "allowed_fields": ["revenue"],
         "supported_conclusions": ["Revenue totals 550."],
         "valid_chart_types": [ArtifactType.TABLE],
-        "clarification_required": False,
     }
 
 
@@ -54,8 +53,12 @@ def test_answered_golden_case_requires_gradable_expectations(empty_field: str) -
         GoldenCase.model_validate(payload)
 
 
-def test_refusal_and_profile_cases_do_not_require_calculations() -> None:
-    for outcome in (ExpectedOutcome.REFUSED, ExpectedOutcome.PROFILE):
+def test_non_answer_cases_do_not_require_calculations() -> None:
+    for outcome in (
+        ExpectedOutcome.REFUSED,
+        ExpectedOutcome.PROFILE,
+        ExpectedOutcome.CLARIFICATION,
+    ):
         payload = {
             **answered_case_payload(),
             "expected_outcome": outcome,
@@ -66,3 +69,15 @@ def test_refusal_and_profile_cases_do_not_require_calculations() -> None:
         }
 
         assert GoldenCase.model_validate(payload).expected_outcome is outcome
+
+
+def test_accepted_outcomes_include_the_expected_outcome() -> None:
+    case = GoldenCase.model_validate(
+        {
+            **answered_case_payload(),
+            "expected_outcome": ExpectedOutcome.CLARIFICATION,
+            "acceptable_outcomes": [ExpectedOutcome.REFUSED],
+        }
+    )
+
+    assert case.accepted_outcomes == {ExpectedOutcome.CLARIFICATION, ExpectedOutcome.REFUSED}

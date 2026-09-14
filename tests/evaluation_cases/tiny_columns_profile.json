@@ -4,6 +4,5 @@
   "dataset_sha256": "cda4f9b4c6a72ac4b49a1897aab4924bb5e2a9badbb78d88a13025406537b710",
   "user_request": "file này có những cột nào",
   "goal_family": "data_quality",
-  "expected_outcome": "profile",
-  "clarification_required": false
+  "expected_outcome": "profile"
 }

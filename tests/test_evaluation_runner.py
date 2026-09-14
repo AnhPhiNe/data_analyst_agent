@@ -100,7 +100,6 @@ def test_suite_runs_a_case_through_the_application_and_grades_it(tmp_path: Path)
     assert result["provider_requests"] == 5
     assert {check["name"] for check in result["checks"]} == {
         "outcome",
-        "clarification",
         "forbidden_claims",
         "calculations",
         "insight_coverage",
@@ -109,6 +108,25 @@ def test_suite_runs_a_case_through_the_application_and_grades_it(tmp_path: Path)
     }
     assert (tmp_path / "eval" / "summary.json").is_file()
     assert sleeps == []
+
+
+def test_clarification_pause_is_graded_without_confirming_the_hypothesis(tmp_path: Path) -> None:
+    gateway = FakeModelGateway(
+        [goal_output(clarification_question="There is no profit field. Use revenue?")]
+    )
+
+    summary = run_suite(
+        LocalAnalysisApplication(tmp_path / "app-data", gateway),
+        (load_case("tiny_missing_field_refusal.json"),),
+        project_root=ROOT,
+        runs=1,
+        requests_per_minute=60_000,
+        output_dir=tmp_path / "eval",
+        sleep=lambda _: None,
+    )
+
+    assert summary.passed == 1, summary.failures
+    assert len(gateway.requests) == 1
 
 
 def test_provider_error_is_retried_once_after_the_rate_window(tmp_path: Path) -> None:
@@ -141,12 +159,10 @@ def test_grading_separates_refusals_provider_errors_and_forbidden_claims() -> No
     refused = grade_run(
         refusal_case,
         {"status": "failed", "error": "group too small", "error_kind": "analysis"},
-        asked_clarification=False,
     )
     provider = grade_run(
         load_case("tiny_sales_summary.json"),
         {"status": "failed", "error": "quota exhausted", "error_kind": "provider"},
-        asked_clarification=False,
     )
     overclaimed = grade_run(
         refusal_case,
@@ -154,7 +170,6 @@ def test_grading_separates_refusals_provider_errors_and_forbidden_claims() -> No
             "status": "completed",
             "verified_insights": [{"claim": "Region causes revenue", "evidence": {"values": []}}],
         },
-        asked_clarification=True,
     )
 
     assert refused.passed
@@ -162,6 +177,5 @@ def test_grading_separates_refusals_provider_errors_and_forbidden_claims() -> No
     assert not provider.passed
     assert {check.name for check in overclaimed.checks if not check.passed} == {
         "outcome",
-        "clarification",
         "forbidden_claims",
     }

@@ -12,6 +12,5 @@
   "allowed_filters": [],
   "supported_conclusions": ["North has higher total revenue than South."],
   "forbidden_claims": ["cause"],
-  "valid_chart_types": ["bar", "table"],
-  "clarification_required": false
+  "valid_chart_types": ["bar", "table"]
 }

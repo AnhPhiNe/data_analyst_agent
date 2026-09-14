@@ -19,6 +19,7 @@ class EvaluationModel(BaseModel):
 class ExpectedOutcome(StrEnum):
     ANSWERED = "answered"
     PROFILE = "profile"
+    CLARIFICATION = "clarification"
     REFUSED = "refused"
 
 
@@ -35,13 +36,17 @@ class GoldenCase(EvaluationModel):
     user_request: NonEmptyText
     goal_family: GoalFamily
     expected_outcome: ExpectedOutcome = ExpectedOutcome.ANSWERED
+    acceptable_outcomes: tuple[ExpectedOutcome, ...] = ()
     required_calculations: tuple[ExpectedCalculation, ...] = ()
     allowed_fields: tuple[str, ...] = ()
     allowed_filters: tuple[str, ...] = ()
     supported_conclusions: tuple[str, ...] = ()
     forbidden_claims: tuple[str, ...] = ()
     valid_chart_types: tuple[ArtifactType, ...] = ()
-    clarification_required: bool = False
+
+    @property
+    def accepted_outcomes(self) -> frozenset[ExpectedOutcome]:
+        return frozenset((self.expected_outcome, *self.acceptable_outcomes))
 
     @model_validator(mode="after")
     def require_gradable_expectations(self) -> Self:

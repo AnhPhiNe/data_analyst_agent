@@ -10,6 +10,5 @@
   ],
   "allowed_fields": ["line", "defects"],
   "supported_conclusions": ["Line B has more defects on average than line A, and the difference is statistically significant."],
-  "forbidden_claims": ["cause"],
-  "clarification_required": false
+  "forbidden_claims": ["cause"]
 }

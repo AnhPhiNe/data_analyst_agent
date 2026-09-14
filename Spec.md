@@ -518,7 +518,7 @@ Each evaluation case includes:
 
 Numerical correctness is graded deterministically. Natural-language quality is evaluated through a documented rubric, not solely by an LLM judge.
 
-Each case also declares its expected outcome: answered with Verified Insights, answered from the Data Profile, or refused safely. The evaluation runner (`python -m tabular_analytics_agent.evaluation.runner`) grades outcome, clarification behavior, computed values, values reported in Verified Insights, schema grounding against allowed fields, chart type, and forbidden claims, and it paces model calls to the provider quota.
+Each case declares its expected outcome — answered with Verified Insights, answered from the Data Profile, a clarification question, or a safe refusal — and may list other acceptable outcomes. Clarification behavior is graded through the outcome: the runner approves plans but never confirms a clarification on the user's behalf. The evaluation runner (`python -m tabular_analytics_agent.evaluation.runner`) grades outcome, computed values, values reported in Verified Insights, schema grounding against allowed fields, chart type, and forbidden claims, and it paces model calls to the provider quota.
 
 ### 17.3 Evaluation process
 

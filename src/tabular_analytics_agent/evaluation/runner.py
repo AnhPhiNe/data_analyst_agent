@@ -24,7 +24,7 @@ from tabular_analytics_agent.evaluation.models import (
 from tabular_analytics_agent.model_gateway import GeminiModelGateway, GeminiSettings
 from tabular_analytics_agent.orchestration import AgentRunStatus, AgentState
 
-_MAX_APPROVALS = 4
+_MAX_PLAN_APPROVALS = 3
 Scalar = str | int | float | bool | None
 
 
@@ -78,34 +78,27 @@ def run_case(
     project_root: Path,
     run_index: int = 0,
 ) -> CaseRunResult:
-    """Upload the case dataset, ask the question, approve any pause, and grade the result."""
+    """Upload the case dataset, ask the question, approve plans, and grade the result.
+
+    A clarification pause is graded as it stands: confirming the agent's own hypothesis
+    automatically would hide whether it asked for the right reason.
+    """
     dataset = project_root / case.dataset_path
     content = dataset.read_bytes()
     if hashlib.sha256(content).hexdigest() != case.dataset_sha256:
         raise ValueError(f"dataset content does not match the hash recorded in {case.case_id}")
     workspace = application.ingest(application.stage_upload(dataset.name, content))
     state = application.start(workspace, case.user_request)
-    asked_clarification = False
-    for _ in range(_MAX_APPROVALS):
-        status = state.get("status")
-        if status == AgentRunStatus.AWAITING_SEMANTIC_REVIEW:
-            asked_clarification = True
-            state = application.resume(workspace, {"approved": True})
-        elif status == AgentRunStatus.AWAITING_PLAN_APPROVAL:
-            state = application.resume(workspace, True)
-        else:
+    for _ in range(_MAX_PLAN_APPROVALS):
+        if state.get("status") != AgentRunStatus.AWAITING_PLAN_APPROVAL:
             break
-    return grade_run(case, state, asked_clarification=asked_clarification, run_index=run_index)
+        state = application.resume(workspace, True)
+    return grade_run(case, state, run_index=run_index)
 
 
-def grade_run(
-    case: GoldenCase,
-    state: AgentState,
-    *,
-    asked_clarification: bool,
-    run_index: int = 0,
-) -> CaseRunResult:
+def grade_run(case: GoldenCase, state: AgentState, *, run_index: int = 0) -> CaseRunResult:
     actual = _actual_outcome(state)
+    accepted = sorted(outcome.value for outcome in case.accepted_outcomes)
     claims = tuple(str(item.get("claim", "")) for item in state.get("verified_insights", []))
     forbidden = [
         text
@@ -113,16 +106,7 @@ def grade_run(
         if any(text.casefold() in claim.casefold() for claim in claims)
     ]
     checks = [
-        _check(
-            "outcome",
-            actual == case.expected_outcome.value,
-            f"expected {case.expected_outcome.value}, got {actual}",
-        ),
-        _check(
-            "clarification",
-            asked_clarification == case.clarification_required,
-            f"clarification requested: {asked_clarification}",
-        ),
+        _check("outcome", actual in accepted, f"expected {' or '.join(accepted)}, got {actual}"),
         _check(
             "forbidden_claims",
             not forbidden,
@@ -212,9 +196,7 @@ def summarize(results: Sequence[CaseRunResult]) -> SuiteSummary:
         passed=sum(result.passed for result in results),
         provider_errors=len(results) - len(graded),
         pass_rate_excluding_provider_errors=_rate([result.passed for result in graded]),
-        outcome_accuracy=_rate(
-            [result.actual_outcome == result.expected_outcome.value for result in graded]
-        ),
+        outcome_accuracy=_rate(check_outcomes.get("outcome", [])),
         check_pass_rates={name: _rate(values) for name, values in sorted(check_outcomes.items())},
         average_model_calls=_mean([result.model_calls for result in graded]),
         average_total_tokens=_mean([result.total_tokens for result in graded]),
@@ -267,9 +249,12 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 
 def _actual_outcome(state: AgentState) -> str:
+    status = state.get("status")
+    if status == AgentRunStatus.AWAITING_SEMANTIC_REVIEW:
+        return ExpectedOutcome.CLARIFICATION.value
     if state.get("answered_from_profile"):
         return ExpectedOutcome.PROFILE.value
-    if state.get("status") == AgentRunStatus.COMPLETED and state.get("verified_insights"):
+    if status == AgentRunStatus.COMPLETED and state.get("verified_insights"):
         return ExpectedOutcome.ANSWERED.value
     return ExpectedOutcome.REFUSED.value
 

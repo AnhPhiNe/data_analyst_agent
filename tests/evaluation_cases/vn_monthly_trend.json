@@ -13,6 +13,5 @@
   "allowed_fields": ["Tháng", "Doanh thu"],
   "supported_conclusions": ["Tổng doanh thu tăng qua từng tháng."],
   "forbidden_claims": ["cause"],
-  "valid_chart_types": ["line", "bar", "table"],
-  "clarification_required": false
+  "valid_chart_types": ["line", "bar", "table"]
 }

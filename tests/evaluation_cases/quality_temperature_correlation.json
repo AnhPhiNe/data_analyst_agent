@@ -9,6 +9,5 @@
   ],
   "allowed_fields": ["temperature", "defects"],
   "supported_conclusions": ["Temperature and defects have a strong positive association that does not establish causation."],
-  "forbidden_claims": ["cause"],
-  "clarification_required": false
+  "forbidden_claims": ["cause"]
 }

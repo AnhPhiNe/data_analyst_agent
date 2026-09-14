@@ -11,6 +11,5 @@
   ],
   "allowed_fields": ["Khu vực", "Doanh thu"],
   "supported_conclusions": ["Nam có tổng doanh thu cao nhất."],
-  "valid_chart_types": ["bar", "table"],
-  "clarification_required": false
+  "valid_chart_types": ["bar", "table"]
 }

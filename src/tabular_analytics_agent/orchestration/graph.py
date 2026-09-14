@@ -253,19 +253,23 @@ def build_agent_graph(
                 "Create a semantic annotation only when a genuine ambiguity directly changes the "
                 "required calculation and blocks a responsible answer; otherwise continue and let "
                 "the later plan record the uncertainty as a caveat. Ask only for information "
-                "needed by this request. If semantic_annotations is non-empty, "
-                "clarification_question must "
-                "be a non-empty question asking the user to choose or confirm the exact blocking "
-                "interpretation. Otherwise return null clarification_question. Set "
+                "needed by this request. If the request names a measure or field that does not "
+                "exist in the dataset, never substitute another field for it; instead return a "
+                "clarification_question naming the missing measure and the closest available "
+                "fields. If semantic_annotations is non-empty, clarification_question must be a "
+                "non-empty question asking the user to choose or confirm the exact blocking "
+                "interpretation. In all other cases return null clarification_question. Set "
                 "answer_from_profile to true only when the request can be answered entirely from "
                 "the Data Profile: column names, field kinds, row count, missing values, unique "
                 "counts, warnings, or whole-column descriptive statistics (count, mean, standard "
-                "deviation, minimum, quartiles, median, maximum). Use false for filtered, "
-                "grouped, or derived calculations."
+                "deviation, minimum, quartiles, median, maximum), for example 'which columns are "
+                "there', 'mean of each column', or 'which columns have missing values'. Use false "
+                "for filtered, grouped, or derived calculations such as 'average revenue by "
+                "region'."
             ),
             response_schema=GoalInterpretation,
             system_instruction=_SYSTEM_INSTRUCTION,
-            prompt_template_version="semantic-v5",
+            prompt_template_version="semantic-v6",
             timeout_seconds=_model_call_timeout_seconds(state, budget, clock()),
         )
         try:
@@ -373,11 +377,12 @@ def build_agent_graph(
                 "Reference only listed fields. SQL reads rows of the dataset table only; schema "
                 "catalogs such as information_schema are unavailable. Set requires_approval to "
                 "true only for a step the user should review before it runs; ordinary read-only "
-                "calculations use false."
+                "calculations use false. Never let a different field stand in for a requested "
+                "measure that the dataset does not contain."
             ),
             response_schema=PlanDraft,
             system_instruction=_SYSTEM_INSTRUCTION,
-            prompt_template_version="plan-v3",
+            prompt_template_version="plan-v4",
             timeout_seconds=_model_call_timeout_seconds(state, budget, clock()),
         )
         trace: ModelCallTrace | None = None
