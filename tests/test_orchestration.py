@@ -614,9 +614,10 @@ def test_repeated_tool_action_is_rejected_without_reexecution(tmp_path: Path) ->
     assert len(completed["tool_actions"]) == 2
 
 
-def test_unknown_plan_field_stops_safely_before_approval(tmp_path: Path) -> None:
+def test_unknown_plan_field_stops_safely_after_the_repair_budget(tmp_path: Path) -> None:
     core, request = run_request(tmp_path)
-    gateway = FakeModelGateway([goal_output(), plan_output(required_fields=["profit"])])
+    unknown_plan = plan_output(required_fields=["profit"])
+    gateway = FakeModelGateway([goal_output(), unknown_plan, unknown_plan, unknown_plan])
     agent = AgentOrchestrator(gateway, core, checkpointer=InMemorySaver())
 
     failed = agent.start(request)
@@ -624,6 +625,22 @@ def test_unknown_plan_field_stops_safely_before_approval(tmp_path: Path) -> None
     assert failed["status"] == AgentRunStatus.FAILED
     assert "Unknown fields" in failed["error"]
     assert failed["tool_actions"] == []
+    assert len(gateway.requests) == 4
+
+
+def test_misspelled_plan_field_is_repaired_with_the_error(tmp_path: Path) -> None:
+    core, request = run_request(tmp_path)
+    gateway = FakeModelGateway(
+        [goal_output(), plan_output(required_fields=["regoin", "revenue"]), plan_output()]
+    )
+    agent = AgentOrchestrator(gateway, core, checkpointer=InMemorySaver())
+
+    paused = agent.start(request)
+
+    assert paused["status"] == AgentRunStatus.AWAITING_PLAN_APPROVAL
+    assert "Unknown fields requested: regoin" in gateway.requests[2].prompt
+    assert "do not substitute another field" in gateway.requests[2].prompt
+    assert paused["model_traces"][1]["error"].startswith("Unknown fields requested")
 
 
 def test_plan_fields_are_canonicalized_to_original_dataset_names(tmp_path: Path) -> None:

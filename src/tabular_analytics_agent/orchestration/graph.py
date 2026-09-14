@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import unicodedata
 from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any, Literal, cast
@@ -168,6 +169,7 @@ class AgentOrchestrator:
             "query_result": {},
             "statistical_result": {},
             "answered_from_profile": False,
+            "plan_repair_count": 0,
             "status": AgentRunStatus.INTERPRETING.value,
         }
         return cast(
@@ -417,6 +419,23 @@ def build_agent_graph(
             if _run_budget_exceeded(state, plan.budget, clock()):
                 raise _budget_error(plan.budget)
         except (ModelGatewayError, ValidationError, ValueError) as exc:
+            repairs = state.get("plan_repair_count", 0)
+            if isinstance(exc, _UnknownFieldError) and repairs < budget.max_repairs_per_action:
+                # A misspelled field name is repaired by replanning with the exact error.
+                feedback = (
+                    f"{exc}. Use field names exactly as listed in the dataset metadata; if a "
+                    "requested measure does not exist, do not substitute another field."
+                )
+                return _with_failure_trace(
+                    {
+                        "status": AgentRunStatus.PLANNING.value,
+                        "error": feedback,
+                        "plan_repair_count": repairs + 1,
+                    },
+                    state,
+                    exc,
+                    trace,
+                )
             return _with_failure_trace(_failed_state(state, exc, clock()), state, exc, trace)
         update: AgentState = {
             "plan": plan.model_dump(mode="json"),
@@ -938,7 +957,7 @@ def build_agent_graph(
     builder.add_conditional_edges(
         "create_plan",
         _route_after_plan,
-        {"approval": "approve_plan", "tool": "request_tool", "end": END},
+        {"approval": "approve_plan", "tool": "request_tool", "plan": "create_plan", "end": END},
     )
     builder.add_conditional_edges(
         "approve_plan",
@@ -1127,19 +1146,28 @@ def _annotation_draft(value: dict[str, Any]) -> SemanticAnnotationDraft:
     return SemanticAnnotationDraft.model_validate(value)
 
 
+class _UnknownFieldError(ValueError):
+    """A model referenced a field name that is not in the Data Profile."""
+
+
+def _field_key(name: str) -> str:
+    # Vietnamese headers may arrive precomposed or decomposed; compare them in one form.
+    return unicodedata.normalize("NFC", name).casefold()
+
+
 def _canonicalize_profile_fields(profile: DataProfile, fields: tuple[str, ...]) -> tuple[str, ...]:
-    canonical_names = {field.name.casefold(): field.name for field in profile.fields}
+    canonical_names = {_field_key(field.name): field.name for field in profile.fields}
     canonical: list[str] = []
     unknown: list[str] = []
     for field in fields:
-        canonical_name = canonical_names.get(field.casefold())
+        canonical_name = canonical_names.get(_field_key(field))
         if canonical_name is None:
             unknown.append(field)
         else:
             canonical.append(canonical_name)
     if unknown:
         names = ", ".join(sorted(set(unknown)))
-        raise ValueError(f"Unknown fields requested: {names}")
+        raise _UnknownFieldError(f"Unknown fields requested: {names}")
     return tuple(canonical)
 
 
@@ -1432,11 +1460,13 @@ def _route_after_review(state: AgentState) -> Literal["review", "plan", "end"]:
     return "plan" if state["status"] == AgentRunStatus.PLANNING else "end"
 
 
-def _route_after_plan(state: AgentState) -> Literal["approval", "tool", "end"]:
+def _route_after_plan(state: AgentState) -> Literal["approval", "tool", "plan", "end"]:
     if state["status"] == AgentRunStatus.AWAITING_PLAN_APPROVAL:
         return "approval"
     if state["status"] == AgentRunStatus.REQUESTING_TOOL:
         return "tool"
+    if state["status"] == AgentRunStatus.PLANNING:
+        return "plan"
     return "end"
 
 

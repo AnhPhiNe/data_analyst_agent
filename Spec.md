@@ -473,6 +473,7 @@ Limits must be configurable and visible in failure messages.
 - Show users a plain-language failure message with a next step; keep technical details in a collapsed view and in the audit trail.
 - Classify terminal failures as provider errors (quota, overload, timeout) or analysis errors so that evaluation does not count provider outages as agent mistakes.
 - A new request in the same Analysis Session must not inherit errors or per-run results from an earlier request; confirmed Semantic Annotations persist.
+- An Analysis Plan that references unknown field names is regenerated with the exact error, within the repair budget of Section 14.3. Field names are compared after Unicode NFC normalization and case folding; the agent never guesses a different field.
 
 ## 16. Observability and Reproducibility
 

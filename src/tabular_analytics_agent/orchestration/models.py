@@ -94,6 +94,7 @@ class AgentState(TypedDict, total=False):
     proposed_annotations: list[dict[str, Any]]
     semantic_annotations: list[dict[str, Any]]
     plan: dict[str, Any]
+    plan_repair_count: int
     current_step_index: int
     tool_request: dict[str, Any]
     query_result: dict[str, Any]
