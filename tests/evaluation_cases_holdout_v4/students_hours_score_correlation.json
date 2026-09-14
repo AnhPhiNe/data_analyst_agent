@@ -1,0 +1,24 @@
+{
+  "case_id": "holdout-v4-students-hours-score-correlation-v1",
+  "dataset_path": "tests/fixtures/eval_holdout_v4/student_scores.csv",
+  "dataset_sha256": "520fcd20fe43f3f13e77e1dc5f4a93c7d685867b0d836031064b492d16c7cb4e",
+  "user_request": "How strongly are weekly study hours related to the final score?",
+  "goal_family": "relationship",
+  "required_calculations": [
+    {
+      "metric": "pearson_r",
+      "expected": 0.8329555110379596,
+      "absolute_tolerance": 0.001
+    }
+  ],
+  "allowed_fields": [
+    "study_hours",
+    "final_score"
+  ],
+  "supported_conclusions": [
+    "Study hours and final score are positively associated, which does not establish causation."
+  ],
+  "forbidden_claims": [
+    "cause"
+  ]
+}

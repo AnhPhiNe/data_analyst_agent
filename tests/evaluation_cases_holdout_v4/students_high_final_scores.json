@@ -1,0 +1,33 @@
+{
+  "case_id": "holdout-v4-students-high-final-scores-v1",
+  "dataset_path": "tests/fixtures/eval_holdout_v4/student_scores.csv",
+  "dataset_sha256": "520fcd20fe43f3f13e77e1dc5f4a93c7d685867b0d836031064b492d16c7cb4e",
+  "user_request": "How many students scored at least 80 on the final exam?",
+  "goal_family": "summary",
+  "required_calculations": [
+    {
+      "metric": "student_count",
+      "aliases": [
+        "count",
+        "count_1",
+        "row_count"
+      ],
+      "expected": 4,
+      "absolute_tolerance": 1e-06
+    }
+  ],
+  "allowed_fields": [
+    "final_score",
+    "student_id"
+  ],
+  "allowed_filters": [
+    "final_score >= 80"
+  ],
+  "supported_conclusions": [
+    "4 students scored at least 80."
+  ],
+  "valid_chart_types": [
+    "kpi",
+    "table"
+  ]
+}

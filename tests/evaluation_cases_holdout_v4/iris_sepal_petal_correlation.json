@@ -1,0 +1,24 @@
+{
+  "case_id": "holdout-v4-iris-sepal-petal-correlation-v1",
+  "dataset_path": "tests/fixtures/eval_holdout_v4/iris.csv",
+  "dataset_sha256": "9cc1c345c71bcc9b486b74cbf6063fa66f4bb5e0f603a4b3c3471ec2e5e8e355",
+  "user_request": "Is sepal length correlated with petal length?",
+  "goal_family": "relationship",
+  "required_calculations": [
+    {
+      "metric": "pearson_r",
+      "expected": 0.8717537758865831,
+      "absolute_tolerance": 0.001
+    }
+  ],
+  "allowed_fields": [
+    "sepal_length",
+    "petal_length"
+  ],
+  "supported_conclusions": [
+    "Sepal and petal length are strongly positively associated, which does not establish causation."
+  ],
+  "forbidden_claims": [
+    "cause"
+  ]
+}

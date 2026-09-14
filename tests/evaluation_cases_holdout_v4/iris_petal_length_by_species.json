@@ -1,0 +1,47 @@
+{
+  "case_id": "holdout-v4-iris-petal-length-by-species-v1",
+  "dataset_path": "tests/fixtures/eval_holdout_v4/iris.csv",
+  "dataset_sha256": "9cc1c345c71bcc9b486b74cbf6063fa66f4bb5e0f603a4b3c3471ec2e5e8e355",
+  "user_request": "What is the average petal length for each species?",
+  "goal_family": "comparison",
+  "required_calculations": [
+    {
+      "metric": "petal_length",
+      "group": {
+        "field": "species",
+        "value": "setosa"
+      },
+      "expected": 1.462,
+      "absolute_tolerance": 1e-06
+    },
+    {
+      "metric": "petal_length",
+      "group": {
+        "field": "species",
+        "value": "versicolor"
+      },
+      "expected": 4.26,
+      "absolute_tolerance": 1e-06
+    },
+    {
+      "metric": "petal_length",
+      "group": {
+        "field": "species",
+        "value": "virginica"
+      },
+      "expected": 5.5520000000000005,
+      "absolute_tolerance": 1e-06
+    }
+  ],
+  "allowed_fields": [
+    "species",
+    "petal_length"
+  ],
+  "supported_conclusions": [
+    "virginica has the longest average petal length."
+  ],
+  "valid_chart_types": [
+    "bar",
+    "table"
+  ]
+}

@@ -1,0 +1,47 @@
+{
+  "case_id": "holdout-v4-titanic-fare-by-embark-town-v1",
+  "dataset_path": "tests/fixtures/eval_holdout_v4/titanic.csv",
+  "dataset_sha256": "81787d320d7f7b03df935e91de8bd19e11d45c5bbcab86ef4d4a76dc91b7d4f2",
+  "user_request": "What is the average fare for each embarkation town?",
+  "goal_family": "comparison",
+  "required_calculations": [
+    {
+      "metric": "fare",
+      "group": {
+        "field": "embark_town",
+        "value": "Cherbourg"
+      },
+      "expected": 59.95414404761905,
+      "absolute_tolerance": 0.0001
+    },
+    {
+      "metric": "fare",
+      "group": {
+        "field": "embark_town",
+        "value": "Queenstown"
+      },
+      "expected": 13.27602987012987,
+      "absolute_tolerance": 0.0001
+    },
+    {
+      "metric": "fare",
+      "group": {
+        "field": "embark_town",
+        "value": "Southampton"
+      },
+      "expected": 27.079811801242233,
+      "absolute_tolerance": 0.0001
+    }
+  ],
+  "allowed_fields": [
+    "embark_town",
+    "fare"
+  ],
+  "supported_conclusions": [
+    "Passengers who embarked at Cherbourg paid the highest average fare."
+  ],
+  "valid_chart_types": [
+    "bar",
+    "table"
+  ]
+}

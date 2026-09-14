@@ -1,0 +1,61 @@
+student_id,gender,study_hours,attendance_pct,previous_score,final_score,parental_education,test_prep
+S001,male,14,84,48,58.3,bachelor,completed
+S002,female,9,90,51,50.2,high school,none
+S003,male,5,67,76,54.8,high school,none
+S004,male,5,67,72,51.9,high school,completed
+S005,female,8,88,95,65.9,high school,none
+S006,female,9,93,61,47.6,bachelor,none
+S007,male,12,79,78,69.6,high school,completed
+S008,male,12,88,78,65.6,,none
+S009,male,3,76,91,57.8,high school,none
+S010,male,20,77,50,80.4,high school,completed
+S011,male,4,89,86,51.8,bachelor,none
+S012,male,8,86,71,51.9,master,none
+S013,male,14,73,54,70.6,master,completed
+S014,female,13,94,45,60.1,high school,none
+S015,female,4,95,67,40.8,bachelor,none
+S016,male,20,87,82,87.6,bachelor,completed
+S017,female,7,87,67,50.3,master,none
+S018,female,1,91,72,48.2,master,none
+S019,male,8,67,69,59.0,master,completed
+S020,female,18,61,84,73.6,high school,none
+S021,female,2,74,72,44.4,bachelor,none
+S022,female,12,73,91,71.2,bachelor,completed
+S023,male,15,77,79,64.8,,none
+S024,female,8,71,84,65.4,master,none
+S025,female,19,69,48,68.7,high school,completed
+S026,female,19,88,63,76.1,high school,none
+S027,female,9,72,66,51.7,master,none
+S028,male,19,66,68,78.8,high school,completed
+S029,female,8,79,56,50.0,bachelor,none
+S030,male,20,68,67,71.7,high school,none
+S031,male,16,95,42,63.5,bachelor,completed
+S032,female,6,80,95,55.6,bachelor,none
+S033,male,8,66,82,55.8,bachelor,none
+S034,female,17,73,83,87.6,master,completed
+S035,female,9,88,83,58.8,high school,none
+S036,male,15,64,67,69.1,high school,none
+S037,female,5,68,81,54.6,master,completed
+S038,male,1,61,60,44.2,bachelor,none
+S039,male,13,93,49,58.6,high school,none
+S040,male,19,65,68,82.1,high school,completed
+S041,male,5,77,69,45.6,high school,none
+S042,female,14,75,67,62.4,,none
+S043,male,9,88,67,63.5,high school,completed
+S044,male,11,75,40,51.7,bachelor,none
+S045,male,15,83,68,61.4,bachelor,none
+S046,female,11,100,95,70.7,master,completed
+S047,male,9,61,76,62.7,high school,none
+S048,male,9,67,77,54.1,high school,none
+S049,female,9,65,73,59.3,high school,completed
+S050,female,6,65,57,47.1,master,none
+S051,female,16,75,70,64.6,high school,none
+S052,male,15,77,54,72.3,bachelor,completed
+S053,female,10,94,81,57.1,high school,none
+S054,female,8,69,69,60.0,master,none
+S055,female,12,97,53,60.5,bachelor,completed
+S056,female,7,81,51,45.8,master,none
+S057,female,11,88,46,56.3,high school,none
+S058,female,15,98,47,71.0,bachelor,completed
+S059,female,14,89,62,63.5,high school,none
+S060,male,11,100,93,66.5,bachelor,none

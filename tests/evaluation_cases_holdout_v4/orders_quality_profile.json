@@ -1,0 +1,19 @@
+{
+  "case_id": "holdout-v4-orders-quality-profile-v1",
+  "dataset_path": "tests/fixtures/eval_holdout_v4/orders_messy.csv",
+  "dataset_sha256": "4cbd76cc8f28f9058eddb6abf15fac551ba8ebd58ccbcbf583caf63ec6fde0dd",
+  "user_request": "How many amount values are missing, and how many duplicate rows are there?",
+  "goal_family": "data_quality",
+  "expected_outcome": "profile",
+  "required_profile_facts": [
+    {
+      "fact": "missing_count",
+      "field": "amount",
+      "expected": 3
+    },
+    {
+      "fact": "duplicate_row_count",
+      "expected": 1
+    }
+  ]
+}
