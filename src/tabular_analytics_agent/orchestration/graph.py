@@ -280,7 +280,8 @@ def build_agent_graph(
                 "clarification_question must be a non-empty question asking the user to choose or "
                 "confirm the exact blocking interpretation. Set "
                 "answer_from_profile to true only when the request can be answered entirely from "
-                "the Data Profile: column names, field kinds, row count, missing values, unique "
+                "the Data Profile: column names, field kinds, row count, duplicate row count, "
+                "missing values, unique "
                 "counts, warnings, or whole-column descriptive statistics (count, mean, standard "
                 "deviation, minimum, quartiles, median, maximum), for example 'which columns are "
                 "there', 'mean of each column', or 'which columns have missing values'. Use false "
@@ -304,7 +305,7 @@ def build_agent_graph(
             ),
             response_schema=GoalInterpretation,
             system_instruction=_SYSTEM_INSTRUCTION,
-            prompt_template_version="semantic-v10",
+            prompt_template_version="semantic-v11",
             timeout_seconds=_model_call_timeout_seconds(state, budget, clock()),
         )
         trace: ModelCallTrace | None = None
@@ -1240,6 +1241,7 @@ def _profile_prompt(profile: DataProfile) -> str:
     ids_by_name = {name: field_id for field_id, name in _field_ids(profile).items()}
     metadata = {
         "row_count": profile.row_count,
+        "duplicate_row_count": profile.duplicate_row_count,
         "fields": [
             {
                 "id": ids_by_name.get(field.name),
@@ -1663,9 +1665,10 @@ def _bind_tool_request_to_step(
     referenced_fields = [
         field for field in inspection.referenced_columns if _field_key(field) in known_fields
     ]
-    if {_field_key(field) for field in referenced_fields} != approved_fields:
+    # Reading fewer approved fields (for example COUNT(*) with one filter) cannot widen scope.
+    if not {_field_key(field) for field in referenced_fields} <= approved_fields:
         raise ValueError(
-            "SQL source fields do not match the approved plan step: the query reads "
+            "SQL source fields must come from the approved plan step: the query reads "
             f"{sorted(referenced_fields)}, the step approves {sorted(step.required_fields)}"
         )
     return BoundToolRequest(

@@ -85,3 +85,13 @@ the outstanding Must-tier flows and reliability gates.
 - The fixes above were derived from these holdout failures, so later runs on these holdout sets
   are development evidence only. An unbiased post-fix score needs a new holdout set committed
   before its first run.
+- Holdout v3 first run (2026-09-14, grading version 3, after ASCII field ids): 25/30 runs passed
+  (83.3%); 7 of 10 cases passed at least 2 of 3 runs and 6 passed all 3. Check rates: outcome
+  90%, calculations 90%, insight coverage 81%, chart 87%; schema grounding, forbidden claims,
+  and profile facts 100%. No garbled field names appeared. Two provider errors were retried
+  (one rate limit, one invalid request). Failures: a plan approving an extra counting field
+  that the SQL did not read (2 runs), insights asserting only part of the requested values
+  (2 runs), and one data-quality question answered with SQL whose "duplicate rows" formula was
+  wrong (3 instead of the profile's 1) instead of from the Data Profile. The Section 17.4 gates
+  for end-to-end success (85%), calculation accuracy (95%), and chart validity (95%) are not
+  yet met on this set.

@@ -370,6 +370,8 @@ def test_structure_question_is_answered_from_profile_without_tools(tmp_path: Pat
     assert len(gateway.requests) == 1
     assert "answer_from_profile" in gateway.requests[0].prompt
     assert "whole-column descriptive statistics" in gateway.requests[0].prompt
+    assert "duplicate row count" in gateway.requests[0].prompt
+    assert '"duplicate_row_count": 0' in gateway.requests[0].prompt
 
 
 def test_read_only_plan_runs_without_waiting_for_approval(tmp_path: Path) -> None:
@@ -1017,6 +1019,32 @@ def test_new_request_replaces_a_pending_clarification(tmp_path: Path) -> None:
     assert restarted["status"] == AgentRunStatus.AWAITING_PLAN_APPROVAL
     assert restarted["clarification_question"] == ""
     assert len(gateway.requests) == 3
+
+
+def test_sql_may_read_a_subset_of_the_approved_fields(tmp_path: Path) -> None:
+    core, request = run_request(tmp_path)
+    gateway = FakeModelGateway(
+        [
+            goal_output(),
+            plan_output(),
+            tool_output("SELECT COUNT(*) AS north_rows FROM dataset WHERE region = 'North'"),
+            insight_output(
+                operator="reports",
+                left_metric="row[0].north_rows",
+                right_metric=None,
+                evidence_metrics=["row[0].north_rows"],
+            ),
+        ]
+    )
+    agent = AgentOrchestrator(gateway, core, checkpointer=InMemorySaver())
+
+    agent.start(request)
+    completed = agent.resume(request.session_id, True)
+
+    assert completed["status"] == AgentRunStatus.COMPLETED
+    assert completed["tool_repair_count"] == 0
+    assert completed["tool_actions"][0]["inputs"]["required_fields"] == ["region", "revenue"]
+    assert completed["verified_insights"][0]["claim"].endswith("is 2.")
 
 
 def test_ascii_field_ids_stand_in_for_vietnamese_names_end_to_end(tmp_path: Path) -> None:

@@ -135,7 +135,14 @@ class _ApiKeyPool:
             self._limited_until[index] = now + self._cooldown_seconds
             self._current = (index + 1) % len(self._requests)
 
+    def disable(self, index: int) -> None:
+        """Stop using a key the provider rejected; it cannot recover during this session."""
+        with self._lock:
+            self._limited_until[index] = math.inf
+            self._current = (index + 1) % len(self._requests)
+
     def seconds_until_available(self, now: float) -> float:
+        """Return the wait for the next usable key, or infinity when every key was rejected."""
         with self._lock:
             return max(0.0, min(self._limited_until) - now)
 
@@ -241,6 +248,11 @@ class GeminiModelGateway(BaseModelGateway):
             except Exception as exc:
                 if isinstance(exc, _InvocationTimeout):
                     raise _model_timeout_error(call_timeout) from exc
+                if _is_rejected_key(exc):
+                    self._key_pool.disable(key_index)
+                    retries += 1
+                    key_index = self._acquire_key(exc)
+                    continue
                 if _status_code(exc) == 429:
                     # Rest this key and move on immediately; waiting is left to the cooldown.
                     self._key_pool.mark_rate_limited(key_index, self._monotonic())
@@ -260,11 +272,14 @@ class GeminiModelGateway(BaseModelGateway):
         index = self._key_pool.acquire(now)
         if index is not None:
             return index
-        wait_seconds = math.ceil(self._key_pool.seconds_until_available(now))
-        message = (
-            f"All {len(self._api_keys)} Gemini API keys are rate limited; the next key is "
-            f"available in {wait_seconds} seconds"
-        )
+        wait = self._key_pool.seconds_until_available(now)
+        if math.isinf(wait):
+            message = f"All {len(self._api_keys)} Gemini API keys were rejected by the provider"
+        else:
+            message = (
+                f"All {len(self._api_keys)} Gemini API keys are rate limited; the next key is "
+                f"available in {math.ceil(wait)} seconds"
+            )
         if error is None:
             raise ModelProviderError(message)
         raise ModelProviderError(f"{message} ({_safe_provider_error(error)})") from error
@@ -371,6 +386,16 @@ def _status_code(error: Exception) -> int | None:
         return int(status)
     except (TypeError, ValueError):
         return None
+
+
+def _is_rejected_key(error: Exception) -> bool:
+    """Recognize an invalid, revoked, or unauthorized key; the message itself is never shown."""
+    message = str(error).casefold()
+    return (
+        _status_code(error) in {401, 403}
+        or "api key not valid" in message
+        or ("api_key_invalid" in message)
+    )
 
 
 def _is_retryable(error: Exception) -> bool:

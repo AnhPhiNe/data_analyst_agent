@@ -470,6 +470,43 @@ def test_rate_limited_key_is_rested_and_the_next_key_is_used_immediately() -> No
     assert response.trace.provider_retry_count == 1
 
 
+class InvalidKeyError(RuntimeError):
+    status_code = 400
+
+
+def test_rejected_key_is_dropped_for_the_session_and_rotation_continues() -> None:
+    clock = ManualMonotonic()
+    used_keys: list[str] = []
+    rejection = InvalidKeyError("API key not valid. Please pass a valid API key.")
+    client = FakeChatModel(
+        [
+            rejection,
+            gemini_response(valid_goal()),
+            gemini_response(valid_goal()),
+            InvalidKeyError("API_KEY_INVALID"),
+        ]
+    )
+    gateway = GeminiModelGateway(
+        GeminiSettings(
+            api_key=SecretStr("key-a"),
+            additional_api_keys=(SecretStr("key-b"),),
+            model_id="gemini-test",
+        ),
+        client_factory=recording_factory(client, used_keys),
+        monotonic=clock,
+    )
+
+    gateway.generate_structured(goal_request())
+    clock.now += 600
+    gateway.generate_structured(goal_request())
+    with pytest.raises(ModelProviderError, match="All 2 Gemini API keys were rejected") as caught:
+        gateway.generate_structured(goal_request())
+
+    # key-a never returns after its rejection, even long after any rate-limit cooldown.
+    assert used_keys == ["key-a", "key-b", "key-b", "key-b"]
+    assert "API key not valid" not in str(caught.value)
+
+
 def test_gemini_adapter_uses_raw_text_when_parsed_value_is_missing() -> None:
     raw = SimpleNamespace(
         text='{"goal_text":"Summarize revenue","goal_family":"summary",'

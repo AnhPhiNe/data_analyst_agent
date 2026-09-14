@@ -80,7 +80,7 @@ The maximum size and execution limits must be configurable rather than hard-code
 4. The application creates a Data Profile and surfaces quality risks and possible PII.
 5. The application proposes three to five relevant Analytical Goals.
 6. The user selects a suggestion or provides a different goal, in English or Vietnamese.
-7. Questions answerable from the Data Profile alone — column names, field types, row count, missing values, unique counts, quality warnings, and whole-column descriptive statistics — are answered directly from the profile without an Analysis Plan or Tool Actions.
+7. Questions answerable from the Data Profile alone — column names, field types, row count, duplicate rows, missing values, unique counts, quality warnings, and whole-column descriptive statistics — are answered directly from the profile without an Analysis Plan or Tool Actions.
 8. For other goals, the agent asks for Semantic Annotations when ambiguity could materially change the answer to that goal.
 9. The agent displays a concise Analysis Plan.
 10. The application pauses for approval only when a plan step requires review, including every consequential data-cleaning or transformation step; read-only plans run immediately and remain inspectable.
@@ -390,7 +390,7 @@ The implementation should define versioned equivalents of these models:
 - Provide a deterministic `FakeModelGateway` for automated tests.
 - Do not implement automatic provider fallback in the MVP.
 - Permit later hosted benchmarks with Qwen3.8-27B and `gpt-oss-120b` without changing analytical tools or graph contracts. Free tiers from Groq and Cohere were considered and deferred because their tokens-per-minute or monthly caps are tighter than Gemini Flash-Lite.
-- Model calls must respect provider quotas. The Gemini gateway can rotate several configured API keys: it uses one key for up to 15 requests per minute, rests a key for 65 seconds after that budget is used or a rate-limit response arrives, moves to the next key immediately, and wraps to the first key after the last. When every key is resting, the call fails as a provider error that states the wait instead of blocking. Evaluation runs also pace requests. Using several keys must comply with the provider's terms; honoring provider `retry-after` headers remains Should-tier.
+- Model calls must respect provider quotas. The Gemini gateway can rotate several configured API keys: it uses one key for up to 15 requests per minute, rests a key for 65 seconds after that budget is used or a rate-limit response arrives, moves to the next key immediately, and wraps to the first key after the last. When every key is resting, the call fails as a provider error that states the wait instead of blocking. A key the provider rejects as invalid or unauthorized is dropped for the rest of the session. Evaluation runs also pace requests. Using several keys must comply with the provider's terms; honoring provider `retry-after` headers remains Should-tier.
 
 ### 11.3 Model-output rules
 
@@ -707,6 +707,7 @@ Amendments from the first manual Streamlit acceptance session. A Vietnamese head
 - The Gemini gateway rotates several API keys with a per-key minute budget and a 65-second cooldown, and evaluation pacing scales with the key count (Sections 11.2 and 25.3).
 - After the first holdout run: interpretation repairs unknown field names, filters use exact profile sample values with a repair for empty filtered results, calculated SQL outputs are aliased deterministically, and line charts accept text periods (Sections 14.1, 15, 25.1, and FR-11).
 - After rechecking those fixes: grading version 3 matches grouped query values by group and value instead of alias lists, and ASCII field ids replace copied non-ASCII names in model outputs (Sections 15, 17.3, and 25.1).
+- After holdout v3: SQL may read a subset of the approved fields, duplicate-row questions are answered from the Data Profile, and rejected API keys leave the rotation (Sections 6, 11.2, and 25.1).
 
 ## 25. Implementation Contracts
 
@@ -714,7 +715,7 @@ Amendments from the first manual Streamlit acceptance session. A Vietnamese head
 
 | Tool | Input | Output | Constraints |
 |---|---|---|---|
-| `read_only_sql` | One DuckDB `SELECT` or `WITH ... SELECT` over the single table named `dataset`; its source columns must equal the approved step's `required_fields`; unqualified field ids such as `c1` are rewritten to exact quoted field names before validation; an unaliased calculated output receives a deterministic ASCII alias such as `sum_1`, and an explicit alias that is not a short ASCII identifier is repaired | `QueryResult`: columns, rows, row count, truncation flag, normalized SQL, `GROUP BY` output columns, and `WHERE`/`HAVING` filters | No wildcard projections, schema catalogs, external-access functions, or other tables |
+| `read_only_sql` | One DuckDB `SELECT` or `WITH ... SELECT` over the single table named `dataset`; its source columns must come from the approved step's `required_fields` (reading fewer of them is allowed); unqualified field ids such as `c1` are rewritten to exact quoted field names before validation; an unaliased calculated output receives a deterministic ASCII alias such as `sum_1`, and an explicit alias that is not a short ASCII identifier is repaired | `QueryResult`: columns, rows, row count, truncation flag, normalized SQL, `GROUP BY` output columns, and `WHERE`/`HAVING` filters | No wildcard projections, schema catalogs, external-access functions, or other tables |
 | `statistical_analysis` | The approved operation plus the parameters its rule requires (the operation rule table in `statistics.models`) | `StatisticalResult`: estimates, test statistic, p-value, adjusted alpha, effect size, assumption checks, and warnings | Runs on a deterministic reservoir sample of at most the configured query row limit |
 
 Questions fully covered by the Data Profile are answered without a tool (Section 6, step 7).
