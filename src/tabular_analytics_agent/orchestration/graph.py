@@ -300,12 +300,14 @@ def build_agent_graph(
                 "the user could resolve it, also return a clarification_question naming that "
                 "metric and the closest available fields. Use an unavailable mapping without a "
                 "clarification question only for an explicitly unsupported capability. Dimensions "
-                "such as region, month, or category are not metrics and need no mapping. Return "
+                "such as region, month, or category, and dataset-level profile facts such as row "
+                "count, duplicate rows, or missing-value counts, are not metrics and need no "
+                "mapping. Return "
                 "null clarification_question in all other cases."
             ),
             response_schema=GoalInterpretation,
             system_instruction=_SYSTEM_INSTRUCTION,
-            prompt_template_version="semantic-v11",
+            prompt_template_version="semantic-v12",
             timeout_seconds=_model_call_timeout_seconds(state, budget, clock()),
         )
         trace: ModelCallTrace | None = None
@@ -1010,8 +1012,9 @@ def build_agent_graph(
                 if (
                     not isinstance(result, QueryResult)
                     or result.truncated
-                    # A grouped table is a summary, not a row listing; its row count says little.
-                    or result.group_by_columns
+                    # An aggregated result is a summary, not a row listing; its row count says
+                    # nothing about the answer (COUNT(*) returns one row whatever it counts).
+                    or result.aggregated
                     or source_fields & pii_fields
                 ):
                     continue

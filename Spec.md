@@ -216,7 +216,7 @@ Every Verified Insight contains:
 
 If required evidence is missing or validation fails, the conclusion is an Unsupported Claim and must not be displayed as a Verified Insight. A malformed insight draft becomes an Unsupported Claim without discarding the other drafts of the same run.
 
-Row-level values are described by their SQL `GROUP BY` keys (for example `year = 2024`); ungrouped results fall back to their text columns, and single-row results omit row positions. Claims about filtered query results name the SQL `WHERE`/`HAVING` conditions, which are also recorded as Evidence Trail filters, and statistics that relate two fields name both fields. When no drafted claim passes verification, each complete (untruncated), ungrouped, non-PII query result publishes its row count as a deterministic claim, because a row listing is answered by its table. Row listings may select `rowid + 1 AS row_number` to identify rows of the uploaded file.
+Row-level values are described by their SQL `GROUP BY` keys (for example `year = 2024`); ungrouped results fall back to their text columns, and single-row results omit row positions. Claims about filtered query results name the SQL `WHERE`/`HAVING` conditions, which are also recorded as Evidence Trail filters, and statistics that relate two fields name both fields. When no drafted claim passes verification, each complete (untruncated), non-aggregated (no `GROUP BY` or aggregate function outside a window), non-PII query result publishes its row count as a deterministic claim, because a row listing is answered by its table. Row listings may select `rowid + 1 AS row_number` to identify rows of the uploaded file.
 
 ### FR-11 — Charts and dashboard
 

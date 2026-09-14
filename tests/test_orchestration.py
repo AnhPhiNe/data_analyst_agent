@@ -1047,6 +1047,26 @@ def test_sql_may_read_a_subset_of_the_approved_fields(tmp_path: Path) -> None:
     assert completed["verified_insights"][0]["claim"].endswith("is 2.")
 
 
+def test_aggregate_result_gets_no_automatic_row_count_claim(tmp_path: Path) -> None:
+    core, request = run_request(tmp_path)
+    gateway = FakeModelGateway(
+        [
+            goal_output(),
+            plan_output(),
+            tool_output("SELECT COUNT(*) AS north_rows FROM dataset WHERE region = 'North'"),
+            {"insights": []},
+        ]
+    )
+    agent = AgentOrchestrator(gateway, core, checkpointer=InMemorySaver())
+
+    agent.start(request)
+    completed = agent.resume(request.session_id, True)
+
+    # COUNT(*) returns one row, so "result row count is 1" would misstate the answer (2).
+    assert completed["status"] == AgentRunStatus.COMPLETED
+    assert completed["verified_insights"] == []
+
+
 def test_ascii_field_ids_stand_in_for_vietnamese_names_end_to_end(tmp_path: Path) -> None:
     upload = tmp_path / "doanh_thu.csv"
     upload.write_text("Khu vực,Doanh thu\nBắc,100\nNam,150\nBắc,50\n", encoding="utf-8", newline="")

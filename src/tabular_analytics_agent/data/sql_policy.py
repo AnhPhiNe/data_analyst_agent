@@ -39,6 +39,7 @@ class SQLAnalysis:
     group_by_columns: tuple[str, ...] = ()
     unaliased_outputs: tuple[str, ...] = ()
     filters: tuple[str, ...] = ()
+    aggregated: bool = False
 
 
 def replace_column_references(sql: str, replacements: Mapping[str, str]) -> str:
@@ -172,6 +173,22 @@ def analyze_read_only_sql(sql: str, *, allowed_table: str) -> SQLAnalysis:
         group_by_columns=_group_by_output_columns(statement),
         unaliased_outputs=_unaliased_outputs(statement),
         filters=_filters(statement),
+        aggregated=_is_aggregated(statement),
+    )
+
+
+def _is_aggregated(statement: exp.Query) -> bool:
+    """Return whether the outer query groups rows or reduces them with an aggregate function.
+
+    Window functions keep every row, so an aggregate inside OVER (...) does not count.
+    """
+    if not isinstance(statement, exp.Select):
+        return False
+    if statement.args.get("group"):
+        return True
+    return any(
+        function.find_ancestor(exp.Select) is statement and not function.find_ancestor(exp.Window)
+        for function in statement.find_all(exp.AggFunc)
     )
 
 

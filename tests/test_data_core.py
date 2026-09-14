@@ -154,6 +154,13 @@ def test_query_inspection_reports_unaliased_outputs_and_filters(tmp_path: Path) 
     assert plain.unaliased_outputs == ()
     assert plain.filters == ()
     assert result.filters == ("revenue >= 100",)
+    windowed = core.inspect_query(
+        handle, "SELECT region, SUM(revenue) OVER () AS running_total FROM dataset"
+    )
+    assert inspection.aggregated
+    assert result.aggregated
+    assert not plain.aggregated
+    assert not windowed.aggregated
 
 
 def test_field_ids_are_rewritten_to_exact_names_without_touching_aliases() -> None:
