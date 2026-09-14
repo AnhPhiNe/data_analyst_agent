@@ -42,6 +42,7 @@ from tabular_analytics_agent.data.models import (
 )
 from tabular_analytics_agent.data.sql_policy import analyze_read_only_sql
 from tabular_analytics_agent.domain import (
+    IDENTIFIER_LIKE_WARNING,
     CategoryFrequency,
     DataProfile,
     DatasetIdentity,
@@ -514,7 +515,7 @@ class TabularDataCore:
             and unique_count == non_missing
             and (is_text or normalized_type in _INTEGER_TYPES)
         ):
-            warnings.append("identifier-like unique field")
+            warnings.append(IDENTIFIER_LIKE_WARNING)
         if row_count and missing_count / row_count >= 0.5:
             warnings.append("high missingness")
         if is_text and unique_count > 50:

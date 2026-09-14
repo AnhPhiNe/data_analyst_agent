@@ -136,6 +136,9 @@ class TemporalSummary(DomainModel):
     latest: NonEmptyText
 
 
+IDENTIFIER_LIKE_WARNING = "identifier-like unique field"
+
+
 class FieldProfile(DomainModel):
     name: NonEmptyText
     kind: FieldKind

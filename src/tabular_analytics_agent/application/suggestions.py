@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-from tabular_analytics_agent.domain import DataProfile, FieldKind
+from tabular_analytics_agent.domain import IDENTIFIER_LIKE_WARNING, DataProfile, FieldKind
 
 _MAX_SUGGESTIONS = 5
 _MAX_GROUP_CATEGORIES = 20
-_IDENTIFIER_WARNING = "identifier-like unique field"
 
 
 def suggest_goals(profile: DataProfile) -> tuple[str, ...]:
@@ -19,7 +18,7 @@ def suggest_goals(profile: DataProfile) -> tuple[str, ...]:
     usable = [
         field
         for field in profile.fields
-        if field.name not in excluded and _IDENTIFIER_WARNING not in field.warnings
+        if field.name not in excluded and IDENTIFIER_LIKE_WARNING not in field.warnings
     ]
     measures = [
         field.name for field in usable if field.kind is FieldKind.NUMERIC and field.unique_count > 1

@@ -1,6 +1,7 @@
 """Public domain interface for validated analysis records."""
 
 from tabular_analytics_agent.domain.models import (
+    IDENTIFIER_LIKE_WARNING,
     ActionStatus,
     AnalysisPlan,
     AnalysisSession,
@@ -39,6 +40,7 @@ from tabular_analytics_agent.domain.models import (
 )
 
 __all__ = [
+    "IDENTIFIER_LIKE_WARNING",
     "ActionStatus",
     "AnalysisPlan",
     "AnalysisSession",
