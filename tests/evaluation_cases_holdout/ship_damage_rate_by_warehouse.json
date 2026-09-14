@@ -1,0 +1,51 @@
+{
+  "case_id": "holdout-ship-damage-rate-by-warehouse-v1",
+  "dataset_path": "tests/fixtures/eval_holdout/shipments_wide.xlsx",
+  "dataset_sha256": "c5b8667d06a84bb2a50051ad8d13f7264adfb1a80e1fcf31b2bfd933052c62f8",
+  "user_request": "For each origin warehouse, what is the damage rate as a fraction (total damaged units divided by total units)?",
+  "goal_family": "comparison",
+  "required_calculations": [
+    {
+      "metric": "damage_rate",
+      "aliases": [
+        "damage_ratio",
+        "damaged_rate",
+        "damage_fraction",
+        "rate"
+      ],
+      "group": {
+        "field": "origin_warehouse",
+        "value": "WH-North"
+      },
+      "expected": 0.025589563472152535,
+      "absolute_tolerance": 0.0001
+    },
+    {
+      "metric": "damage_rate",
+      "aliases": [
+        "damage_ratio",
+        "damaged_rate",
+        "damage_fraction",
+        "rate"
+      ],
+      "group": {
+        "field": "origin_warehouse",
+        "value": "WH-South"
+      },
+      "expected": 0.024239298607529654,
+      "absolute_tolerance": 0.0001
+    }
+  ],
+  "allowed_fields": [
+    "origin_warehouse",
+    "damaged_units",
+    "units"
+  ],
+  "supported_conclusions": [
+    "WH-North has the higher damage rate."
+  ],
+  "valid_chart_types": [
+    "bar",
+    "table"
+  ]
+}

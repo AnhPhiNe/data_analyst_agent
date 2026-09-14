@@ -68,3 +68,10 @@ the outstanding Must-tier flows and reliability gates.
   with a derived metric, dirty sensor data with prompt-injection text) in
   `tests/evaluation_cases_holdout/`. Expectations were computed independently with pandas and
   SciPy and committed before any live run; they must not be edited after model output is seen.
+- Holdout contamination (2026-09-14): two cases whose exact questions were tried manually in
+  Streamlit (average salary by department, revenue per employee) moved unchanged to
+  `tests/evaluation_cases_holdout_contaminated/` and are reported separately. The other workforce
+  cases share that dataset, which the user has viewed, so their results carry that caveat.
+- Holdout v2 (2026-09-14): 5 cases on an unseen 30-column, single-sheet XLSX shipments table
+  (synonym field, date-range filter, derived ratio, unavailable metric beside a similar field, and
+  missing-value profile), computed with pandas and committed before any live run.

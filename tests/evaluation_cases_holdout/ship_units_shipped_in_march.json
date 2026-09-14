@@ -1,0 +1,35 @@
+{
+  "case_id": "holdout-ship-units-shipped-in-march-v1",
+  "dataset_path": "tests/fixtures/eval_holdout/shipments_wide.xlsx",
+  "dataset_sha256": "c5b8667d06a84bb2a50051ad8d13f7264adfb1a80e1fcf31b2bfd933052c62f8",
+  "user_request": "How many units were shipped in March 2026?",
+  "goal_family": "summary",
+  "required_calculations": [
+    {
+      "metric": "units",
+      "aliases": [
+        "total_units",
+        "sum_units",
+        "units_shipped",
+        "total_units_shipped",
+        "march_units"
+      ],
+      "expected": 1688,
+      "absolute_tolerance": 1e-06
+    }
+  ],
+  "allowed_fields": [
+    "ship_date",
+    "units"
+  ],
+  "allowed_filters": [
+    "ship_date in March 2026"
+  ],
+  "supported_conclusions": [
+    "1688 units were shipped in March 2026."
+  ],
+  "valid_chart_types": [
+    "kpi",
+    "table"
+  ]
+}

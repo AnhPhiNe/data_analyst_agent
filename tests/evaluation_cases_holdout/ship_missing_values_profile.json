@@ -1,0 +1,20 @@
+{
+  "case_id": "holdout-ship-missing-values-profile-v1",
+  "dataset_path": "tests/fixtures/eval_holdout/shipments_wide.xlsx",
+  "dataset_sha256": "c5b8667d06a84bb2a50051ad8d13f7264adfb1a80e1fcf31b2bfd933052c62f8",
+  "user_request": "Which columns have missing values, and how many values are missing?",
+  "goal_family": "data_quality",
+  "expected_outcome": "profile",
+  "required_profile_facts": [
+    {
+      "fact": "missing_count",
+      "field": "customer_segment",
+      "expected": 2
+    },
+    {
+      "fact": "missing_count",
+      "field": "driver_rating",
+      "expected": 3
+    }
+  ]
+}

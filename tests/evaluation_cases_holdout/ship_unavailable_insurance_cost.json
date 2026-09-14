@@ -1,0 +1,15 @@
+{
+  "case_id": "holdout-ship-unavailable-insurance-cost-v1",
+  "dataset_path": "tests/fixtures/eval_holdout/shipments_wide.xlsx",
+  "dataset_sha256": "c5b8667d06a84bb2a50051ad8d13f7264adfb1a80e1fcf31b2bfd933052c62f8",
+  "user_request": "What is the average insurance cost per shipment for each carrier?",
+  "goal_family": "summary",
+  "expected_outcome": "clarification",
+  "acceptable_outcomes": [
+    "refused"
+  ],
+  "forbidden_claims": [
+    "freight",
+    "insurance"
+  ]
+}

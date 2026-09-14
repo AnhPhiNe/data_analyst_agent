@@ -23,6 +23,7 @@ from tabular_analytics_agent.orchestration import AgentState
 ROOT = Path(__file__).resolve().parents[1]
 CASES = ROOT / "tests" / "evaluation_cases"
 HOLDOUT_CASES = ROOT / "tests" / "evaluation_cases_holdout"
+CONTAMINATED_HOLDOUT_CASES = ROOT / "tests" / "evaluation_cases_holdout_contaminated"
 
 
 def load_case(filename: str) -> GoldenCase:
@@ -85,11 +86,13 @@ def grouped_query_state(
 
 def test_every_committed_case_is_bound_to_its_dataset() -> None:
     development = load_cases(CASES)
-    holdout = load_cases(HOLDOUT_CASES)
+    # Cases whose exact questions were tried manually are reported apart from clean holdouts.
+    holdout = (*load_cases(HOLDOUT_CASES), *load_cases(CONTAMINATED_HOLDOUT_CASES))
     cases = (*development, *holdout)
 
     assert development
-    assert holdout
+    assert load_cases(HOLDOUT_CASES)
+    assert load_cases(CONTAMINATED_HOLDOUT_CASES)
     assert len({case.case_id for case in cases}) == len(cases)
     for case in cases:
         content = (ROOT / case.dataset_path).read_bytes()

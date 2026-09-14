@@ -1,0 +1,77 @@
+{
+  "case_id": "holdout-ship-avg-delivery-time-by-carrier-v1",
+  "dataset_path": "tests/fixtures/eval_holdout/shipments_wide.xlsx",
+  "dataset_sha256": "c5b8667d06a84bb2a50051ad8d13f7264adfb1a80e1fcf31b2bfd933052c62f8",
+  "user_request": "What is the average delivery time in days for each carrier?",
+  "goal_family": "comparison",
+  "required_calculations": [
+    {
+      "metric": "transit_days",
+      "aliases": [
+        "avg_transit_days",
+        "average_transit_days",
+        "avg_delivery_days",
+        "avg_delivery_time",
+        "average_delivery_time",
+        "avg_days",
+        "avg_delivery_time_days",
+        "average_delivery_time_days"
+      ],
+      "group": {
+        "field": "carrier",
+        "value": "BlueLine"
+      },
+      "expected": 5.142857142857143,
+      "absolute_tolerance": 1e-06
+    },
+    {
+      "metric": "transit_days",
+      "aliases": [
+        "avg_transit_days",
+        "average_transit_days",
+        "avg_delivery_days",
+        "avg_delivery_time",
+        "average_delivery_time",
+        "avg_days",
+        "avg_delivery_time_days",
+        "average_delivery_time_days"
+      ],
+      "group": {
+        "field": "carrier",
+        "value": "Cargo One"
+      },
+      "expected": 3.4166666666666665,
+      "absolute_tolerance": 1e-06
+    },
+    {
+      "metric": "transit_days",
+      "aliases": [
+        "avg_transit_days",
+        "average_transit_days",
+        "avg_delivery_days",
+        "avg_delivery_time",
+        "average_delivery_time",
+        "avg_days",
+        "avg_delivery_time_days",
+        "average_delivery_time_days"
+      ],
+      "group": {
+        "field": "carrier",
+        "value": "FastFreight"
+      },
+      "expected": 5.357142857142857,
+      "absolute_tolerance": 1e-06
+    }
+  ],
+  "allowed_fields": [
+    "carrier",
+    "transit_days"
+  ],
+  "supported_conclusions": [
+    "Cargo One has the shortest average delivery time."
+  ],
+  "valid_chart_types": [
+    "bar",
+    "table"
+  ]
+}
