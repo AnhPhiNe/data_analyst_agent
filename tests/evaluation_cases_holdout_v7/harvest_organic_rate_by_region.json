@@ -1,0 +1,47 @@
+{
+  "case_id": "holdout-v7-harvest-organic-rate-by-region-v1",
+  "dataset_path": "tests/fixtures/eval_holdout_v7/farm_harvest.csv",
+  "dataset_sha256": "9688bcc26983a30075818cab2f25fce34ae9d13ca7849958fe9023daf8a0dade",
+  "user_request": "What share of harvests were organic in each region, as a value between 0 and 1?",
+  "goal_family": "comparison",
+  "required_calculations": [
+    {
+      "metric": "is_organic",
+      "group": {
+        "field": "region",
+        "value": "Coast"
+      },
+      "expected": 0.1864406779661017,
+      "absolute_tolerance": 0.0001
+    },
+    {
+      "metric": "is_organic",
+      "group": {
+        "field": "region",
+        "value": "Delta"
+      },
+      "expected": 0.176,
+      "absolute_tolerance": 0.0001
+    },
+    {
+      "metric": "is_organic",
+      "group": {
+        "field": "region",
+        "value": "Highlands"
+      },
+      "expected": 0.2653061224489796,
+      "absolute_tolerance": 0.0001
+    }
+  ],
+  "allowed_fields": [
+    "region",
+    "is_organic"
+  ],
+  "supported_conclusions": [
+    "Highlands has the highest organic share."
+  ],
+  "valid_chart_types": [
+    "bar",
+    "table"
+  ]
+}

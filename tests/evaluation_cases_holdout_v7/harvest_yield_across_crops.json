@@ -1,0 +1,39 @@
+{
+  "case_id": "holdout-v7-harvest-yield-across-crops-v1",
+  "dataset_path": "tests/fixtures/eval_holdout_v7/farm_harvest.csv",
+  "dataset_sha256": "9688bcc26983a30075818cab2f25fce34ae9d13ca7849958fe9023daf8a0dade",
+  "user_request": "Does average yield differ significantly across crops?",
+  "goal_family": "comparison",
+  "required_calculations": [
+    {
+      "metric": "group[str:\"Cassava\"].mean",
+      "expected": 954.667469879518,
+      "absolute_tolerance": 1e-06
+    },
+    {
+      "metric": "group[str:\"Coffee\"].mean",
+      "expected": 647.2127419354839,
+      "absolute_tolerance": 1e-06
+    },
+    {
+      "metric": "group[str:\"Maize\"].mean",
+      "expected": 800.1104301075269,
+      "absolute_tolerance": 1e-06
+    },
+    {
+      "metric": "group[str:\"Rice\"].mean",
+      "expected": 866.0774757281553,
+      "absolute_tolerance": 1e-06
+    }
+  ],
+  "allowed_fields": [
+    "crop",
+    "yield_kg"
+  ],
+  "supported_conclusions": [
+    "Mean yield is compared across crops with a multi-group test."
+  ],
+  "forbidden_claims": [
+    "cause"
+  ]
+}

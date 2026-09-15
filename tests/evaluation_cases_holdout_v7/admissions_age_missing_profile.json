@@ -1,0 +1,15 @@
+{
+  "case_id": "holdout-v7-admissions-age-missing-profile-v1",
+  "dataset_path": "tests/fixtures/eval_holdout_v7/tuyen_sinh.csv",
+  "dataset_sha256": "191da63a957fa3a948908bbbd96cfefb1c59d9600b587810ae326e784f3c8ca5",
+  "user_request": "Cột Tuổi có bao nhiêu giá trị bị thiếu?",
+  "goal_family": "data_quality",
+  "expected_outcome": "profile",
+  "required_profile_facts": [
+    {
+      "fact": "missing_count",
+      "field": "Tuổi",
+      "expected": 22
+    }
+  ]
+}

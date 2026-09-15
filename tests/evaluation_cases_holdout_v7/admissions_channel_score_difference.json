@@ -1,0 +1,29 @@
+{
+  "case_id": "holdout-v7-admissions-channel-score-difference-v1",
+  "dataset_path": "tests/fixtures/eval_holdout_v7/tuyen_sinh.csv",
+  "dataset_sha256": "191da63a957fa3a948908bbbd96cfefb1c59d9600b587810ae326e784f3c8ca5",
+  "user_request": "Điểm xét tuyển trung bình của hình thức trực tiếp và trực tuyến có khác nhau có ý nghĩa thống kê không?",
+  "goal_family": "comparison",
+  "required_calculations": [
+    {
+      "metric": "group[str:\"Trực tiếp\"].mean",
+      "expected": 24.493426966292134,
+      "absolute_tolerance": 1e-06
+    },
+    {
+      "metric": "group[str:\"Trực tuyến\"].mean",
+      "expected": 25.50330985915493,
+      "absolute_tolerance": 1e-06
+    }
+  ],
+  "allowed_fields": [
+    "Hình thức",
+    "Điểm xét tuyển"
+  ],
+  "supported_conclusions": [
+    "Điểm trung bình của hai hình thức được so sánh bằng kiểm định hai nhóm."
+  ],
+  "forbidden_claims": [
+    "cause"
+  ]
+}

@@ -1,0 +1,55 @@
+{
+  "case_id": "holdout-v7-admissions-count-by-program-v1",
+  "dataset_path": "tests/fixtures/eval_holdout_v7/tuyen_sinh.csv",
+  "dataset_sha256": "191da63a957fa3a948908bbbd96cfefb1c59d9600b587810ae326e784f3c8ca5",
+  "user_request": "Có bao nhiêu hồ sơ đăng ký theo mỗi ngành?",
+  "goal_family": "comparison",
+  "required_calculations": [
+    {
+      "metric": "record_count",
+      "group": {
+        "field": "Ngành",
+        "value": "Kinh tế"
+      },
+      "expected": 82,
+      "absolute_tolerance": 0.0
+    },
+    {
+      "metric": "record_count",
+      "group": {
+        "field": "Ngành",
+        "value": "Kỹ thuật"
+      },
+      "expected": 72,
+      "absolute_tolerance": 0.0
+    },
+    {
+      "metric": "record_count",
+      "group": {
+        "field": "Ngành",
+        "value": "Ngôn ngữ"
+      },
+      "expected": 92,
+      "absolute_tolerance": 0.0
+    },
+    {
+      "metric": "record_count",
+      "group": {
+        "field": "Ngành",
+        "value": "Y khoa"
+      },
+      "expected": 74,
+      "absolute_tolerance": 0.0
+    }
+  ],
+  "allowed_fields": [
+    "Ngành"
+  ],
+  "supported_conclusions": [
+    "Ngành Ngôn ngữ có nhiều hồ sơ nhất."
+  ],
+  "valid_chart_types": [
+    "bar",
+    "table"
+  ]
+}

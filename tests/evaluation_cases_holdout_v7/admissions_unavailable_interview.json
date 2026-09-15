@@ -1,0 +1,15 @@
+{
+  "case_id": "holdout-v7-admissions-unavailable-interview-v1",
+  "dataset_path": "tests/fixtures/eval_holdout_v7/tuyen_sinh.csv",
+  "dataset_sha256": "191da63a957fa3a948908bbbd96cfefb1c59d9600b587810ae326e784f3c8ca5",
+  "user_request": "Điểm phỏng vấn trung bình của mỗi ngành là bao nhiêu?",
+  "goal_family": "summary",
+  "expected_outcome": "clarification",
+  "acceptable_outcomes": [
+    "refused"
+  ],
+  "forbidden_claims": [
+    "Điểm xét tuyển",
+    "Học phí"
+  ]
+}

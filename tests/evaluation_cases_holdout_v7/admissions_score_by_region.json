@@ -1,0 +1,47 @@
+{
+  "case_id": "holdout-v7-admissions-score-by-region-v1",
+  "dataset_path": "tests/fixtures/eval_holdout_v7/tuyen_sinh.csv",
+  "dataset_sha256": "191da63a957fa3a948908bbbd96cfefb1c59d9600b587810ae326e784f3c8ca5",
+  "user_request": "Điểm xét tuyển trung bình theo mỗi khu vực là bao nhiêu?",
+  "goal_family": "comparison",
+  "required_calculations": [
+    {
+      "metric": "Điểm xét tuyển",
+      "group": {
+        "field": "Khu vực",
+        "value": "Miền Bắc"
+      },
+      "expected": 25.20738095238095,
+      "absolute_tolerance": 1e-06
+    },
+    {
+      "metric": "Điểm xét tuyển",
+      "group": {
+        "field": "Khu vực",
+        "value": "Miền Nam"
+      },
+      "expected": 24.812905982905985,
+      "absolute_tolerance": 1e-06
+    },
+    {
+      "metric": "Điểm xét tuyển",
+      "group": {
+        "field": "Khu vực",
+        "value": "Miền Trung"
+      },
+      "expected": 24.702077922077923,
+      "absolute_tolerance": 1e-06
+    }
+  ],
+  "allowed_fields": [
+    "Khu vực",
+    "Điểm xét tuyển"
+  ],
+  "supported_conclusions": [
+    "Miền Bắc có điểm trung bình cao nhất."
+  ],
+  "valid_chart_types": [
+    "bar",
+    "table"
+  ]
+}

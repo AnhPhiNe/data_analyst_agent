@@ -1,0 +1,24 @@
+{
+  "case_id": "holdout-v7-harvest-rainfall-yield-correlation-v1",
+  "dataset_path": "tests/fixtures/eval_holdout_v7/farm_harvest.csv",
+  "dataset_sha256": "9688bcc26983a30075818cab2f25fce34ae9d13ca7849958fe9023daf8a0dade",
+  "user_request": "Is rainfall correlated with yield?",
+  "goal_family": "relationship",
+  "required_calculations": [
+    {
+      "metric": "pearson_r",
+      "expected": 0.7349745831063051,
+      "absolute_tolerance": 0.001
+    }
+  ],
+  "allowed_fields": [
+    "rainfall_mm",
+    "yield_kg"
+  ],
+  "supported_conclusions": [
+    "Rainfall and yield are positively associated, which does not establish causation."
+  ],
+  "forbidden_claims": [
+    "cause"
+  ]
+}

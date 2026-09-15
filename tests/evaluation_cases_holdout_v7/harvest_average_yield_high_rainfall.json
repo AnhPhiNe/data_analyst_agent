@@ -1,0 +1,25 @@
+{
+  "case_id": "holdout-v7-harvest-average-yield-high-rainfall-v1",
+  "dataset_path": "tests/fixtures/eval_holdout_v7/farm_harvest.csv",
+  "dataset_sha256": "9688bcc26983a30075818cab2f25fce34ae9d13ca7849958fe9023daf8a0dade",
+  "user_request": "What is the average yield in kg for harvests with rainfall above 100 mm?",
+  "goal_family": "summary",
+  "required_calculations": [
+    {
+      "metric": "avg_yield",
+      "expected": 901.397105263158,
+      "absolute_tolerance": 1e-06
+    }
+  ],
+  "allowed_fields": [
+    "rainfall_mm",
+    "yield_kg"
+  ],
+  "supported_conclusions": [
+    "The average yield above 100 mm of rainfall is reported."
+  ],
+  "valid_chart_types": [
+    "kpi",
+    "table"
+  ]
+}

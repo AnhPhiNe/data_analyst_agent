@@ -1,0 +1,56 @@
+{
+  "case_id": "holdout-v7-harvest-total-yield-by-crop-v1",
+  "dataset_path": "tests/fixtures/eval_holdout_v7/farm_harvest.csv",
+  "dataset_sha256": "9688bcc26983a30075818cab2f25fce34ae9d13ca7849958fe9023daf8a0dade",
+  "user_request": "What is the total yield in kg for each crop?",
+  "goal_family": "comparison",
+  "required_calculations": [
+    {
+      "metric": "yield_kg",
+      "group": {
+        "field": "crop",
+        "value": "Cassava"
+      },
+      "expected": 79237.4,
+      "absolute_tolerance": 0.01
+    },
+    {
+      "metric": "yield_kg",
+      "group": {
+        "field": "crop",
+        "value": "Coffee"
+      },
+      "expected": 40127.19,
+      "absolute_tolerance": 0.01
+    },
+    {
+      "metric": "yield_kg",
+      "group": {
+        "field": "crop",
+        "value": "Maize"
+      },
+      "expected": 74410.27,
+      "absolute_tolerance": 0.01
+    },
+    {
+      "metric": "yield_kg",
+      "group": {
+        "field": "crop",
+        "value": "Rice"
+      },
+      "expected": 89205.98,
+      "absolute_tolerance": 0.01
+    }
+  ],
+  "allowed_fields": [
+    "crop",
+    "yield_kg"
+  ],
+  "supported_conclusions": [
+    "Rice has the highest total yield."
+  ],
+  "valid_chart_types": [
+    "bar",
+    "table"
+  ]
+}

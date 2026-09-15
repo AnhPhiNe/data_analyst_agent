@@ -1,0 +1,23 @@
+{
+  "case_id": "holdout-v7-admissions-april-count-v1",
+  "dataset_path": "tests/fixtures/eval_holdout_v7/tuyen_sinh.csv",
+  "dataset_sha256": "191da63a957fa3a948908bbbd96cfefb1c59d9600b587810ae326e784f3c8ca5",
+  "user_request": "Có bao nhiêu hồ sơ nộp trong tháng 4 năm 2026?",
+  "goal_family": "summary",
+  "required_calculations": [
+    {
+      "metric": "record_count",
+      "expected": 78
+    }
+  ],
+  "allowed_fields": [
+    "Ngày nộp"
+  ],
+  "supported_conclusions": [
+    "Tháng 4 năm 2026 có 78 hồ sơ."
+  ],
+  "valid_chart_types": [
+    "kpi",
+    "table"
+  ]
+}
