@@ -1,0 +1,74 @@
+{
+  "case_id": "final-attendance-by-sport-v1",
+  "dataset_path": "tests/fixtures/eval_final/lop_the_thao_cong_dong.csv",
+  "dataset_sha256": "4f9ae51ae75ff99a0cb341918ba2496df1cd15c595038d6bd37e764809b89b8e",
+  "user_request": "Cho tôi số người tham dự trung bình của từng môn thể thao.",
+  "goal_family": "summary",
+  "expected_outcome": "answered",
+  "acceptable_outcomes": [],
+  "required_calculations": [
+    {
+      "metric": "so_nguoi_tham_du",
+      "expected": 25.84722222222222,
+      "absolute_tolerance": 1e-06,
+      "group": {
+        "field": "mon_the_thao",
+        "value": "aerobic"
+      }
+    },
+    {
+      "metric": "so_nguoi_tham_du",
+      "expected": 20.73611111111111,
+      "absolute_tolerance": 1e-06,
+      "group": {
+        "field": "mon_the_thao",
+        "value": "boi_loi"
+      }
+    },
+    {
+      "metric": "so_nguoi_tham_du",
+      "expected": 25.680555555555557,
+      "absolute_tolerance": 1e-06,
+      "group": {
+        "field": "mon_the_thao",
+        "value": "bong_ro"
+      }
+    },
+    {
+      "metric": "so_nguoi_tham_du",
+      "expected": 28.59722222222222,
+      "absolute_tolerance": 1e-06,
+      "group": {
+        "field": "mon_the_thao",
+        "value": "cau_long"
+      }
+    },
+    {
+      "metric": "so_nguoi_tham_du",
+      "expected": 23.76388888888889,
+      "absolute_tolerance": 1e-06,
+      "group": {
+        "field": "mon_the_thao",
+        "value": "yoga"
+      }
+    }
+  ],
+  "required_profile_facts": [],
+  "allowed_fields": [
+    "mon_the_thao",
+    "so_nguoi_tham_du"
+  ],
+  "allowed_filters": [],
+  "supported_conclusions": [
+    "Average attendance is reported for every sport."
+  ],
+  "forbidden_claims": [
+    "causes",
+    "caused by",
+    "proves"
+  ],
+  "valid_chart_types": [
+    "bar",
+    "table"
+  ]
+}

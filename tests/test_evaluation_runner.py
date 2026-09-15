@@ -39,6 +39,7 @@ HOLDOUT_V7_CASES = ROOT / "tests" / "evaluation_cases_holdout_v7"
 HOLDOUT_V8_CASES = ROOT / "tests" / "evaluation_cases_holdout_v8"
 HOLDOUT_V9_CASES = ROOT / "tests" / "evaluation_cases_holdout_v9"
 RELEASE_CASES = ROOT / "tests" / "evaluation_cases_release"
+FINAL_CASES = ROOT / "tests" / "evaluation_cases_final"
 
 
 def load_case(filename: str) -> GoldenCase:
@@ -111,6 +112,7 @@ def test_every_committed_case_is_bound_to_its_dataset() -> None:
     holdout_v8 = load_cases(HOLDOUT_V8_CASES)
     holdout_v9 = load_cases(HOLDOUT_V9_CASES)
     release = load_cases(RELEASE_CASES)
+    final = load_cases(FINAL_CASES)
     cases = (
         *development,
         *holdout,
@@ -122,6 +124,7 @@ def test_every_committed_case_is_bound_to_its_dataset() -> None:
         *holdout_v8,
         *holdout_v9,
         *release,
+        *final,
     )
 
     assert holdout_v3
@@ -150,6 +153,10 @@ def test_every_committed_case_is_bound_to_its_dataset() -> None:
     earlier_datasets |= {case.dataset_path for case in holdout_v9}
     # The release suite uses datasets that no development or holdout case has used.
     assert not earlier_datasets & {case.dataset_path for case in release}
+    earlier_datasets |= {case.dataset_path for case in release}
+    # The final holdout measures the post-release fixes on two more unseen datasets.
+    assert len(final) == 10
+    assert not earlier_datasets & {case.dataset_path for case in final}
 
     assert development
     assert load_cases(HOLDOUT_CASES)

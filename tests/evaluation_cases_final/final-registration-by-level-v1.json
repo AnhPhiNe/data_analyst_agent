@@ -1,0 +1,56 @@
+{
+  "case_id": "final-registration-by-level-v1",
+  "dataset_path": "tests/fixtures/eval_final/lop_the_thao_cong_dong.csv",
+  "dataset_sha256": "4f9ae51ae75ff99a0cb341918ba2496df1cd15c595038d6bd37e764809b89b8e",
+  "user_request": "moi cap do co tong bn nguoi dang ky?",
+  "goal_family": "summary",
+  "expected_outcome": "answered",
+  "acceptable_outcomes": [],
+  "required_calculations": [
+    {
+      "metric": "so_nguoi_dang_ky",
+      "expected": 7089,
+      "absolute_tolerance": 1e-06,
+      "group": {
+        "field": "cap_do",
+        "value": "co_ban"
+      }
+    },
+    {
+      "metric": "so_nguoi_dang_ky",
+      "expected": 1692,
+      "absolute_tolerance": 1e-06,
+      "group": {
+        "field": "cap_do",
+        "value": "nang_cao"
+      }
+    },
+    {
+      "metric": "so_nguoi_dang_ky",
+      "expected": 3111,
+      "absolute_tolerance": 1e-06,
+      "group": {
+        "field": "cap_do",
+        "value": "trung_cap"
+      }
+    }
+  ],
+  "required_profile_facts": [],
+  "allowed_fields": [
+    "cap_do",
+    "so_nguoi_dang_ky"
+  ],
+  "allowed_filters": [],
+  "supported_conclusions": [
+    "Total registrations are reported for every level."
+  ],
+  "forbidden_claims": [
+    "causes",
+    "caused by",
+    "proves"
+  ],
+  "valid_chart_types": [
+    "bar",
+    "table"
+  ]
+}

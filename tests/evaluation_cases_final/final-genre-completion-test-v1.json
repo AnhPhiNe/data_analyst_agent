@@ -1,0 +1,70 @@
+{
+  "case_id": "final-genre-completion-test-v1",
+  "dataset_path": "tests/fixtures/eval_final/podcast_episode_performance.csv",
+  "dataset_sha256": "fa1bb282d10a8cf0a85290bb6c59d0ede3ab2e7950704013e325e0e253b899a7",
+  "user_request": "Is completion rate different across genres?",
+  "goal_family": "comparison",
+  "expected_outcome": "answered",
+  "acceptable_outcomes": [],
+  "required_calculations": [
+    {
+      "metric": "group[str:\"business\"].mean",
+      "expected": 0.5977647619047619,
+      "absolute_tolerance": 1e-06
+    },
+    {
+      "metric": "group[str:\"culture\"].mean",
+      "expected": 0.6234238095238096,
+      "absolute_tolerance": 1e-06
+    },
+    {
+      "metric": "group[str:\"history\"].mean",
+      "expected": 0.6613600000000001,
+      "absolute_tolerance": 1e-06
+    },
+    {
+      "metric": "group[str:\"science\"].mean",
+      "expected": 0.7131342857142856,
+      "absolute_tolerance": 1e-06
+    }
+  ],
+  "required_profile_facts": [],
+  "allowed_fields": [
+    "genre",
+    "completion_rate"
+  ],
+  "allowed_filters": [],
+  "supported_conclusions": [
+    "Completion rate is compared across genres with a group difference test."
+  ],
+  "forbidden_claims": [
+    "causes",
+    "caused by",
+    "proves"
+  ],
+  "valid_chart_types": [],
+  "alternative_calculations": [
+    [
+      {
+        "metric": "group[str:\"business\"].median",
+        "expected": 0.5929,
+        "absolute_tolerance": 1e-06
+      },
+      {
+        "metric": "group[str:\"culture\"].median",
+        "expected": 0.6162,
+        "absolute_tolerance": 1e-06
+      },
+      {
+        "metric": "group[str:\"history\"].median",
+        "expected": 0.6578,
+        "absolute_tolerance": 1e-06
+      },
+      {
+        "metric": "group[str:\"science\"].median",
+        "expected": 0.713,
+        "absolute_tolerance": 1e-06
+      }
+    ]
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "case_id": "final-ambiguous-effective-class-v1",
+  "dataset_path": "tests/fixtures/eval_final/lop_the_thao_cong_dong.csv",
+  "dataset_sha256": "4f9ae51ae75ff99a0cb341918ba2496df1cd15c595038d6bd37e764809b89b8e",
+  "user_request": "lop nao hieu qua nhat?",
+  "goal_family": "comparison",
+  "expected_outcome": "clarification",
+  "acceptable_outcomes": [],
+  "required_calculations": [],
+  "required_profile_facts": [],
+  "allowed_fields": [
+    "mon_the_thao",
+    "ty_le_tham_du",
+    "diem_hai_long"
+  ],
+  "allowed_filters": [],
+  "supported_conclusions": [],
+  "forbidden_claims": [],
+  "valid_chart_types": []
+}

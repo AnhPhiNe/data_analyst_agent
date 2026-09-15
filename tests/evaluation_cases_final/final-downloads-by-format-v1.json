@@ -1,0 +1,65 @@
+{
+  "case_id": "final-downloads-by-format-v1",
+  "dataset_path": "tests/fixtures/eval_final/podcast_episode_performance.csv",
+  "dataset_sha256": "fa1bb282d10a8cf0a85290bb6c59d0ede3ab2e7950704013e325e0e253b899a7",
+  "user_request": "What is the average 7-day download count for each episode format?",
+  "goal_family": "summary",
+  "expected_outcome": "answered",
+  "acceptable_outcomes": [],
+  "required_calculations": [
+    {
+      "metric": "downloads_7d",
+      "expected": 8747.368421052632,
+      "absolute_tolerance": 1e-06,
+      "group": {
+        "field": "episode_format",
+        "value": "interview"
+      }
+    },
+    {
+      "metric": "downloads_7d",
+      "expected": 11098.5,
+      "absolute_tolerance": 1e-06,
+      "group": {
+        "field": "episode_format",
+        "value": "narrative"
+      }
+    },
+    {
+      "metric": "downloads_7d",
+      "expected": 7171.0,
+      "absolute_tolerance": 1e-06,
+      "group": {
+        "field": "episode_format",
+        "value": "panel"
+      }
+    },
+    {
+      "metric": "downloads_7d",
+      "expected": 6475.943396226415,
+      "absolute_tolerance": 1e-06,
+      "group": {
+        "field": "episode_format",
+        "value": "solo"
+      }
+    }
+  ],
+  "required_profile_facts": [],
+  "allowed_fields": [
+    "episode_format",
+    "downloads_7d"
+  ],
+  "allowed_filters": [],
+  "supported_conclusions": [
+    "Average downloads are reported for every episode format."
+  ],
+  "forbidden_claims": [
+    "causes",
+    "caused by",
+    "proves"
+  ],
+  "valid_chart_types": [
+    "bar",
+    "table"
+  ]
+}

@@ -1,0 +1,65 @@
+{
+  "case_id": "final-completion-by-genre-v1",
+  "dataset_path": "tests/fixtures/eval_final/podcast_episode_performance.csv",
+  "dataset_sha256": "fa1bb282d10a8cf0a85290bb6c59d0ede3ab2e7950704013e325e0e253b899a7",
+  "user_request": "completion rate tung genre sao?",
+  "goal_family": "summary",
+  "expected_outcome": "answered",
+  "acceptable_outcomes": [],
+  "required_calculations": [
+    {
+      "metric": "completion_rate",
+      "expected": 0.5977647619047619,
+      "absolute_tolerance": 1e-06,
+      "group": {
+        "field": "genre",
+        "value": "business"
+      }
+    },
+    {
+      "metric": "completion_rate",
+      "expected": 0.6234238095238096,
+      "absolute_tolerance": 1e-06,
+      "group": {
+        "field": "genre",
+        "value": "culture"
+      }
+    },
+    {
+      "metric": "completion_rate",
+      "expected": 0.6613600000000001,
+      "absolute_tolerance": 1e-06,
+      "group": {
+        "field": "genre",
+        "value": "history"
+      }
+    },
+    {
+      "metric": "completion_rate",
+      "expected": 0.7131342857142856,
+      "absolute_tolerance": 1e-06,
+      "group": {
+        "field": "genre",
+        "value": "science"
+      }
+    }
+  ],
+  "required_profile_facts": [],
+  "allowed_fields": [
+    "genre",
+    "completion_rate"
+  ],
+  "allowed_filters": [],
+  "supported_conclusions": [
+    "Average completion rate is reported for every genre."
+  ],
+  "forbidden_claims": [
+    "causes",
+    "caused by",
+    "proves"
+  ],
+  "valid_chart_types": [
+    "bar",
+    "table"
+  ]
+}

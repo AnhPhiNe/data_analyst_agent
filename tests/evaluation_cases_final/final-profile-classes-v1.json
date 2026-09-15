@@ -1,0 +1,83 @@
+{
+  "case_id": "final-profile-classes-v1",
+  "dataset_path": "tests/fixtures/eval_final/lop_the_thao_cong_dong.csv",
+  "dataset_sha256": "4f9ae51ae75ff99a0cb341918ba2496df1cd15c595038d6bd37e764809b89b8e",
+  "user_request": "Bảng này có bao nhiêu dòng, những cột nào và kiểu dữ liệu của từng cột?",
+  "goal_family": "data_quality",
+  "expected_outcome": "profile",
+  "acceptable_outcomes": [],
+  "required_calculations": [],
+  "required_profile_facts": [
+    {
+      "fact": "row_count",
+      "expected": 360
+    },
+    {
+      "fact": "field_names",
+      "expected": [
+        "ngay_hoc",
+        "mon_the_thao",
+        "cap_do",
+        "so_nguoi_dang_ky",
+        "so_nguoi_tham_du",
+        "thoi_luong_phut",
+        "diem_hai_long",
+        "ty_le_tham_du"
+      ]
+    },
+    {
+      "fact": "field_kind",
+      "field": "ngay_hoc",
+      "expected": "datetime"
+    },
+    {
+      "fact": "field_kind",
+      "field": "mon_the_thao",
+      "expected": "categorical"
+    },
+    {
+      "fact": "field_kind",
+      "field": "cap_do",
+      "expected": "categorical"
+    },
+    {
+      "fact": "field_kind",
+      "field": "so_nguoi_dang_ky",
+      "expected": "numeric"
+    },
+    {
+      "fact": "field_kind",
+      "field": "so_nguoi_tham_du",
+      "expected": "numeric"
+    },
+    {
+      "fact": "field_kind",
+      "field": "thoi_luong_phut",
+      "expected": "numeric"
+    },
+    {
+      "fact": "field_kind",
+      "field": "diem_hai_long",
+      "expected": "numeric"
+    },
+    {
+      "fact": "field_kind",
+      "field": "ty_le_tham_du",
+      "expected": "numeric"
+    }
+  ],
+  "allowed_fields": [
+    "ngay_hoc",
+    "mon_the_thao",
+    "cap_do",
+    "so_nguoi_dang_ky",
+    "so_nguoi_tham_du",
+    "thoi_luong_phut",
+    "diem_hai_long",
+    "ty_le_tham_du"
+  ],
+  "allowed_filters": [],
+  "supported_conclusions": [],
+  "forbidden_claims": [],
+  "valid_chart_types": []
+}

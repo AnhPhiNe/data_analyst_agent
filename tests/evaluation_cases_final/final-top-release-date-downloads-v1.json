@@ -1,0 +1,52 @@
+{
+  "case_id": "final-top-release-date-downloads-v1",
+  "dataset_path": "tests/fixtures/eval_final/podcast_episode_performance.csv",
+  "dataset_sha256": "fa1bb282d10a8cf0a85290bb6c59d0ede3ab2e7950704013e325e0e253b899a7",
+  "user_request": "Ngày phát hành nào có tổng downloads_7d cao nhất?",
+  "goal_family": "comparison",
+  "expected_outcome": "answered",
+  "acceptable_outcomes": [],
+  "required_calculations": [
+    {
+      "metric": "downloads_7d",
+      "expected": 134700,
+      "absolute_tolerance": 1e-06,
+      "group": {
+        "field": null,
+        "value": "2026-06-10T00:00:00"
+      }
+    }
+  ],
+  "required_profile_facts": [],
+  "allowed_fields": [
+    "release_date",
+    "downloads_7d"
+  ],
+  "allowed_filters": [],
+  "supported_conclusions": [
+    "2026-06-10 has the highest total 7-day downloads."
+  ],
+  "forbidden_claims": [
+    "causes",
+    "caused by",
+    "proves"
+  ],
+  "valid_chart_types": [
+    "bar",
+    "table",
+    "kpi"
+  ],
+  "alternative_calculations": [
+    [
+      {
+        "metric": "downloads_7d",
+        "expected": 134700,
+        "absolute_tolerance": 1e-06,
+        "group": {
+          "field": null,
+          "value": "2026-06-10"
+        }
+      }
+    ]
+  ]
+}

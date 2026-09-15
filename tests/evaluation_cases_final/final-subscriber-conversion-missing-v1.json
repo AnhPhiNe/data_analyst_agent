@@ -1,0 +1,20 @@
+{
+  "case_id": "final-subscriber-conversion-missing-v1",
+  "dataset_path": "tests/fixtures/eval_final/podcast_episode_performance.csv",
+  "dataset_sha256": "fa1bb282d10a8cf0a85290bb6c59d0ede3ab2e7950704013e325e0e253b899a7",
+  "user_request": "Tỷ lệ chuyển người nghe thành thuê bao của từng genre là bao nhiêu?",
+  "goal_family": "summary",
+  "expected_outcome": "clarification",
+  "acceptable_outcomes": [
+    "refused"
+  ],
+  "required_calculations": [],
+  "required_profile_facts": [],
+  "allowed_fields": [
+    "genre"
+  ],
+  "allowed_filters": [],
+  "supported_conclusions": [],
+  "forbidden_claims": [],
+  "valid_chart_types": []
+}
