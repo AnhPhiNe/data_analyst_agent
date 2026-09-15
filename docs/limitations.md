@@ -50,10 +50,16 @@ result values of at most 50 rows.
 
 ## 4. Privacy detection is heuristic
 
-- Possible PII is detected from English column names (for example `email`, `phone`, `full_name`)
-  and from values that look like email addresses or phone numbers.
-- Column names in other languages, such as `Tên khách hàng` or `Địa chỉ`, and personal names or
-  addresses in values are not detected. Such fields are sent to the model like any other field.
+- Possible PII is detected from personal-data column names in English and Vietnamese,
+  compared after removing diacritics (for example `full_name`, `Họ và tên`, `Địa chỉ`,
+  `SĐT`, `CCCD`), and from values that look like email addresses or phone numbers. The word
+  list is short and generic: a column called only `Tên` or `name`, or one named in another
+  language, is not detected.
+- Personal names or addresses inside other columns are not detected, and such fields are
+  sent to the model like any other field.
+- Possible PII fields send no sample values and are not used to draft claims, so a question
+  whose answer names a person, such as the customer who spent the most, gets no Verified
+  Insight.
 - An identifier-like warning requires at least 20 non-missing rows, so an id column in a smaller
   table is treated as an ordinary field.
 
@@ -209,13 +215,5 @@ datasets from v8, so the two scores are not directly comparable.
 
 ## 11. Specified but not implemented
 
-These parts of the specification are recorded as known gaps instead of being removed from it:
-
-- Person names, addresses, and non-English column names such as `Tên khách hàng` are not
-  detected as possible PII (see Section 4; scheduled right after the release suite).
-- A dataset with no numeric field, no grouping field, and no missing values or duplicate rows
-  gets two goal suggestions instead of three to five (scheduled right after the release
-  suite).
-- There is no run-level trace ID, no complete record of graph node transitions, no estimated
-  cost, and no application command to rerun a saved Tool Action; the saved SQL or statistical
-  parameters can be rerun manually (deferred after the MVP).
+- Person names and addresses inside the values of columns whose names do not mark personal
+  data are not detected as possible PII (see Section 4).

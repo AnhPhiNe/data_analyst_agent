@@ -296,3 +296,15 @@ the outstanding Must-tier flows and reliability gates.
   seen before on this case and not changed. The new tests failed against the previous commit in a
   separate clone. 420 tests passed (2 skipped), branch-inclusive coverage 91.04%, Ruff,
   formatting, and strict mypy passed. The code is frozen for the release suite from this commit.
+- Known gaps closed before the release suite (2026-09-15, after the Spec v1.5 accuracy
+  pass): personal-data column names in Vietnamese and English are detected as possible PII
+  after removing diacritics, with generic words only and none taken from evaluation
+  datasets; goal suggestions always number at least three; each run records a run ID and its
+  graph node path from checkpoint history; the evaluation runner totals prompt and output
+  tokens and estimates cost from `--input-price` and `--output-price`; and the Audit view
+  reruns a saved SQL or statistical Tool Action without a model call and reports whether it
+  reproduced. No prompt template or grading rule changed, and no development fixture has
+  personal-data columns, so no live run was needed. The new tests failed against the
+  previous commit in a separate clone. 427 tests passed (2 skipped), branch-inclusive
+  coverage 91.01%, Ruff, formatting, and strict mypy passed. The code is frozen again
+  for the release suite from this commit.

@@ -78,7 +78,7 @@ The maximum size and execution limits must be configurable rather than hard-code
 2. The user uploads a CSV or XLSX Source Dataset.
 3. The application validates the file, stores it immutably, and computes its hash.
 4. The application creates a Data Profile, surfaces quality risks and possible PII, and shows a Data Overview (FR-11).
-5. The application proposes relevant Analytical Goals, three to five for most datasets (FR-05).
+5. The application proposes three to five relevant Analytical Goals (FR-05).
 6. The user selects a suggestion or provides a different goal, in English or Vietnamese.
 7. Questions answerable from the Data Profile alone — column names, field types, row count, duplicate rows, missing values, unique counts, quality warnings, and whole-column descriptive statistics — are answered directly from the profile without an Analysis Plan or Tool Actions.
 8. For other goals, the agent asks for Semantic Annotations when ambiguity could materially change the answer to that goal.
@@ -155,7 +155,7 @@ Driver Exploration may identify Statistical Associations but must not imply caus
 
 Goals may be written in English or Vietnamese, and Supported Datasets may use Vietnamese headers and values.
 
-After profiling, the application proposes three to five goals derived deterministically from the Data Profile's field kinds (comparison, relationship, trend, two-group significance, data quality, summary, and structure). Suggestions make no model call and never name possible PII or identifier-like fields. A dataset with no numeric field, no grouping field, and no missing values or duplicate rows currently receives only two structure suggestions (known gap, Section 24). The user may select a suggestion or write a different goal.
+After profiling, the application proposes three to five goals derived deterministically from the Data Profile's field kinds (comparison, relationship, trend, two-group significance, data quality, summary, and structure). Suggestions make no model call and never name possible PII or identifier-like fields. When the profile offers fewer than three such goals, a question about the columns with the most distinct values is added. The user may select a suggestion or write a different goal.
 
 ### FR-06 — Analysis planning
 
@@ -486,7 +486,7 @@ Limits must be configurable and visible in failure messages.
 - Load API credentials from environment variables or Streamlit Secrets.
 - Never commit `.env` or secrets.
 - Redact credentials from errors and traces.
-- Detect likely PII heuristically from email and phone values and from English column names such as `email`, `phone`, `address`, or `full_name`; identifier-like fields are flagged separately (FR-03). Person names and addresses in values, and non-English column names such as `Tên khách hàng`, are not detected yet (known gap, Section 24).
+- Detect likely PII heuristically from email and phone values and from personal-data column names in English and Vietnamese, matched after removing diacritics: for example `email`, `full_name`, `customer_name`, `Họ và tên`, `Địa chỉ`, `SĐT`, `CCCD`, `Ngày sinh`, or `Tên khách hàng`. A bare `name` or `Tên` is not treated as PII, because product and branch names are common. Identifier-like fields are flagged separately (FR-03). Person names and addresses inside the values of other columns are not detected (known gap, Section 24).
 - Send no sample values from possible PII fields, and exclude results that read them from insight drafting (Section 14.5).
 - Provide an option that sends no row samples to the API: `TABULAR_AGENT_SEND_SAMPLE_VALUES=false` withholds every frequent field value from model prompts. The default sends them, and prompts are unchanged when the option is not set.
 - Do not commit real user data to the repository.
@@ -524,18 +524,18 @@ Limits must be configurable and visible in failure messages.
 
 Every run records:
 
-- Session ID. A run-level trace ID is a known gap (Section 24).
-- A trace for each model call, by graph task, without private chain-of-thought. A complete record of graph node transitions is a known gap.
+- Session ID and a run ID assigned when each request starts.
+- A trace for each model call, by graph task, without private chain-of-thought, and the graph nodes each run passed through, read back from the checkpoint history.
 - Model identifier and inference settings.
 - Prompt-template version.
 - Tool name, schema version, structured input, and bounded output summary.
 - Working Dataset version and Source Dataset hash.
 - Validation outcomes.
-- Latency, retries, and token usage. Estimated cost is a known gap: the trace field exists but is not filled.
+- Latency, retries, and prompt and output token usage. Evaluation reports estimate API cost from those tokens when the runner is given prices; the application does not price calls, so the trace's cost field stays empty.
 - Error classification.
 - Created insights and artifacts.
 
-Computations must be reproducible by preserving exact SQL or Tool Action parameters and fixed random seeds where sampling is used. A saved Tool Action keeps the exact SQL or statistical parameters needed to rerun it without another model call; an application command that reruns it is a known gap.
+Computations must be reproducible by preserving exact SQL or Tool Action parameters and fixed random seeds where sampling is used. A saved Tool Action keeps the exact SQL or statistical parameters needed to rerun it, and the Audit view reruns it without another model call and reports whether the result was reproduced.
 
 The Audit view shows, for the current request, each Tool Action's exact SQL or statistical parameters, approved fields, verification checks, error, and retry count; each Verified Insight's fields, filters, row counts, and evidence values; rejected claims with their reasons; and model-call metadata including prompt-template versions and errors.
 
@@ -775,8 +775,9 @@ Records the post-review fixes and a specification accuracy check against the cod
 - Phase 3 of the post-review plan (consolidation): charts and insights share one semantic-annotation fingerprint, and charts stored with the earlier case-sensitive order stay current; SQL identifier quoting, the `dataset` table name, the possible-PII warning, and the 2–20 value grouping rule each have one definition; claims show every significant digit of a float, matching the KPI (FR-10); grading moved out of the runner, and grading version 5 reports every Section 17.4 gate with its own denominator (Section 17.3); and the CI workflow installs with the pinned constraints and builds both Docker targets. No prompt template changed.
 - Final fix round before the release suite, for two failure classes each seen on two datasets in holdouts v6, v8, and v9: a proposed chart that fails validation falls back to the verified result table (FR-11), and a ranking request that names no measure asks which field defines it when two or more numeric fields could (FR-04; semantic-v14). A live check on development fixtures clarified 4 of 4 unnamed-measure runs and answered 4 of 4 named-measure controls; one development run of the ten development cases passed 9 of 10 with no unnecessary clarification.
 - Specification accuracy check. Sections that described the original design now match the code: tools are typed Python interfaces and LangChain serves only the model (Section 8); the conceptual workflow states are mapped to graph nodes (Section 9); session metadata is a JSON file with SQLite checkpoints and artifact records, and Parquet is not used (Section 12); and prompts carry the profile's frequent values, five by default (Sections 14.1 and 14.5). User decisions are recorded: the classic tier uses public datasets not seen in development (Section 17.1); case studies, screenshots, a demo video, and sample traces are deferred after the MVP (Sections 19 and 22); and the Docker image build is verified last (Section 18). Sections 25.3 and 25.4 are in order.
+- Known gaps closed before the release suite: Vietnamese and English personal-data column names are detected as possible PII after removing diacritics (Section 14.4); goal suggestions always number at least three (FR-05); each run has a run ID and its graph node path is read back from checkpoints; evaluation reports estimate cost from recorded prompt and output tokens and given prices; and the Audit view reruns a saved Tool Action without a model call and reports whether it reproduced (Section 16). No prompt template or grading rule changed.
 
-Known gaps at v1.5, specified but not implemented: detection of person names, addresses, and non-English PII column names (Section 14.4); a run-level trace ID, a record of graph node transitions, estimated cost, and an application command to rerun a saved Tool Action (Section 16); and at least three goal suggestions for a dataset with no numeric, grouping, or missing-value facts (FR-05). PII detection and the suggestion count are scheduled right after the release suite; the observability items are deferred after the MVP.
+Known gaps at v1.5: person names and addresses inside the values of columns whose names do not mark personal data are not detected as possible PII (Section 14.4).
 
 ## 25. Implementation Contracts
 
