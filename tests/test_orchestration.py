@@ -1207,6 +1207,49 @@ def test_sql_plan_step_without_fields_is_replanned(tmp_path: Path) -> None:
     assert [action["status"] for action in completed["tool_actions"]] == ["succeeded"]
 
 
+def test_sql_plan_step_without_fields_fails_after_the_replan_budget(tmp_path: Path) -> None:
+    core, request = run_request(tmp_path)
+    empty_plan = plan_output()
+    steps = empty_plan["steps"]
+    assert isinstance(steps, list)
+    assert isinstance(steps[0], dict)
+    steps[0]["required_fields"] = []
+    gateway = FakeModelGateway(
+        [
+            goal_output(),
+            empty_plan,
+            tool_output(),
+            empty_plan,
+            tool_output(),
+            empty_plan,
+            tool_output(),
+        ]
+    )
+    agent = AgentOrchestrator(gateway, core, checkpointer=InMemorySaver())
+
+    state = agent.start(request)
+    # The default budget allows two replans; each defective plan pauses for approval again.
+    for _ in range(2):
+        assert state["status"] == AgentRunStatus.AWAITING_PLAN_APPROVAL
+        state = agent.resume(request.session_id, True)
+    assert state["status"] == AgentRunStatus.AWAITING_PLAN_APPROVAL
+    failed = agent.resume(request.session_id, True)
+
+    assert failed["status"] == AgentRunStatus.FAILED
+    assert "lists no required_fields" in failed["error"]
+    assert failed["plan_repair_count"] == 2
+    assert failed.get("tool_actions", []) == []
+    assert [item.task.value for item in gateway.requests] == [
+        "semantic_interpretation",
+        "plan",
+        "tool_request",
+        "plan",
+        "tool_request",
+        "plan",
+        "tool_request",
+    ]
+
+
 def test_new_request_replaces_a_pending_clarification(tmp_path: Path) -> None:
     core, request = run_request(tmp_path)
     gateway = FakeModelGateway([goal_output(with_semantics=True), goal_output(), plan_output()])
