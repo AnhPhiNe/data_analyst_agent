@@ -5,11 +5,13 @@ from __future__ import annotations
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass
+from typing import Literal
 
 import sqlglot
 from sqlglot import expressions as exp
 
 from tabular_analytics_agent.data.errors import UnsafeQueryError
+from tabular_analytics_agent.domain import FilterScope
 
 _DENIED_FUNCTIONS = {
     "csv_scan",
@@ -39,6 +41,8 @@ class SQLAnalysis:
     group_by_columns: tuple[str, ...] = ()
     unaliased_outputs: tuple[str, ...] = ()
     filters: tuple[str, ...] = ()
+    filter_scopes: tuple[FilterScope, ...] = ()
+    dataset_count_scope: Literal["whole_dataset"] | None = None
 
 
 def replace_column_references(sql: str, replacements: Mapping[str, str]) -> str:
@@ -172,6 +176,12 @@ def analyze_read_only_sql(sql: str, *, allowed_table: str) -> SQLAnalysis:
         group_by_columns=_group_by_output_columns(statement),
         unaliased_outputs=_unaliased_outputs(statement),
         filters=_filters(statement),
+        filter_scopes=_filter_scopes(statement),
+        dataset_count_scope=(
+            "whole_dataset"
+            if is_whole_dataset_count(statement, allowed_table=allowed_table)
+            else None
+        ),
     )
 
 
@@ -221,6 +231,108 @@ def _filters(statement: exp.Query) -> tuple[str, ...]:
         for clause in (statement.args.get("where"), statement.args.get("having"))
         if isinstance(clause, (exp.Where, exp.Having))
     )
+
+
+def is_whole_dataset_count(
+    query: str | exp.Query,
+    *,
+    allowed_table: str,
+) -> bool:
+    """Check whether SQL is exactly one unfiltered ``COUNT(*)`` over the session table."""
+    if isinstance(query, str):
+        try:
+            statements = sqlglot.parse(query, read="duckdb")
+        except sqlglot.errors.ParseError:
+            return False
+        if len(statements) != 1 or statements[0] is None:
+            return False
+        statement = statements[0]
+    else:
+        statement = query
+
+    if not isinstance(statement, exp.Select):
+        return False
+    if any(
+        value is not None
+        for key, value in statement.args.items()
+        if key not in {"expressions", "from_"}
+    ):
+        return False
+    from_clause = statement.args.get("from_")
+    if not isinstance(from_clause, exp.From) or not isinstance(from_clause.this, exp.Table):
+        return False
+    if any(value is not None for key, value in from_clause.args.items() if key != "this"):
+        return False
+    table = from_clause.this
+    if (
+        table.db
+        or table.catalog
+        or table.name.casefold() != allowed_table.casefold()
+        or any(
+            value is not None for key, value in table.args.items() if key not in {"this", "alias"}
+        )
+        or len(tuple(statement.find_all(exp.Table))) != 1
+    ):
+        return False
+    if len(statement.expressions) != 1:
+        return False
+    projection = statement.expressions[0]
+    count_expression = projection.this if isinstance(projection, exp.Alias) else projection
+    return (
+        isinstance(count_expression, exp.Count)
+        and count_expression.sql(dialect="duckdb").casefold() == "count(*)"
+    )
+
+
+def _filter_scopes(statement: exp.Query) -> tuple[FilterScope, ...]:
+    """Return WHERE/HAVING predicates with stable SELECT scope labels.
+
+    ``filters`` intentionally remains the legacy outer-query tuple.  This richer view keeps
+    predicates in their owning SELECT so a CTE, EXISTS, or nested subquery is never presented as
+    one flattened conjunction with the outer query.
+    """
+    cte_scopes: dict[int, str] = {}
+    cte_occurrences: dict[str, int] = {}
+    for cte in statement.find_all(exp.CTE):
+        if not cte.alias_or_name or not isinstance(cte.this, exp.Select):
+            continue
+        alias = cte.alias_or_name
+        occurrence_key = alias.casefold()
+        occurrence = cte_occurrences.get(occurrence_key, 0) + 1
+        cte_occurrences[occurrence_key] = occurrence
+        scope = f"cte:{alias}" if occurrence == 1 else f"cte:{alias}:{occurrence}"
+        cte_scopes[id(cte.this)] = scope
+    all_selects = tuple(statement.find_all(exp.Select))
+    scoped_selects: list[tuple[str, exp.Select]] = []
+    if isinstance(statement, exp.Select):
+        scoped_selects.append(("outer", statement))
+    cte_select_ids = set(cte_scopes)
+    for select in all_selects:
+        cte_scope = cte_scopes.get(id(select))
+        if cte_scope is not None:
+            scoped_selects.append((cte_scope, select))
+    subquery_index = 0
+    for select in all_selects:
+        if select is statement or id(select) in cte_select_ids:
+            continue
+        subquery_index += 1
+        scoped_selects.append((f"subquery:{subquery_index}", select))
+
+    scopes: list[FilterScope] = []
+    for scope, select in scoped_selects:
+        for key in ("where", "having"):
+            clause_name: Literal["where", "having"] = "where" if key == "where" else "having"
+            clause = select.args.get(key)
+            if not isinstance(clause, (exp.Where, exp.Having)):
+                continue
+            scopes.append(
+                FilterScope(
+                    scope=scope,
+                    clause=clause_name,
+                    expression=clause.this.sql(dialect="duckdb"),
+                )
+            )
+    return tuple(scopes)
 
 
 def _output_alias_references(statement: exp.Query) -> set[int]:

@@ -59,7 +59,6 @@ from tabular_analytics_agent.orchestration.binding import (
     bind_tool_request_to_step,
     canonicalize_requested_metric_mappings,
     current_plan_step,
-    require_sql_step_fields,
     unavailable_metric_clarification_question,
     unavailable_metric_refusal_reason,
     validate_plan_metric_grounding,
@@ -526,7 +525,6 @@ def build_agent_graph(
                 )
                 for step in response.output.steps
             )
-            require_sql_step_fields(canonical_steps)
             validate_plan_metric_grounding(canonical_steps, metric_mappings)
             plan = AnalysisPlan(
                 plan_id=uuid4(),
@@ -661,6 +659,22 @@ def build_agent_graph(
         except ModelProviderError as exc:
             # Transport retries belong to the gateway, not the SQL repair loop.
             return failed_state(state, exc, clock())
+        except PlanRepairError as exc:
+            # The approved plan itself is defective, so replan instead of retrying the SQL.
+            plan_repairs = state.get("plan_repair_count", 0)
+            if plan_repairs >= plan.budget.max_repairs_per_action:
+                return with_failure_trace(failed_state(state, exc, clock()), state, exc, trace)
+            return with_failure_trace(
+                {
+                    "status": AgentRunStatus.PLANNING.value,
+                    "error": str(exc),
+                    "plan_repair_count": plan_repairs + 1,
+                    "tool_repair_count": 0,
+                },
+                state,
+                exc,
+                trace,
+            )
         except (
             ModelGatewayError,
             QueryExecutionError,
@@ -1185,7 +1199,7 @@ def build_agent_graph(
     builder.add_conditional_edges(
         "request_tool",
         _route_after_tool_request,
-        {"execute": "execute_tool", "retry": "request_tool", "end": END},
+        {"execute": "execute_tool", "retry": "request_tool", "plan": "create_plan", "end": END},
     )
     builder.add_conditional_edges(
         "execute_tool",
@@ -1251,11 +1265,13 @@ def _route_after_approval(state: AgentState) -> Literal["tool", "plan", "end"]:
     return "end"
 
 
-def _route_after_tool_request(state: AgentState) -> Literal["execute", "retry", "end"]:
+def _route_after_tool_request(state: AgentState) -> Literal["execute", "retry", "plan", "end"]:
     if state["status"] == AgentRunStatus.REQUESTING_TOOL:
         return "execute"
     if state["status"] == AgentRunStatus.RETRYING_TOOL:
         return "retry"
+    if state["status"] == AgentRunStatus.PLANNING:
+        return "plan"
     return "end"
 
 

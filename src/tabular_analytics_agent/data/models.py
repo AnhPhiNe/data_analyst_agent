@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from tabular_analytics_agent.domain import DatasetIdentity
+from tabular_analytics_agent.domain import DatasetIdentity, FilterScope
 
 PositiveInt = Annotated[int, Field(gt=0)]
 NonEmptyText = Annotated[str, Field(min_length=1)]
@@ -60,6 +60,8 @@ class QueryInspection(DataModel):
     group_by_columns: tuple[str, ...] = ()
     unaliased_outputs: tuple[str, ...] = ()
     filters: tuple[str, ...] = ()
+    filter_scopes: tuple[FilterScope, ...] = ()
+    dataset_count_scope: Literal["whole_dataset"] | None = None
 
 
 class QueryResult(DataModel):
@@ -74,6 +76,8 @@ class QueryResult(DataModel):
     duration_ms: int = Field(ge=0)
     group_by_columns: tuple[str, ...] = ()
     filters: tuple[str, ...] = ()
+    filter_scopes: tuple[FilterScope, ...] = ()
+    dataset_count_scope: Literal["whole_dataset"] | None = None
 
     @model_validator(mode="after")
     def validate_shape(self) -> QueryResult:

@@ -251,6 +251,8 @@ class TabularDataCore:
             group_by_columns=analysis.group_by_columns,
             unaliased_outputs=analysis.unaliased_outputs,
             filters=analysis.filters,
+            filter_scopes=analysis.filter_scopes,
+            dataset_count_scope=analysis.dataset_count_scope,
         )
 
     def query(
@@ -319,6 +321,8 @@ class TabularDataCore:
                 if any(column.name == name for column in columns)
             ),
             filters=inspection.filters,
+            filter_scopes=inspection.filter_scopes,
+            dataset_count_scope=inspection.dataset_count_scope,
         )
 
     def _inspect_xlsx(self, path: Path) -> tuple[str, ...]:

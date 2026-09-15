@@ -6,7 +6,7 @@ import hashlib
 import json
 from datetime import datetime
 from enum import StrEnum
-from typing import Annotated, Any, Self
+from typing import Annotated, Any, Literal, Self
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -307,6 +307,14 @@ class EvidenceValue(DomainModel):
     unit: str | None = None
 
 
+class FilterScope(DomainModel):
+    """One SQL predicate together with the SELECT scope that owns it."""
+
+    scope: NonEmptyText
+    clause: Literal["where", "having"]
+    expression: NonEmptyText
+
+
 class InsightAssertion(DomainModel):
     operator: InsightOperator
     left_metric: NonEmptyText
@@ -335,6 +343,8 @@ class EvidenceTrail(DomainModel):
     semantic_annotation_fingerprint: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
     source_fields: tuple[str, ...]
     filters: tuple[str, ...] = ()
+    filter_scopes: tuple[FilterScope, ...] = ()
+    dataset_count_scope: Literal["whole_dataset"] | None = None
     source_row_count: NonNegativeInt
     result_row_count: NonNegativeInt
     missing_data_handling: NonEmptyText
@@ -345,8 +355,10 @@ class EvidenceTrail(DomainModel):
 
     @model_validator(mode="after")
     def require_reproducible_evidence(self) -> Self:
-        if not self.source_fields:
-            raise ValueError("an evidence trail requires source fields")
+        if not self.source_fields and self.dataset_count_scope != "whole_dataset":
+            raise ValueError(
+                "an evidence trail requires source fields or whole-dataset count evidence"
+            )
         if not self.tool_action_ids:
             raise ValueError("an evidence trail requires a tool action")
         if len(self.tool_parameters) != len(self.tool_action_ids) or any(

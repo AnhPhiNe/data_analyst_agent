@@ -1131,6 +1131,40 @@ def test_unaliased_calculated_sql_output_is_repaired_before_execution(tmp_path: 
     assert "snake_case alias" in gateway.requests[3].prompt
 
 
+def test_empty_sql_plan_fields_are_validated_when_query_is_bound(tmp_path: Path) -> None:
+    core, request = run_request(tmp_path)
+    empty_plan = plan_output()
+    steps = empty_plan["steps"]
+    assert isinstance(steps, list)
+    assert isinstance(steps[0], dict)
+    steps[0]["required_fields"] = []
+    gateway = FakeModelGateway(
+        [
+            goal_output(),
+            empty_plan,
+            tool_output("SELECT COUNT(*) AS row_count FROM dataset"),
+            insight_output(
+                operator="reports",
+                left_metric="row[0].row_count",
+                right_metric=None,
+                evidence_metrics=["row[0].row_count"],
+            ),
+            chart_output(),
+        ]
+    )
+    agent = AgentOrchestrator(gateway, core, checkpointer=InMemorySaver())
+
+    paused = agent.start(request)
+    completed = agent.resume(request.session_id, True)
+
+    assert paused["status"] == AgentRunStatus.AWAITING_PLAN_APPROVAL
+    assert completed["status"] == AgentRunStatus.COMPLETED
+    assert completed["plan"]["steps"][0]["required_fields"] == []
+    assert completed["query_result"]["dataset_count_scope"] == "whole_dataset"
+    assert completed["tool_actions"][0]["inputs"]["required_fields"] == []
+    assert completed["verified_insights"][0]["claim"].endswith("is 3.")
+
+
 def test_sql_plan_step_without_fields_is_replanned(tmp_path: Path) -> None:
     core, request = run_request(tmp_path)
     empty_plan = plan_output()
@@ -1138,13 +1172,39 @@ def test_sql_plan_step_without_fields_is_replanned(tmp_path: Path) -> None:
     assert isinstance(steps, list)
     assert isinstance(steps[0], dict)
     steps[0]["required_fields"] = []
-    gateway = FakeModelGateway([goal_output(), empty_plan, plan_output()])
+    gateway = FakeModelGateway(
+        [
+            goal_output(),
+            empty_plan,
+            tool_output(),
+            plan_output(),
+            tool_output(),
+            insight_output(),
+            chart_output(),
+        ]
+    )
     agent = AgentOrchestrator(gateway, core, checkpointer=InMemorySaver())
 
-    paused = agent.start(request)
+    agent.start(request)
+    replanned = agent.resume(request.session_id, True)
 
-    assert paused["status"] == AgentRunStatus.AWAITING_PLAN_APPROVAL
-    assert "must list the exact dataset fields" in gateway.requests[2].prompt
+    # A step that reads fields but approves none is a plan defect: it goes back to planning
+    # with the fields its query reads, instead of exhausting SQL retries.
+    assert replanned["status"] == AgentRunStatus.AWAITING_PLAN_APPROVAL
+    assert [item.task.value for item in gateway.requests] == [
+        "semantic_interpretation",
+        "plan",
+        "tool_request",
+        "plan",
+    ]
+    assert "lists no required_fields, but its query reads region, revenue" in (
+        gateway.requests[3].prompt
+    )
+    assert replanned["plan"]["steps"][0]["required_fields"] == ["region", "revenue"]
+
+    completed = agent.resume(request.session_id, True)
+    assert completed["status"] == AgentRunStatus.COMPLETED
+    assert [action["status"] for action in completed["tool_actions"]] == ["succeeded"]
 
 
 def test_new_request_replaces_a_pending_clarification(tmp_path: Path) -> None:

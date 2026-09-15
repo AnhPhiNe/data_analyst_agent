@@ -7,6 +7,7 @@ import json
 import math
 import re
 from collections.abc import Iterable
+from typing import Literal
 from uuid import uuid4
 
 from tabular_analytics_agent.data import QueryResult
@@ -15,6 +16,7 @@ from tabular_analytics_agent.domain import (
     DataProfile,
     EvidenceTrail,
     EvidenceValue,
+    FilterScope,
     InsightAssertion,
     InsightOperator,
     SemanticAnnotation,
@@ -30,6 +32,9 @@ from tabular_analytics_agent.statistics import (
     AssumptionStatus,
     StatisticalResult,
     display_group_label,
+)
+from tabular_analytics_agent.verification.query_evidence import (
+    verified_dataset_count_matches_profile,
 )
 
 InsightPublication = VerifiedInsight | UnsupportedClaim
@@ -112,6 +117,25 @@ def publish_insight(
     source_fields = _source_fields(action, result)
     profile_fields = {field.name for field in profile.fields}
     unknown_fields = sorted(set(source_fields) - profile_fields)
+    verified_dataset_count = isinstance(result, QueryResult) and (
+        verified_dataset_count_matches_profile(profile, result)
+    )
+    schema_grounding_passed = (bool(source_fields) and not unknown_fields) or (
+        not source_fields and verified_dataset_count
+    )
+    schema_grounding_message = (
+        "All referenced source fields exist in the Data Profile."
+        if source_fields and not unknown_fields
+        else (
+            "Whole-dataset COUNT(*) matches the profiled row count."
+            if verified_dataset_count
+            else "Unknown or absent evidence fields: "
+            f"{', '.join(unknown_fields) or 'none supplied'}."
+        )
+    )
+    dataset_count_scope: Literal["whole_dataset"] | None = (
+        "whole_dataset" if verified_dataset_count else None
+    )
     action_verification_passed = bool(action.verification_results) and all(
         item.status is VerificationStatus.PASSED for item in action.verification_results
     )
@@ -167,15 +191,8 @@ def publish_insight(
         ),
         VerificationCheck(
             name="schema_grounding",
-            passed=bool(source_fields) and not unknown_fields,
-            message=(
-                "All referenced fields exist in the Data Profile."
-                if source_fields and not unknown_fields
-                else (
-                    "Unknown or absent evidence fields: "
-                    f"{', '.join(unknown_fields) or 'none supplied'}."
-                )
-            ),
+            passed=schema_grounding_passed,
+            message=schema_grounding_message,
         ),
         VerificationCheck(
             name="evidence_metrics",
@@ -202,7 +219,7 @@ def publish_insight(
     )
     verification = VerificationResult(status=status, checks=checks)
     evidence = None
-    if evidence_metrics and not missing_metrics and source_fields:
+    if evidence_metrics and not missing_metrics and (source_fields or verified_dataset_count):
         evidence = EvidenceTrail(
             trail_id=uuid4(),
             dataset_id=profile.dataset.dataset_id,
@@ -210,6 +227,8 @@ def publish_insight(
             semantic_annotation_fingerprint=semantic_annotation_fingerprint(semantic_annotations),
             source_fields=source_fields,
             filters=_filters(action, result),
+            filter_scopes=_filter_scopes(result),
+            dataset_count_scope=dataset_count_scope,
             source_row_count=profile.row_count,
             result_row_count=_result_row_count(result),
             missing_data_handling=_missing_data_handling(result),
@@ -291,6 +310,12 @@ def _filters(action: ToolAction, result: EvidenceResult) -> tuple[str, ...]:
     if not isinstance(raw, (list, tuple)):
         return ()
     return tuple(str(value) for value in raw)
+
+
+def _filter_scopes(result: EvidenceResult) -> tuple[FilterScope, ...]:
+    if isinstance(result, QueryResult) and result.filter_scopes:
+        return result.filter_scopes
+    return ()
 
 
 def _result_row_count(result: EvidenceResult) -> int:
@@ -537,9 +562,16 @@ def _statistical_scope(result: EvidenceResult) -> str:
 
 def _query_scope(result: EvidenceResult) -> str:
     """Name the SQL filters that restrict a query result, for example ``where score >= 60``."""
-    if not isinstance(result, QueryResult) or not result.filters:
+    if not isinstance(result, QueryResult):
         return ""
-    return f" where {' and '.join(result.filters)}"
+    scope = f" where {' and '.join(result.filters)}" if result.filters else ""
+    inner_scopes = tuple(item for item in result.filter_scopes if item.scope != "outer")
+    if inner_scopes:
+        context = "; ".join(
+            f"{item.scope} {item.clause} {item.expression}" for item in inner_scopes
+        )
+        scope += f" (query context: {context})"
+    return scope
 
 
 def _humanize_identifier(value: str) -> str:

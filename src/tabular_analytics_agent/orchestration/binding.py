@@ -52,18 +52,6 @@ INFERENTIAL_OPERATIONS = {
 INFERENCE_ALPHA = 0.05
 
 
-def require_sql_step_fields(steps: tuple[PlanStep, ...]) -> None:
-    empty = [
-        step.step_id
-        for step in steps
-        if step.expected_tool == "read_only_sql" and not step.required_fields
-    ]
-    if empty:
-        raise PlanRepairError(
-            f"SQL plan steps must list the exact dataset fields they read: {', '.join(empty)}"
-        )
-
-
 def canonicalize_requested_metric_mappings(
     profile: DataProfile,
     mappings: object,
@@ -223,6 +211,14 @@ def bind_tool_request_to_step(
     referenced_fields = [
         field for field in inspection.referenced_columns if field_key(field) in known_fields
     ]
+    if not step.required_fields and inspection.dataset_count_scope != "whole_dataset":
+        # Rewriting the SQL cannot fix a step that approves no fields; the plan must be revised.
+        read = ", ".join(sorted(referenced_fields)) or "no dataset field"
+        raise PlanRepairError(
+            f"SQL plan step {step.step_id} lists no required_fields, but its query reads {read}. "
+            "List every dataset field a SQL step reads; only an unfiltered whole-dataset "
+            "COUNT(*) may list none"
+        )
     # Reading fewer approved fields (for example COUNT(*) with one filter) cannot widen scope.
     if not {field_key(field) for field in referenced_fields} <= approved_fields:
         raise ValueError(
