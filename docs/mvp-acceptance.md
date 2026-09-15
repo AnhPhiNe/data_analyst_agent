@@ -46,11 +46,13 @@ These items are in integration review until the verification record below is com
   chart, pin/unpin, open another session, reopen after restart, export, and confirmed deletion.
 - Live evaluation is done: 109 committed cases (10 development, 15 first holdout, 2 contaminated,
   and 12 or 10 in each of holdout sets v3 to v9), each run 3 times with provider failures reported
-  separately. Holdout expectations were never changed after a run.
+  separately. Holdout expectations were never changed after a run. The 40-case release suite
+  was then measured once: 103/118 graded runs passed (see the verification record).
 - Section 17.4 quality gates were all met on the post-fix holdout v7 (36/36, every check 100%), and
   still are when re-graded with grading version 5, which gives each gate its own denominator.
   Earlier holdout sets (v3–v6) are development evidence after the fixes derived from them; their
-  denominators are recorded above.
+  denominators are recorded above. The release suite did not meet calculation accuracy, tool
+  execution success, or chart validity (`docs/limitations.md` Section 12).
 - Review semantic correctness and filter use in addition to deterministic number/evidence checks.
   A model-produced mapping makes a decision inspectable; it does not prove the meaning is correct.
 - Milestone 6 hardening tests are in `tests/test_hardening.py` and `tests/test_settings.py`
@@ -332,3 +334,11 @@ the outstanding Must-tier flows and reliability gates.
   `docs/limitations.md`). 429 tests passed (2 skipped), branch-inclusive coverage 91.02%,
   Ruff, formatting, and strict mypy passed. The suite is run once, three runs per case, and
   its expectations are never edited afterwards.
+- Release suite result (2026-09-15, commit `096ff45`, measured once): 103 of 118 graded runs
+  passed (87.3%), with 2 provider errors reported separately. End-to-end success, schema
+  grounding, unsupported-claim rate, evidence completeness, and clarification recall met their
+  Section 17.4 thresholds; calculation accuracy (155/176, 88.1%), tool execution success
+  (72/76, 94.7%), and chart validity (54/59, 91.5%) did not. The 15 failures and a manual
+  review of all 129 stored runs are in `docs/limitations.md` Section 12. The expectations were
+  not edited. Under the agreed stop rule, at most one more fix round follows, limited to
+  failure classes seen on two or more datasets and measured on a new small holdout.

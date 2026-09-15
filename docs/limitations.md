@@ -29,12 +29,14 @@ The same question can receive a different plan, SQL, chart type, or set of repor
 | v7 | 36/36 (100%) | clear questions and clean data, written to test the latest fixes |
 | v8 (hard) | 24/36 (66.7%) | messy values, vague and multi-step questions; see Section 10 |
 | v9 | 20/36 (55.6%) | measured the post-v8 fixes; 6 failures were chart-only; see Section 10 |
+| Release suite | 103/118 (87.3%) | 40 cases on unseen datasets, measured once; see Section 12 |
 
 The gap between v7 and v8 is the most useful reading of these numbers: the agent is reliable on
 clear questions over clean data and much weaker when values are inconsistent or the question is
 vague. Each set has 12 cases run 3 times. That sample is small: a single case failing all runs moves the
 score by 8.3 points, and a perfect score is consistent with a lower long-run rate. Later sets were
-written by the same author who fixed the earlier failures.
+written by the same author who fixed the earlier failures. The release suite has 40 cases
+whose questions were written outside the repository; 2 of its 120 runs were provider errors.
 
 ## 3. Data sent to the model provider
 
@@ -220,3 +222,63 @@ datasets from v8, so the two scores are not directly comparable.
 
 - Person names and addresses inside the values of columns whose names do not mark personal
   data are not detected as possible PII (see Section 4).
+
+## 12. What the release suite showed
+
+The release suite (40 cases on nine datasets not used in development, three runs per case,
+grading version 6) was run once at commit `096ff45` on 2026-09-15. Its expectations were not
+changed afterwards. 118 runs were graded; 2 runs ended in provider errors after retries (9 retries
+in total) and are reported separately. 103 of 118 runs passed (87.3%; 95% Wilson interval about
+80–92%).
+
+| Section 17.4 gate (threshold) | Result | Met |
+|---|---|---|
+| Calculation accuracy (≥95%) | 155/176 (88.1%) | no |
+| Schema grounding (100%) | 156/156 | yes |
+| Unsupported-claim rate (≤2%) | 0/225 | yes |
+| Tool execution success (≥95%) | 72/76 (94.7%) | no |
+| Chart validity (≥95%) | 54/59 (91.5%) | no |
+| Evidence completeness (100%) | 225/225 | yes |
+| Clarification recall (≥90%) | 30/30 | yes |
+| End-to-end success (≥85%) | 103/118 (87.3%) | yes |
+
+One clarification was unnecessary. All five chart misses come from runs that failed or asked for
+clarification, not from invalid charts. A run averaged 3.5 model calls, about 4,600 tokens, and
+6.3 seconds; the suite used 474,232 prompt tokens and 66,517 output tokens.
+
+**Failures (15 runs).**
+
+- Numbers stored with a unit, such as `12.5 kg`: all 3 runs summed only the values without a unit
+  and reported wrong weights per material.
+- Dates written in several formats: asked for one month's revenue, all 3 runs filtered only ISO
+  dates. Two published a Verified Insight of about 63% of the true total, and one failed on cast
+  errors. The claim was accurate for its filter, which is why the filter must stay visible.
+- Removing duplicate rows across every column: all 3 runs failed. The plan approved only the
+  status field, the SQL policy forbids `SELECT DISTINCT *`, and the repair budget ran out.
+- Incomplete answers from correct results: counting a normalized material, all 3 runs asserted
+  one or two of the eight result rows; asked which batch had the fewest defects, one run reported
+  the defect rate but not the batch.
+- An abbreviated measure, `luot_thue tb` (average rentals), was mapped as unavailable, causing the
+  one unnecessary clarification.
+- A requested two-shift test was answered with per-shift averages from SQL instead.
+
+**Manual review of every stored run.** All 129 stored runs, including the runs later retried after
+provider errors, were read, and all 226 claims and 31 clarification questions were scanned. Every
+passing run was numerically and semantically correct, and no unsupported claim was published. The
+review found these presentation problems:
+
+- 24 of 31 clarification questions used the generic unavailable-metric text, in English even for
+  Vietnamese questions, without naming fields that could answer. They include 11 of 18 runs of
+  ambiguous ranking questions, where the model's own mapping reason already named candidates.
+- 33 claims embedded SQL predicates, such as `where NOT "thoi_gian_phan_hoi_phut" IS NULL`.
+- 21 claims showed generated aliases, such as `Count 1 for island = Biscoe`.
+- 17 claims showed floating-point noise, such as `3.1000000000000005`.
+- Test names were lowercased inside sentences, such as `aNOVA F statistic` and
+  `welch t statistic`.
+- 10 answers backed only by a statistical test showed the technical notice "No chart candidate was
+  published".
+- 94 claims name groups by raw field names, such as `phuong_phap = A`.
+- One claim stated that a total weight is positive, which is true but uninformative.
+- 8 runs listed every row in a SQL step before a statistical test; this spends a Tool Action
+  without changing the result.
+- A KPI answered "which batch" questions with the value alone, without the batch.
