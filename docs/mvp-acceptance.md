@@ -308,3 +308,27 @@ the outstanding Must-tier flows and reliability gates.
   previous commit in a separate clone. 427 tests passed (2 skipped), branch-inclusive
   coverage 91.01%, Ruff, formatting, and strict mypy passed. The code is frozen again
   for the release suite from this commit.
+- Release suite (2026-09-15), committed before any live run in
+  `tests/evaluation_cases_release/` with datasets in `tests/fixtures/eval_release/`. The
+  questions were written from a brief in a new ChatGPT chat without repository access: 40 cases
+  on nine datasets, ten per tier (two tiny tables, the public Palmer Penguins and Tips tables
+  downloaded from `mwaskom/seaborn-data` with the user's approval, two deliberately dirty
+  tables including one XLSX, and pharmaceutical sales, powder-coating quality, and field
+  technician shifts). By type: 16 calculations, 6 statistical tests, 6 ambiguous requests
+  that should be clarified, 4 unavailable metrics, 4 profile questions, and 4 calculations on
+  dirty data; 23 questions are in Vietnamese. Corrections approved before any run: a
+  two-group test on seven batches per method is answered, because the tool's minimum is three
+  values per group (the brief had wrongly said twenty); a month and a quarter are filtered
+  instead of grouped, because a derived period group has no predictable output name and
+  day-first and month-first dates cannot be told apart; the clean-calculation venue column is
+  generated without spelling variants; the Penguins `year` column that the seaborn copy lacks
+  is dropped; and a stray citation marker is removed. Grading version 6 grades groups on
+  several columns, groups on derived labels by value, and alternative valid methods (t-test
+  means or Mann–Whitney medians, ANOVA or Kruskal–Wallis, a mean of per-row rates or a pooled
+  rate). Expected values were computed with pandas and SciPy; the 20 hardest were recomputed
+  with SQL through the data core with no difference, and a profile check confirmed the kinds,
+  missing counts, and duplicates the profile cases expect. That check also found that
+  dash-separated non-ISO dates are flagged as possible PII (documented in
+  `docs/limitations.md`). 429 tests passed (2 skipped), branch-inclusive coverage 91.02%,
+  Ruff, formatting, and strict mypy passed. The suite is run once, three runs per case, and
+  its expectations are never edited afterwards.

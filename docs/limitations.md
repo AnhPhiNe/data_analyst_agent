@@ -57,6 +57,9 @@ result values of at most 50 rows.
   language, is not detected.
 - Personal names or addresses inside other columns are not detected, and such fields are
   sent to the model like any other field.
+- Dates written with dashes in a non-ISO order, such as `03-04-2025`, look like phone numbers
+  and flag their column as possible PII, which withholds its values from the model. The
+  release suite's recycling dataset shows this; no release case reads that column.
 - Possible PII fields send no sample values and are not used to draft claims, so a question
   whose answer names a person, such as the customer who spent the most, gets no Verified
   Insight.
