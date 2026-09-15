@@ -88,9 +88,12 @@ from tabular_analytics_agent.orchestration.models import (
 )
 from tabular_analytics_agent.orchestration.prompts import (
     SYSTEM_INSTRUCTION,
+    chart_prompt,
+    insight_prompt,
+    interpretation_prompt,
     json_for_prompt,
-    profile_prompt,
-    tool_payload_guidance,
+    plan_prompt,
+    tool_request_prompt,
 )
 from tabular_analytics_agent.orchestration.run_state import (
     append_trace,
@@ -285,56 +288,11 @@ def build_agent_graph(
         profile = DataProfile.model_validate(state["data_profile"])
         request = StructuredModelRequest(
             task=ModelTask.SEMANTIC_INTERPRETATION,
-            prompt=(
-                "<untrusted_user_request>"
-                f"{json_for_prompt(state['user_request'])}"
-                "</untrusted_user_request>\n"
-                f"{profile_prompt(profile, include_sample_values=send_sample_values)}\n"
-                "Confirmed semantic annotations: "
-                f"{json_for_prompt(state.get('semantic_annotations', []))}\n"
-                "Interpret the analytical goal using the original field names exactly as supplied. "
-                "Default to an empty semantic_annotations list. Never infer or assign a business "
-                "definition, unit, currency, geography, or domain meaning from a column name, file "
-                "name, or value sample. Do not create an annotation merely to restate "
-                "a field name. "
-                "Create a semantic annotation only when a genuine ambiguity directly changes the "
-                "required calculation and blocks a responsible answer; otherwise continue and let "
-                "the later plan record the uncertainty as a caveat. Ask only for information "
-                "needed by this request. A request to rank or judge entities without naming the "
-                "measure, with a superlative such as best or top in any language, needs "
-                "clarification when the Data Profile has two or more numeric fields that could "
-                "each define the ranking: return a clarification_question naming those candidate "
-                "fields. When the request names the measure it ranks by, do not ask. If "
-                "semantic_annotations is non-empty, "
-                "clarification_question must be a non-empty question asking the user to choose or "
-                "confirm the exact blocking interpretation. Set "
-                "answer_from_profile to true only when the request can be answered entirely from "
-                "the Data Profile: column names, field kinds, row count, duplicate row count, "
-                "missing values, unique "
-                "counts, warnings, or whole-column descriptive statistics (count, mean, standard "
-                "deviation, minimum, quartiles, median, maximum). Use false for filtered, grouped, "
-                "or derived calculations. If the request names a column that does not exist, "
-                "return a "
-                "clarification_question listing the available columns. "
-                "For every metric the user explicitly requests, add one requested_metric_mappings "
-                "entry with the user's original requested_label and a status: direct when "
-                "source_fields are the exact fields that measure it, derived when source_fields "
-                "list every field used and derivation states a reproducible formula, or "
-                "unavailable when no field measures it (empty source_fields, optional reason). "
-                "Aggregating one field (average, sum, count, minimum, or maximum) is direct; use "
-                "derived only for a formula that combines or transforms fields. "
-                "Never map a requested metric to a field that measures something else, even when "
-                "it is the closest available field. When a metric is unavailable or ambiguous and "
-                "the user could resolve it, also return a clarification_question naming that "
-                "metric and the closest available fields. Use an unavailable mapping without a "
-                "clarification question only for an explicitly unsupported capability. Grouping "
-                "dimensions and dataset-level profile facts (row count, duplicate row count, "
-                "missing-value counts) are not metrics and need no mapping. Counting rows or "
-                "records is a row count, not a metric: a request to count the dataset's records, "
-                "under whatever noun the dataset uses for them, needs no mapping and no identifier "
-                "field. "
-                "Return "
-                "null clarification_question in all other cases."
+            prompt=interpretation_prompt(
+                user_request=state["user_request"],
+                profile=profile,
+                semantic_annotations=state.get("semantic_annotations", []),
+                include_sample_values=send_sample_values,
             ),
             response_schema=GoalInterpretation,
             system_instruction=SYSTEM_INSTRUCTION,
@@ -513,35 +471,13 @@ def build_agent_graph(
             return failed_state(state, run_budget_error(budget), clock())
         request = StructuredModelRequest(
             task=ModelTask.PLAN,
-            prompt=(
-                f"Analytical goal: {json_for_prompt(state['goal'])}\n"
-                "Confirmed annotations: "
-                f"{json_for_prompt(state.get('semantic_annotations', []))}\n"
-                f"{profile_prompt(profile, include_sample_values=send_sample_values)}\n"
-                "Requested metric mappings: "
-                f"{json_for_prompt(state.get('requested_metric_mappings', []))}\n"
-                "Requested plan revision: "
-                f"{json_for_prompt(state.get('error', 'none'))}\n"
-                "Create the shortest reproducible plan. Every calculation step must use one "
-                "allowlisted tool: read_only_sql or statistical_analysis. Statistical analysis "
-                "supports descriptive, correlation, confidence_interval, t_test, mann_whitney, "
-                "chi_square, anova, kruskal_wallis, linear_regression, and logistic_regression. "
-                "When the goal asks whether a difference or relationship is statistically "
-                "significant or could be due to chance, include a statistical_analysis step; "
-                "SQL aggregates alone cannot answer that. "
-                "To count rows, list only the fields that filter or group them in "
-                "required_fields; counting rows needs no identifier field. "
-                "SQL steps run independently and cannot read an earlier step's result, so a "
-                "question that uses one result to choose rows for another, such as the "
-                "top-ranked groups, is a single SQL step with a CTE or subquery. "
-                "Reference only listed fields. SQL reads rows of the dataset table only; schema "
-                "catalogs such as information_schema are unavailable. Set requires_approval to "
-                "true only for a step the user should review before it runs; ordinary read-only "
-                "calculations use false. Never let a different field stand in for a requested "
-                "measure that the dataset does not contain. Every direct or derived requested "
-                "metric mapping must have all of its source_fields in the required_fields of its "
-                "calculation step. Additional required_fields are allowed for grouping or "
-                "filtering dimensions; do not treat those dimensions as substitutions."
+            prompt=plan_prompt(
+                goal=state["goal"],
+                semantic_annotations=state.get("semantic_annotations", []),
+                profile=profile,
+                requested_metric_mappings=state.get("requested_metric_mappings", []),
+                revision=state.get("error", "none"),
+                include_sample_values=send_sample_values,
             ),
             response_schema=PlanDraft,
             system_instruction=SYSTEM_INSTRUCTION,
@@ -675,16 +611,12 @@ def build_agent_graph(
             return failed_state(state, exc, clock())
         request = StructuredModelRequest(
             task=ModelTask.TOOL_REQUEST,
-            prompt=(
-                "Current approved plan step: "
-                f"{json_for_prompt(step.model_dump(mode='json'))}\n"
-                f"{profile_prompt(profile, include_sample_values=send_sample_values)}\n"
-                "Previous tool error: <untrusted_tool_error>"
-                f"{json_for_prompt(state.get('error', 'none'))}"
-                "</untrusted_tool_error>\n"
-                "Return only the calculation payload for this already-approved step; do not repeat "
-                "its tool name, operation, purpose, or allowed-column list. "
-                f"{tool_payload_guidance(step, handle)}"
+            prompt=tool_request_prompt(
+                step=step,
+                profile=profile,
+                handle=handle,
+                previous_error=state.get("error", "none"),
+                include_sample_values=send_sample_values,
             ),
             response_schema=(
                 SQLToolRequestDraft
@@ -947,22 +879,9 @@ def build_agent_graph(
             return failed_state(state, run_budget_error(plan.budget), clock())
         request = StructuredModelRequest(
             task=ModelTask.INSIGHT_DRAFT,
-            prompt=(
-                "Analytical goal: "
-                f"{json_for_prompt(state['goal'])}\n"
-                "Verified Tool Action evidence catalog: "
-                f"{json_for_prompt(insight_evidence_catalog(state, profile))}\n"
-                "Select structured insight assertions using only exact metric identifiers from "
-                "the catalog. Final claim text is rendered deterministically from evidence. "
-                "When the goal compares groups, periods, or values, prefer greater_than, "
-                "less_than, or equals between the compared metrics; use reports only for a "
-                "single value. The reports, positive, negative, and significance operators take "
-                "a null right_metric. Create an assertion for every value or comparison the "
-                "analytical goal asks for, not only the first one. Columns listed in "
-                "group_by_columns label result rows: assert on the measured values of each "
-                "group, never on the labels themselves. For a statistical comparison, also "
-                "report the estimate of each compared group. Include material caveats; never "
-                "infer causation from association."
+            prompt=insight_prompt(
+                goal=state["goal"],
+                evidence_catalog=insight_evidence_catalog(state, profile),
             ),
             response_schema=InsightDraftBatch,
             system_instruction=SYSTEM_INSTRUCTION,
@@ -1119,22 +1038,10 @@ def build_agent_graph(
         }
         request = StructuredModelRequest(
             task=ModelTask.CHART_INTENT,
-            prompt=(
-                "Analytical goal: "
-                f"{json_for_prompt(state['goal'])}\n"
-                "Verified query result metadata (schema only; no cell values): "
-                f"{json_for_prompt(chart_result_metadata(result, profile))}\n"
-                "Allowed result columns for x_field, y_fields, color_field, and label keys, as id "
-                "to exact name (write either the id or the exact name): "
-                f"{json_for_prompt(result_columns)}. "
-                "Never use placeholder names such as x or y.\n"
-                "Propose one readable chart using only these supported artifact types: "
-                "kpi, table, histogram, bar, line, scatter. A kpi needs exactly one result row "
-                "and exactly one y field; for one row with several values, use table with no "
-                "encodings. Choose based on the analytical goal, field types, cardinality, and "
-                "row count. Use only these result columns, by id or exact name, in encodings and "
-                "labels. Set "
-                "aggregation to null because aggregation already happened in verified SQL."
+            prompt=chart_prompt(
+                goal=state["goal"],
+                result_metadata=chart_result_metadata(result, profile),
+                result_columns=result_columns,
             ),
             response_schema=ChartIntentDraft,
             system_instruction=SYSTEM_INSTRUCTION,
