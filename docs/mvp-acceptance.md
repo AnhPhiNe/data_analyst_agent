@@ -44,21 +44,24 @@ These items are in integration review until the verification record below is com
   are checked against the eligible fields and filter values are escaped SQL literals.
 - Check every Must-tier workflow in Streamlit: upload, profile, clarification, approval, result,
   chart, pin/unpin, open another session, reopen after restart, export, and confirmed deletion.
-- Run live smoke evaluation with grading version 2 or later: at least 10 cases, 3 datasets,
-  and 3 runs per case. Keep provider failures separate from analysis failures.
-- Expand to at least 40 release cases across all four dataset tiers in Spec Section 17.1.
-  Reserve unseen cases for holdout testing; do not change their expectations to fit model output.
+- Live evaluation is done: 97 committed cases (10 development, 15 first holdout, 2 contaminated,
+  and 12 or 10 in each of holdout sets v3 to v8), each run 3 times with provider failures reported
+  separately. Holdout expectations were never changed after a run.
 - Section 17.4 quality gates were all met on the post-fix holdout v7 (36/36, every check 100%).
   Earlier holdout sets (v3–v6) are development evidence after the fixes derived from them; their
   denominators are recorded above.
 - Review semantic correctness and filter use in addition to deterministic number/evidence checks.
   A model-produced mapping makes a decision inspectable; it does not prove the meaning is correct.
 - Milestone 6 hardening tests are in `tests/test_hardening.py` and `tests/test_settings.py`
-  (see the verification record). Still open from Section 14.4: an option that sends no row
-  samples to the model API; today only PII candidate fields are withheld.
-- Provide Docker packaging and verify setup/build/test from a clean environment.
-- Complete sales, manufacturing, and workforce demonstrations; diagrams, screenshots, demo video,
-  sample traces, documented limitations, and the portfolio README.
+  (see the verification record). The Section 14.4 option that sends no row samples is implemented
+  as `TABULAR_AGENT_SEND_SAMPLE_VALUES=false`.
+- Docker packaging is added (`Dockerfile` with runtime and check targets, `.dockerignore`, and
+  pinned `constraints.txt`), but the image has not been built: Docker is not installed on the
+  development machine. The clean-environment check of the documented setup is in the
+  verification record.
+- Documented limitations (`docs/limitations.md`), the portfolio README, and the architecture and
+  agent workflow diagrams (`docs/architecture.md`) are written. Still open: screenshots, a demo
+  video, sample traces, and the sales, manufacturing, and workforce case studies.
 
 HTML report export, extra chart families, and quota-aware gateway work remain Should-tier.
 Additional providers, PDF, and notebook exports remain Could-tier. They do not take priority over
@@ -184,3 +187,23 @@ the outstanding Must-tier flows and reliability gates.
   met on this set. It is one run of 12 cases (3 each), not a large sample; model variance can
   still lower a future run, which is why the earlier partial-coverage class was fixed at the root
   rather than tuned away.
+- Hard holdout v8, measurement only (2026-09-15, grading version 4, commit c0833bb, 30 requests
+  per minute): 24/36 runs passed (66.7%); outcome 91.7%, calculations 66.7%, chart 83.3%, insight
+  coverage 62.5%, schema grounding 91.7%, forbidden claims and profile facts 100%. One rate-limit
+  retry, no remaining provider error. Per case: all 3 runs passed for text-formatted costs and
+  shipping fees, a synonym, the top-3 regions, the unavailable conversion rate, the ambiguous top
+  category, and the most-missing column; 2 of 3 for the latest-month comparison; 1 of 3 for
+  excluding inconsistently spelled cancelled orders; 0 of 3 for Hanoi revenue with inconsistent city
+  spellings, the ambiguous best customer (answered instead of clarified), and the pooled average of
+  the two busiest countries. No deterministic defect was found; the agent was not changed, and the
+  findings are documented in `docs/limitations.md` Section 10.
+- Clean-environment check of the documented setup (2026-09-15, commit e0d8216): a fresh clone
+  without `.env` or an existing virtual environment, a new Python 3.12.14 virtual environment, and
+  `pip install --constraint constraints.txt --editable ".[dev]"` installed 101 packages from PyPI.
+  In that environment `ruff check .`, `ruff format --check .`, and strict `mypy` passed, and
+  pytest passed 368 tests (2 skipped) with 90.90% branch-inclusive coverage. This verifies
+  criterion 1 on Windows. The first attempt failed for two environmental reasons, both documented:
+  the source repository is owned by another Windows account, which blocks `git clone` until the
+  path is marked safe for that command, and a deep working folder exceeded the Windows path-length
+  limit while installing pyarrow. The Docker image build (criterion 12) is still unverified
+  because Docker is not installed on the development machine.

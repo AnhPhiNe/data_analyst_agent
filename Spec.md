@@ -755,6 +755,7 @@ Adds scope agreed after the Milestone 6 hardening work. No earlier decision is r
 - After holdout v5 (29/36 first run): grading version 4 matches statistical group labels after decoding their JSON, so escaped non-ASCII labels match plain ones (32/36 re-graded; Section 17.3); and counting rows uses COUNT(*) with no identifier field in the plan, a failure class seen on two datasets (FR-06 and Section 25.1).
 - Data Overview explorer: user-chosen measure, aggregation, group, time period, filters, and a box plot, so the overview serves any dataset (Should tier; FR-11).
 - After holdout v6 (30/36): counting rows or records under any name is a row count that needs no requested-metric mapping (semantic-v13), resolving a conflict the counting rule introduced between interpretation and plan grounding (Section 25.4); and insight synthesis deterministically reports each statistical result's headline estimates — every group mean, or a lone coefficient — that the model leaves out, so correct analyses are not marked incomplete by model variance (FR-10).
+- Milestone 7 deliverables: a two-stage Dockerfile (runtime and release-check targets) with pinned dependency constraints, a product limitations document (criterion 14), and updated architecture and workflow diagrams. A hard holdout (v8: inconsistent spellings, numbers stored as text, vague and multi-step questions) was run for measurement only, scoring 24/36 against 36/36 on the clean post-fix holdout v7; its findings are documented rather than tuned away (Section 17.3).
 
 ## 25. Implementation Contracts
 

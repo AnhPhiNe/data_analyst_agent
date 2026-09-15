@@ -1,0 +1,145 @@
+# Product limitations
+
+This document satisfies Spec Section 21, criterion 14. It states what the MVP does not guarantee,
+with the evidence behind each statement. Read it before relying on a result.
+
+## 1. Correct numbers are verified; correct questions are not
+
+Verification Gates prove that every number in a Verified Insight comes from a successful,
+read-only Tool Action on the current dataset, and that the claim text is rendered from that
+evidence. They do not prove that the calculation answers the user's question.
+
+- A syntactically valid but semantically wrong formula still produces verified numbers. During
+  evaluation, one run listed matching rows instead of summing them, and an earlier run computed
+  duplicate rows with a wrong formula.
+- A requested-metric mapping makes the chosen fields inspectable. It does not prove that the
+  language equivalence or derivation is right, which is why the plan and mapping are shown to the
+  user.
+
+## 2. Model behavior varies between runs
+
+The planner and insight drafts come from `gemini-3.5-flash-lite`, whose sampling cannot be fixed.
+The same question can receive a different plan, SQL, chart type, or set of reported values.
+
+| Holdout set (first run) | Passed | Notes |
+|---|---|---|
+| v4 | 33/36 (91.7%) | classic and messy tables |
+| v5 | 29/36 (80.6%) | 32/36 after the grader fix for Vietnamese group labels |
+| v6 | 30/36 (83.3%) | failures included a regression later fixed |
+| v7 | 36/36 (100%) | clear questions and clean data, written to test the latest fixes |
+| v8 (hard) | 24/36 (66.7%) | messy values, vague and multi-step questions; see Section 10 |
+
+The gap between v7 and v8 is the most useful reading of these numbers: the agent is reliable on
+clear questions over clean data and much weaker when values are inconsistent or the question is
+vague. Each set has 12 cases run 3 times. That sample is small: a single case failing all runs moves the
+score by 8.3 points, and a perfect score is consistent with a lower long-run rate. Later sets were
+written by the same author who fixed the earlier failures.
+
+## 3. Data sent to the model provider
+
+Details are in Spec Section 14.5. In short, the model receives field names and kinds, row counts,
+up to 10 frequent values of each non-PII field, tool error messages, and verified result values of
+at most 50 rows.
+
+- `TABULAR_AGENT_SEND_SAMPLE_VALUES=false` withholds the frequent values but not field metadata or
+  result values, and filters on text values then fail more often.
+- Free API tiers may allow the provider to use submitted content. Real customer data needs a paid
+  tier or an enterprise offering, checked against the provider's terms.
+- Keeping all data on the machine requires a local model adapter, which is not implemented.
+
+## 4. Privacy detection is heuristic
+
+- Possible PII is detected from English column names (for example `email`, `phone`, `full_name`)
+  and from values that look like email addresses or phone numbers.
+- Column names in other languages, such as `Tên khách hàng` or `Địa chỉ`, and personal names or
+  addresses in values are not detected. Such fields are sent to the model like any other field.
+- An identifier-like warning requires at least 20 non-missing rows, so an id column in a smaller
+  table is treated as an ordinary field.
+
+## 5. Data preparation is limited
+
+- Only one rectangular table per session: CSV, or one selected XLSX sheet, up to 100 MB by default.
+  There are no joins across files.
+- Category values are not normalized. `Hà Nội`, `Hà Nội ` (trailing space), and `hà nội` are
+  different values unless the generated SQL trims and case-folds them.
+- Numbers stored as text, such as `1.250.000` or `$4.99`, stay text in the profile. The agent must
+  convert them in SQL, which it may not do.
+- Dates in ISO form (`2026-03-02`) are detected in any language. Other date formats are converted
+  only when the column name is an English date word and every value parses; day-first and
+  month-first forms such as `03/04/2026` can be read the wrong way.
+- Working Dataset transformations (cleaning, recoding) are a Should-tier feature and are not
+  implemented.
+
+## 6. Resource and quota limits
+
+- Queries return at most 10,000 rows; statistical tests use a deterministic reservoir sample of at
+  most that many rows. Limits are configurable (Spec Section 25.3).
+- A question uses about 4 to 5 model calls. The free tier allows 15 requests per minute per API key;
+  several keys rotate, but keys created in the same Google project may share one quota. Using
+  several keys must comply with the provider's terms.
+
+## 7. Charts and the Data Overview
+
+- The agent proposes KPI, table, histogram, bar, line, or scatter charts, and the chosen type can
+  vary. Answers backed only by a statistical test have no chart.
+- The Data Overview and explorer are descriptive. They run no significance test, show at most 20
+  groups, filter on at most 3 fields, and never produce Verified Insights.
+
+## 8. Deployment model
+
+- Streamlit runs as a single-user local application with no authentication or multi-user access
+  control.
+- Session files, checkpoints, and artifacts are stored unencrypted on local disk.
+- Deleting a session removes its files and artifact records in sequence, not in one transaction,
+  and is not a forensic secure erase.
+
+## 9. Evaluation caveats
+
+- Almost all evaluation datasets are synthetic, generated for this project; two public tables (Iris
+  and Titanic) were also used.
+- Expected values are computed independently with pandas and SciPy, but grading matches values
+  deterministically. A correct result under an unexpected grouping column name can be graded as
+  missing.
+- Evaluation runs are paced for the free tier and use the author's API keys; results depend on the
+  model version available on the run date.
+
+## 10. What the hard holdout exposed
+
+Holdout v8 was written to measure limits, and its failures were recorded without changing the
+agent. It passed 24 of 36 runs: calculations 66.7%, insight coverage 62.5%, chart validity 83.3%,
+schema grounding 91.7%, outcome 91.7%, and forbidden claims and profile facts 100%.
+
+**A verified number can still be the wrong answer to the business question.**
+
+- Asked in Vietnamese without diacritics for revenue in Hanoi, where the city was typed as
+  `Hà Nội`, `Hà Nội ` (trailing space), and `hà nội`, every run filtered on the exact value
+  `Hà Nội` and reported about 57% of the true total. The claim was accurate for that filter and
+  named it, but it did not answer the question.
+- Asked for order value excluding cancelled orders, where the status was spelled `cancelled`,
+  `Cancelled `, and `CANCELLED`, two of three runs lowercased the value but did not trim it and
+  included the orders with a trailing space.
+
+**Vague requests are not recognized consistently.** "Which category is our top performer?" was
+answered with a clarification question in all runs, but "Khách hàng tốt nhất của chúng tôi là ai?"
+("Who is our best customer?") was answered in all runs by assuming revenue. The two measures pick
+different customers in that dataset.
+
+**Multi-step questions are fragile.** Plan steps do not pass results to one another; a later step
+must repeat the earlier logic in its own query. Asked for the average order total of the two
+countries with the most orders, all runs reported per-country averages instead of one pooled
+average, and one run's second step ranked countries by average value rather than order count, so it
+reported the wrong countries.
+
+**Large results give thin answers.** Model-bound evidence is capped at 50 rows. A 60-row customer
+ranking produced only the claim that the result has 60 rows, and the ranking itself was visible
+only in the result table.
+
+**Coverage of query results still varies.** Headline statistical estimates are reported
+deterministically, but query values are chosen by the model. In one run comparing the two latest
+months, only one month's revenue was asserted.
+
+What held up on the same messy data: costs stored as `1.250.000` and fees stored as `$4.99` were
+converted correctly in every run, a synonym ("basket size") was mapped to `items_per_order`, a
+near-miss metric (conversion rate without traffic data) was correctly treated as unavailable, the
+most-missing column was answered from the profile, and instruction text inside a cell had no effect
+on any claim.

@@ -1,140 +1,165 @@
-# Foundation Architecture
+# Architecture
 
 ## Dependency direction
 
-```text
-Streamlit adapter
-    -> application module
-        -> orchestration module
-            -> domain module
-                <- analytical adapters
-                <- persistence adapters
-                <- model adapters
+```mermaid
+flowchart LR
+    UI[Streamlit adapter] --> APP[application]
+    APP --> ORCH[orchestration]
+    APP --> DATA[data]
+    APP --> VIS[visualization]
+    ORCH --> MG[model_gateway]
+    ORCH --> DATA
+    ORCH --> STATS[statistics]
+    ORCH --> VER[verification]
+    ORCH --> VIS
+    STATS --> DATA
+    APP --> DOM[domain]
+    ORCH --> DOM
+    DATA --> DOM
+    STATS --> DOM
+    VER --> DOM
+    VIS --> DOM
 ```
 
-The `domain` module owns the stable language, contracts, and invariants. It has no dependency
-on Streamlit, LangGraph, DuckDB, a model provider, or persistence technology.
+The `domain` module owns the shared language, contracts, and invariants. It has no dependency on
+Streamlit, LangGraph, DuckDB, a model provider, or a storage technology. Streamlit and the model
+provider are adapters at the edges, so a FastAPI front end or another model can replace them without
+changing the analytical core.
 
-## Planned modules and seams
+## Agent workflow
 
-### Domain module
+```mermaid
+flowchart TD
+    I[interpret_request] -->|needs clarification| R[review_semantics]
+    I -->|answerable from the profile| END1([completed from profile])
+    I --> P[create_plan]
+    R -->|corrected request| I
+    R --> P
+    R -->|accepted unavailable metric| END2([typed refusal])
+    P -->|repairable plan defect| P
+    P -->|a step needs review| A[approve_plan]
+    P --> T[request_tool]
+    A -->|revision requested| P
+    A --> T
+    T -->|invalid payload, within budget| T
+    T --> X[execute_tool]
+    X -->|next step or repair| T
+    X -->|too few values| END3([insufficient_sample refusal])
+    X --> S[synthesize_insights]
+    S --> C[propose_artifact]
+    S --> END4([completed])
+    C --> END4
+```
 
-The external interface consists of validated Pydantic contracts. It hides cross-field
-invariants such as a passed verification requiring all checks to pass. Tests exercise these
+Every node writes a checkpoint. Approval pauses are LangGraph interrupts, so a session resumes
+after the application restarts. Human waiting time is excluded from the active run budget.
+
+## Modules
+
+### Domain
+
+Validated Pydantic contracts: sessions, profiles, plans, Tool Actions, insight assertions, Verified
+Insights, artifacts, and execution budgets. Cross-field invariants live here, and tests exercise the
 contracts directly.
 
-### Dataset analysis module
+### Data
 
-`TabularDataCore` exposes one small interface for inspecting, ingesting, profiling, and querying
-a session dataset. CSV/XLSX parsing, immutable source copying, DuckDB configuration, SQL policy,
-PII heuristics, and result normalization remain implementation details behind it.
+`TabularDataCore` is the single interface for inspecting, ingesting, profiling, and querying one
+session's dataset.
 
-Published source copies are made read-only and retain a content hash for tamper detection. Each
-Working Dataset stores binding metadata for its dataset ID, source hash, and version; every profile
-or query verifies both canonical paths and that metadata before reading data. Profiles apply one
-missing-value population consistently and include near-constant and Tukey-IQR outlier indicators.
+- Uploads are checked for size, extension, encoding, header validity, and XLSX zip-bomb limits.
+  Source copies are read-only and hash-bound; every read verifies the Working Dataset identity.
+- Profiling infers field kinds, missing values, duplicates, outliers, identifier-like fields, and
+  possible PII. A column whose values are all ISO dates is a datetime field in any language.
+- `sql_policy` parses SQL with sqlglot and allows one `SELECT` or `WITH ... SELECT` over the session
+  table. It rejects DDL, DML, external-access functions, wildcard projections, and other tables,
+  rewrites field ids such as `c1` to exact quoted names, and gives unaliased calculated outputs
+  deterministic ASCII aliases.
+- DuckDB runs read-only with memory, row, and timeout limits. A timed-out query is interrupted.
+- All limits come from `DataCoreLimits`, which `application/settings.py` reads from
+  `TABULAR_AGENT_*` environment variables.
 
-The module uses local-substitutable dependencies: tests exercise real files and real DuckDB
-databases inside temporary directories rather than mocking their behavior.
+### Statistics
 
-### Verification module
+The engine implements descriptive statistics, correlation, confidence intervals, t and Mann-Whitney
+tests, chi-square, ANOVA, Kruskal-Wallis, and linear and logistic regression with NumPy and SciPy.
+Results record sample sizes, missing-data handling, assumption checks, p-values, Bonferroni-adjusted
+alpha, effect sizes, and warnings. `StatisticalTool` reads only approved fields through the data
+core, caps input with a seeded reservoir sample, and raises a typed `InsufficientSampleError` when a
+test lacks data.
 
-The verification module accepts validated analytical records and returns deterministic
-`VerificationResult` values. Its baseline gate checks dataset identity, Working Dataset version,
-schema grounding, and whether a query returned usable evidence. Future statistical and artifact
-checks deepen this same interface rather than relying on model confidence.
+### Verification
 
-Insight publication adds deterministic gates for successful Tool Actions, exact result binding,
-current dataset version, schema grounding, and structured assertions over exact evidence metrics.
-Final claim text is rendered deterministically, so unsupported numeric, directional, comparative,
-significance, or causal language cannot be introduced by the model. Publications that fail any gate
-remain `UnsupportedClaim` records. A stable hash
-of confirmed Semantic Annotations and the Working Dataset version allow previously verified results
-to be marked `StaleInsight` when their analytical context changes.
+`publish_insight` turns a typed assertion into a Verified Insight only when every gate passes: the
+Tool Action succeeded and passed its own gates, the output reference identifies this result, the
+dataset and Working Dataset version match, the fields exist, and the asserted metrics exist in the
+evidence and satisfy the operator. Claim text is rendered from the evidence, so the model cannot add
+numbers, direction, significance, or causal language. Failed drafts become Unsupported Claims.
+Changing confirmed annotations or the dataset version marks earlier insights stale.
 
-### Statistical analysis module
+### Visualization
 
-The statistical module exposes typed requests for descriptive statistics, correlation, confidence
-intervals, two-group and multi-group tests, chi-square, and simple linear or logistic regression.
-NumPy and SciPy perform every calculation. Results record sample sizes, complete/available-case
-missing-data handling, assumptions, p-values, Bonferroni-adjusted alpha, effect sizes, practical
-significance, warnings, and exact parameters.
+The renderer validates a Chart Intent against a verified query result (field existence and types,
+encoding shape, result completeness, readability limits) and emits Plotly JSON. It never runs SQL
+or aggregates values. `ArtifactStore` keeps Candidate and Pinned Artifacts in SQLite with immutable,
+versioned render specifications, grounded to the current session dataset and annotations.
 
-`StatisticalTool` binds this engine to one validated Working Dataset. It extracts only approved
-fields through the read-only data core, caps input using deterministic reservoir sampling with a
-recorded seed, and returns a verified, replayable Tool Action without exposing storage details to
-the statistical engine.
+### Model gateway
 
-### Visualization module
+`ModelGateway.generate_structured` takes a provider-neutral request and a Pydantic response schema,
+validates the response, and allows one schema repair. The Gemini adapter adds bounded retries for
+transient errors and rotates several API keys: each key serves up to 15 requests per minute, rests
+65 seconds after that or after a rate-limit response, and a key the provider rejects is dropped.
+`FakeModelGateway` replays queued outputs for tests.
 
-`visualization` is a deterministic adapter from a structured `ChartIntent` and verified SQL
-`QueryResult` to JSON-safe Plotly specifications. It checks the exact Tool Action/result reference,
-Working Dataset version, result completeness, field existence and types, encoding shape, formatting
-allowlist, and basic readability limits before rendering. It never executes SQL, aggregates values,
-or accepts frontend code from the model. Milestone 5.1 supports KPI, table, histogram, bar, line, and
-scatter output.
+### Orchestration
 
-`ArtifactStore` owns the local Candidate/Pinned lifecycle. It records session-scoped metadata in
-SQLite and publishes immutable, versioned Plotly JSON specifications through an atomic file replace.
-Every artifact carries a typed Query Result reference and passed chart verification. Refinement is
-allowed only while an artifact is a candidate; pinning is an explicit user-controlled dashboard
-transition and never changes the referenced render version. Publication, pinning, and dashboard reads
-are grounded against the current Analysis Session dataset, Working Dataset version, and deterministic
-Semantic Annotation fingerprint, so stale or cross-session results cannot surface as current dashboard
-content.
+`AgentOrchestrator` exposes `start`, `resume`, and `get_state`. `graph.py` holds the nodes and
+routes; supporting modules keep each concern small:
 
-### Application module
+- `prompts.py` builds the delimited, escaped profile metadata. Field ids avoid miscopying non-ASCII
+  names, and the sample-value option withholds frequent values.
+- `binding.py` grounds requested-metric mappings in real fields, requires mapped inputs in the plan,
+  binds each tool payload to its approved step, and rejects repeated identical Tool Actions.
+  Counting rows or records needs no mapping and no identifier field.
+- `evidence_catalog.py` bounds what reaches the model during synthesis: at most 200 evidence values
+  and query results of at most 50 rows, excluding results that read PII fields.
+- `field_ids.py` resolves exact names and ids; `run_state.py` owns failure, refusal, repair, trace,
+  and budget state transitions.
 
-`LocalAnalysisApplication` is the UI-neutral use-case boundary. It stages untrusted uploads beneath a
-generated session namespace, delegates inspection/ingestion/profiling to `TabularDataCore`, persists a
-validated workspace atomically, opens the session's SQLite checkpointer for each agent operation, and
-publishes completed chart renders idempotently through `ArtifactStore`. It can be integration-tested
-with `FakeModelGateway` and later reused by a FastAPI adapter.
+Synthesis publishes the model's drafts and then deterministically reports each statistical result's
+headline estimates that the model left out: every group mean, or the single coefficient. Repairs are
+bounded: a plan with unknown fields is replanned, a failed or empty filtered query is retried with
+the exact error, and insight drafts that name unknown metrics are regenerated once.
 
-### Orchestration module
+### Application
 
-`AgentOrchestrator` exposes `start`, `resume`, and `get_state` operations for an Analysis Session.
-Its explicit LangGraph transitions interpret the goal, optionally pause for Semantic Annotation
-confirmation, create a plan, pause for plan approval, request SQL, execute it, and apply the
-baseline Verification Gates for every approved step. It binds canonical SQL column references to
-the current plan step, rejects wildcard projections and repeated Tool Actions, enforces tool,
-repair, query-timeout, and active-run budgets, and stops safely on failed verification. Human
-approval wait time is checkpointed but excluded from the active-run budget. Applications can inject
-a validated `ExecutionBudget`; each query is capped by both its tool timeout and the remaining run
-budget. Model calls likewise have a transport-enforced timeout bounded by the remaining active-run
-budget.
+`LocalAnalysisApplication` is the UI-neutral use-case boundary: staging uploads under a generated
+session namespace, persisting the workspace atomically, opening the session checkpointer for each
+agent operation, publishing charts, and deleting a session. Around it:
 
-The default local checkpointer stores JSON-safe state in session-scoped SQLite. Dynamic LangGraph
-interrupts make approvals durable across application reloads. Checkpoint namespaces come only from
-the validated Analysis Session ID; Streamlit only renders the current state and sends approval
-decisions back through the public orchestration interface. After approved Tool Actions pass
-verification, the graph requests structured insight drafts, sends only non-PII evidence values to
-the Model Gateway, and publishes each draft as a Verified Insight or Unsupported Claim. Model-bound
-evidence is capped at 200 values, statistical summaries are prioritized, and query results above 50
-rows are withheld until the agent produces a bounded aggregate. Statistical plan steps declare their
-operation up front; the orchestrator derives multiple-testing family size from the approved plan.
-After insight synthesis, the graph may request one structured Chart Intent using goal and schema
-metadata only. It resolves the exact verified query through Evidence Trail action IDs and invokes the
-deterministic visualization adapter. Chart-proposal failure is recorded separately and does not turn a
-successfully verified analysis into a failed run.
+- `overview.py` builds the Data Overview and explorer from the profile and bounded read-only
+  queries, with fixed design limits and no model call. Explorer field names are checked against
+  eligible fields and filter values are escaped as SQL literals.
+- `suggestions.py` proposes goals from field kinds; `exports.py` writes CSV and JSON bound to
+  verified evidence; `settings.py` reads limits, budgets, and the sample-value option.
 
-### Model seam
+### Evaluation
 
-`ModelGateway.generate_structured` accepts a provider-neutral request and a Pydantic response
-schema. Shared behavior validates every response and permits one schema-repair attempt. The
-production adapter uses LangChain's native JSON-schema integration for Gemini, with bounded
-exponential retry only for transient failures. The deterministic fake consumes queued outputs for
-tests. Provider response objects, credentials, and error bodies do not cross this seam.
+Golden cases pin a dataset hash, the question, and expected values computed independently. The
+runner uploads the dataset through the application, approves plans, and grades outcome,
+calculations, insight coverage, schema grounding, forbidden claims, profile facts, and charts
+(grading version 4). Provider errors are retried once and reported separately.
 
-### Delivery seam
+### Delivery
 
-Streamlit is the first delivery adapter. Application operations must remain callable without
-Streamlit so FastAPI and React can be introduced later without rewriting the analytical core.
-The current adapter implements upload, profile inspection, conversational requests, approval pauses,
-verified/unsupported outcomes, candidate charts, dashboard pinning, and audit metadata.
+`streamlit_app.py` renders state and forwards user decisions through the application interface. It
+holds no analytical logic.
 
 ## Testing rule
 
-The public interface of each module is its test surface. Tests assert observable validated
-results and error modes, not internal helper calls. External dependencies receive production
-and local test adapters only when both are genuinely needed.
+The public interface of each module is its test surface. Tests use real files, real DuckDB
+databases, and real SQLite checkpoints in temporary directories, and `FakeModelGateway` in place of
+a live model. `tests/test_hardening.py` covers resource limits, budgets, prompt injection, PII, and
+recovery after a crash during tool execution.
