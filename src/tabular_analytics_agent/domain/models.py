@@ -73,7 +73,6 @@ class VerificationStatus(StrEnum):
 
 class InsightStatus(StrEnum):
     VERIFIED = "verified"
-    STALE = "stale"
     UNSUPPORTED = "unsupported"
 
 
@@ -408,20 +407,6 @@ class UnsupportedClaim(DomainModel):
         return self
 
 
-class StaleInsight(DomainModel):
-    insight_id: UUID
-    status: InsightStatus = InsightStatus.STALE
-    claim: NonEmptyText
-    evidence: EvidenceTrail
-    reason: NonEmptyText
-
-    @model_validator(mode="after")
-    def require_stale_status(self) -> Self:
-        if self.status is not InsightStatus.STALE:
-            raise ValueError("a StaleInsight must have stale status")
-        return self
-
-
 class QueryResultReference(DomainModel):
     """Stable identity for the exact query result visualized by an artifact."""
 
@@ -555,3 +540,19 @@ def measure_field_names(profile: DataProfile) -> tuple[str, ...]:
         and field.name not in excluded
         and IDENTIFIER_LIKE_WARNING not in field.warnings
     )
+
+
+def canonical_uuid(value: object) -> UUID | None:
+    """Return a UUID given as a UUID object or its canonical lowercase text, otherwise None.
+
+    Identifiers name storage paths, so any other spelling is refused rather than normalized.
+    """
+    if isinstance(value, UUID):
+        return value
+    if not isinstance(value, str):
+        return None
+    try:
+        parsed = UUID(value)
+    except ValueError:
+        return None
+    return parsed if str(parsed) == value else None

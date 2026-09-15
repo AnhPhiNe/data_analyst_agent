@@ -10,7 +10,7 @@ import pytest
 
 from tabular_analytics_agent.application import ApplicationError, LocalAnalysisApplication
 from tabular_analytics_agent.data import UnsafeFileError, UnsupportedFileError
-from tabular_analytics_agent.domain import ArtifactStatus, SessionStatus
+from tabular_analytics_agent.domain import ArtifactStatus, ArtifactType, SessionStatus
 from tabular_analytics_agent.model_gateway import FakeModelGateway, ModelTask
 from tabular_analytics_agent.orchestration import AgentRunStatus, ApprovalDecision
 
@@ -116,7 +116,10 @@ def test_end_to_end_application_publishes_and_pins_dashboard_artifact(
     assert gateway.requests[-1].task is ModelTask.CHART_INTENT
 
     first_publication = application.publish_candidates(workspace, completed)
+    saved_at = application.load_workspace(workspace.session.session_id).session.updated_at
     repeated_publication = application.publish_candidates(workspace, completed)
+    # Showing the same result again does not rewrite the session or reorder the session list.
+    assert application.load_workspace(workspace.session.session_id).session.updated_at == saved_at
     assert len(first_publication) == 1
     assert repeated_publication == first_publication
     candidate = first_publication[0]
@@ -188,6 +191,8 @@ def test_upload_staging_rejects_unsupported_or_empty_files(tmp_path: Path) -> No
         application.stage_upload("empty.csv", b"")
     with pytest.raises(UnsafeFileError, match="unique after trimming"):
         application.stage_upload("....csv", b"value,value\n1,2\n")
+    with pytest.raises(UnsafeFileError, match="ZIP archive"):
+        application.stage_upload("renamed.csv", b"PK\x03\x04" + bytes(40))
     assert not tuple((tmp_path / "app-data" / "sessions").rglob("*.csv"))
 
 
@@ -316,3 +321,40 @@ def test_saved_statistical_tool_action_reruns_to_the_same_estimates(tmp_path: Pa
 
     assert completed["status"] == AgentRunStatus.COMPLETED
     assert application.rerun_tool_action(workspace, completed, action_id).reproduced
+
+
+def test_candidate_chart_type_changes_without_a_model_call(tmp_path: Path) -> None:
+    profile_question: dict[str, object] = {
+        "goal_text": "List the columns",
+        "goal_family": "data_quality",
+        "requested_metric_mappings": [],
+        "semantic_annotations": [],
+        "clarification_question": None,
+        "answer_from_profile": True,
+    }
+    gateway = FakeModelGateway([*model_outputs(), profile_question])
+    application = LocalAnalysisApplication(tmp_path / "app-data", gateway)
+    workspace = application.ingest(application.stage_upload("sales.csv", sales_csv()))
+    application.start(workspace, "Compare total revenue by region")
+    completed = application.resume(workspace, True)
+    candidate = application.publish_candidates(workspace, completed)[0]
+    model_calls = len(gateway.requests)
+
+    table = application.refine_candidate(workspace, candidate.artifact_id, ArtifactType.TABLE)
+    line = application.refine_candidate(workspace, candidate.artifact_id, ArtifactType.LINE)
+
+    assert (table.version, table.intent.artifact_type) == (2, ArtifactType.TABLE)
+    assert (line.version, line.intent.x_field, line.intent.y_fields) == (3, "region", ("revenue",))
+    assert application.read_render_spec(line)["plotly_spec"]["data"][0]["mode"] == "lines+markers"
+    # Showing the run again keeps the refined candidate instead of adding the original chart.
+    assert application.publish_candidates(workspace, completed) == (line,)
+    with pytest.raises(ApplicationError, match="kpi chart cannot show"):
+        application.refine_candidate(workspace, candidate.artifact_id, ArtifactType.KPI)
+    assert len(gateway.requests) == model_calls
+
+    # A later request clears the current results; the chart is re-rendered from checkpoints.
+    application.start(workspace, "Which columns are there?")
+    bar = application.refine_candidate(workspace, candidate.artifact_id, ArtifactType.BAR)
+    assert (bar.version, bar.intent.artifact_type) == (4, ArtifactType.BAR)
+    with pytest.raises(ApplicationError, match="could not pin"):
+        application.pin(workspace, uuid4())

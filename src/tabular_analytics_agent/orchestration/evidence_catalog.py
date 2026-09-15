@@ -7,6 +7,7 @@ from typing import Any
 from uuid import UUID
 
 from tabular_analytics_agent.data import (
+    ROW_NUMBER_COLUMN,
     QueryResult,
 )
 from tabular_analytics_agent.domain import (
@@ -45,6 +46,8 @@ MAX_MODEL_ASSUMPTIONS = 50
 
 
 MAX_MODEL_CAVEATS = 20
+# Stop adding catalog entries once fewer prompt characters than this remain.
+_MIN_ENTRY_CHARS = 500
 
 
 # A small result's whole answer fits in this many values, so it can be stated in full.
@@ -69,7 +72,7 @@ def insight_evidence_catalog(state: AgentState, profile: DataProfile) -> list[di
     remaining_values = MAX_MODEL_EVIDENCE_VALUES
     remaining_chars = MAX_MODEL_EVIDENCE_CHARS
     for action, result, source_fields in candidates:
-        if remaining_chars < 500:
+        if remaining_chars < _MIN_ENTRY_CHARS:
             break
         raw_values = available_evidence_values(result)
         omission_reason = None
@@ -254,7 +257,7 @@ def unasserted_small_result_metrics(result: QueryResult, asserted: set[str]) -> 
         for row_index, row in enumerate(result.rows)
         for column, value in zip(result.columns, row, strict=True)
         if column.name not in result.group_by_columns
-        and column.name != "row_number"
+        and column.name != ROW_NUMBER_COLUMN
         and value is not None
     ]
     if len(metrics) > MAX_COMPLETED_RESULT_VALUES:

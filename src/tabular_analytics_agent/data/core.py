@@ -69,6 +69,15 @@ _PII_NAME = re.compile(
     r"ten_(khach_hang|nhan_vien|nguoi|benh_nhan|hoc_sinh|sinh_vien))($|_)",
     re.IGNORECASE,
 )
+# CSV has no file signature, so content that starts like a known binary format is refused.
+_BINARY_SIGNATURES = {
+    b"PK\x03\x04": "a ZIP archive, such as an XLSX workbook renamed to .csv",
+    b"%PDF": "a PDF document",
+    b"\x89PNG": "a PNG image",
+    b"\xff\xd8\xff": "a JPEG image",
+    b"\x1f\x8b": "a gzip archive",
+    b"\xd0\xcf\x11\xe0": "a legacy Office document",
+}
 _EMAIL_VALUE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
 _PHONE_VALUE = re.compile(r"^\+?[0-9][0-9 ()-]{7,}[0-9]$")
 _ISO_DATE_VALUE = re.compile(r"^\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?)?$")
@@ -525,7 +534,7 @@ class TabularDataCore:
                     ).fetchone()
                 )[0]
             )
-            if max_frequency / non_missing >= 0.95:
+            if max_frequency / non_missing >= _NEAR_CONSTANT_SHARE:
                 warnings.append("near-constant field (>=95% same value)")
         if (
             non_missing >= _MIN_IDENTIFIER_ROWS
@@ -535,7 +544,7 @@ class TabularDataCore:
             warnings.append(IDENTIFIER_LIKE_WARNING)
         if row_count and missing_count / row_count >= 0.5:
             warnings.append("high missingness")
-        if is_text and unique_count > 50:
+        if is_text and unique_count > _MAX_CATEGORICAL_UNIQUE_COUNT:
             warnings.append("high cardinality")
         looks_like_pii = self._looks_like_pii(connection, name, quoted)
         if is_text and unique_count > 1:
@@ -645,6 +654,9 @@ def _unlink_read_only(path: Path) -> None:
 def _inspect_csv(path: Path) -> tuple[str, str, tuple[str, ...]]:
     with path.open("rb") as source:
         sample_bytes = source.read(128 * 1024)
+    for signature, description in _BINARY_SIGNATURES.items():
+        if sample_bytes.startswith(signature):
+            raise UnsafeFileError(f"This .csv file is {description}, not comma-separated text")
     match = from_bytes(sample_bytes).best()
     if match is None or not match.encoding:
         raise UnsafeFileError("CSV encoding could not be detected")
@@ -767,7 +779,7 @@ def _infer_field_kind(
         return FieldKind.DATETIME, 1.0
     if normalized_type in {"VARCHAR", "CHAR", "TEXT"}:
         ratio = unique_count / non_missing if non_missing else 0.0
-        if unique_count <= 50 or ratio <= 0.2:
+        if unique_count <= _MAX_CATEGORICAL_UNIQUE_COUNT or ratio <= _MAX_CATEGORICAL_UNIQUE_RATIO:
             return FieldKind.CATEGORICAL, 0.9
         return FieldKind.SHORT_TEXT, 0.8
     return FieldKind.UNKNOWN, 0.5
@@ -834,6 +846,12 @@ def _normalize_scalar(value: Any) -> str | int | float | bool | None:
 
 # Uniqueness says little about a tiny table, and continuous measures are naturally unique.
 _MIN_IDENTIFIER_ROWS = 20
+# A text field with at most this many distinct values, or distinct values in at most this share
+# of its rows, is categorical; beyond the count it also earns a high-cardinality warning.
+_MAX_CATEGORICAL_UNIQUE_COUNT = 50
+_MAX_CATEGORICAL_UNIQUE_RATIO = 0.2
+# A field whose most frequent value covers at least this share of rows is near-constant.
+_NEAR_CONSTANT_SHARE = 0.95
 _INTEGER_TYPES = frozenset(
     {
         "TINYINT",

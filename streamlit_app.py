@@ -35,7 +35,13 @@ from tabular_analytics_agent.application.overview import (
     explorer_options,
 )
 from tabular_analytics_agent.application.suggestions import suggest_goals
-from tabular_analytics_agent.data import QueryExecutionError, QueryTimeoutError, UnsafeQueryError
+from tabular_analytics_agent.data import (
+    DataCoreError,
+    QueryExecutionError,
+    QueryTimeoutError,
+    UnsafeQueryError,
+)
+from tabular_analytics_agent.domain import ArtifactStatus, ArtifactType
 from tabular_analytics_agent.model_gateway import (
     DEFAULT_GEMINI_MODEL,
     GeminiModelGateway,
@@ -43,6 +49,7 @@ from tabular_analytics_agent.model_gateway import (
     ModelConfigurationError,
 )
 from tabular_analytics_agent.orchestration import AgentRunStatus, AgentState
+from tabular_analytics_agent.visualization import SUPPORTED_ARTIFACT_TYPES
 
 load_dotenv()
 
@@ -474,8 +481,12 @@ def resume_agent(
     workspace: AnalysisWorkspace,
     decision: bool | dict[str, object],
 ) -> None:
-    with st.spinner("Agent is working through verified tools…"):
-        state = application.resume(workspace, decision)
+    try:
+        with st.spinner("Agent is working through verified tools…"):
+            state = application.resume(workspace, decision)
+    except ApplicationError as exc:
+        st.error(f"The analysis could not continue: {exc}")
+        return
     set_agent_state(application, workspace, state)
     st.rerun()
 
@@ -570,6 +581,18 @@ def render_result_table(payload: dict[str, Any]) -> None:
         st.warning("The displayed query result reached its configured row limit.")
 
 
+def evidence_conditions(evidence: dict[str, Any]) -> list[str]:
+    """Return an Evidence Trail's WHERE and HAVING conditions, including inner query scopes."""
+    return [
+        *(str(condition) for condition in evidence.get("filters", [])),
+        *(
+            f"{scope['scope']} {scope['clause']} {scope['expression']}"
+            for scope in evidence.get("filter_scopes", [])
+            if scope.get("scope") != "outer"
+        ),
+    ]
+
+
 def render_completed_analysis(
     application: LocalAnalysisApplication,
     workspace: AnalysisWorkspace,
@@ -607,18 +630,10 @@ def render_completed_analysis(
         for item, caveats in zip(insights, caveat_lists, strict=True):
             with st.container(border=True):
                 st.write(item.get("claim", "Verified insight"))
-                evidence = item.get("evidence", {})
-                conditions = [
-                    *evidence.get("filters", []),
-                    *(
-                        f"{scope['scope']} {scope['clause']} {scope['expression']}"
-                        for scope in evidence.get("filter_scopes", [])
-                        if scope.get("scope") != "outer"
-                    ),
-                ]
+                conditions = evidence_conditions(item.get("evidence", {}))
                 if conditions:
                     # Claim text leaves SQL conditions out, so show them beneath the claim.
-                    st.caption("Filters: " + "; ".join(map(str, conditions)))
+                    st.caption("Filters: " + "; ".join(conditions))
                 own = [caveat for caveat in caveats if caveat not in shared]
                 if own:
                     st.caption("Caveats: " + "; ".join(own))
@@ -638,7 +653,10 @@ def render_completed_analysis(
     if artifact_error:
         st.info(f"No chart candidate was published: {artifact_error}")
     else:
-        application.publish_candidates(workspace, state)
+        try:
+            application.publish_candidates(workspace, state)
+        except ApplicationError as exc:
+            st.warning(f"The chart could not be saved as a candidate: {exc}")
         if insights and not state.get("chart_renders"):
             st.caption("Statistical test results have no result table to chart.")
     render_exports(workspace, state)
@@ -690,6 +708,7 @@ def render_exports(workspace: AnalysisWorkspace, state: AgentState) -> None:
 
 def render_artifact(
     application: LocalAnalysisApplication,
+    workspace: AnalysisWorkspace,
     artifact: Any,
     *,
     action_label: str,
@@ -709,8 +728,42 @@ def render_artifact(
             f"dataset v{artifact.source_result_ref.working_dataset_version} · "
             f"artifact v{artifact.version}"
         )
+        if artifact.status is ArtifactStatus.CANDIDATE:
+            render_chart_type_choice(application, workspace, artifact)
         if st.button(action_label, key=f"artifact-{action_label}-{artifact.artifact_id}"):
-            action(artifact.artifact_id)
+            try:
+                action(artifact.artifact_id)
+            except ApplicationError as exc:
+                st.error(str(exc))
+            else:
+                st.rerun()
+
+
+def render_chart_type_choice(
+    application: LocalAnalysisApplication,
+    workspace: AnalysisWorkspace,
+    artifact: Any,
+) -> None:
+    """Show a candidate's verified result as another chart type, without asking the model."""
+    types = [artifact_type.value for artifact_type in SUPPORTED_ARTIFACT_TYPES]
+    current = artifact.intent.artifact_type.value
+    choice, apply = st.columns([3, 2])
+    chosen = choice.selectbox(
+        "Chart type",
+        types,
+        index=types.index(current),
+        key=f"artifact-type-{artifact.artifact_id}",
+    )
+    if apply.button(
+        "Change chart type",
+        key=f"artifact-refine-{artifact.artifact_id}",
+        disabled=chosen == current,
+    ):
+        try:
+            application.refine_candidate(workspace, artifact.artifact_id, ArtifactType(chosen))
+        except ApplicationError as exc:
+            st.error(str(exc))
+        else:
             st.rerun()
 
 
@@ -779,10 +832,14 @@ def render_analyze_tab(
     )
     if prompt:
         st.session_state.setdefault("messages", []).append({"role": "user", "content": prompt})
-        with st.spinner("Agent is interpreting your goal…"):
-            next_state = application.start(workspace, prompt)
-        set_agent_state(application, workspace, next_state)
-        st.rerun()
+        try:
+            with st.spinner("Agent is interpreting your goal…"):
+                next_state = application.start(workspace, prompt)
+        except ApplicationError as exc:
+            st.error(f"The question could not be started: {exc}")
+        else:
+            set_agent_state(application, workspace, next_state)
+            st.rerun()
 
     candidates = application.list_candidates(workspace)
     if candidates:
@@ -792,6 +849,7 @@ def render_analyze_tab(
         for artifact in candidates:
             render_artifact(
                 application,
+                workspace,
                 artifact,
                 action_label="Pin to Dashboard",
                 action=lambda artifact_id: application.pin(workspace, artifact_id),
@@ -809,6 +867,7 @@ def render_dashboard_tab(
     for artifact in artifacts:
         render_artifact(
             application,
+            workspace,
             artifact,
             action_label="Unpin",
             action=lambda artifact_id: application.unpin(workspace, artifact_id),
@@ -889,7 +948,7 @@ def render_audit_tab(
         with st.expander(str(item.get("claim", "Verified insight"))):
             st.caption(
                 f"Fields: {', '.join(evidence.get('source_fields', []))} · filters: "
-                f"{'; '.join(evidence.get('filters', [])) or 'none'} · source rows: "
+                f"{'; '.join(evidence_conditions(evidence)) or 'none'} · source rows: "
                 f"{evidence.get('source_row_count')} · result rows: "
                 f"{evidence.get('result_row_count')}"
             )
@@ -940,6 +999,19 @@ def render_audit_tab(
         )
 
 
+def stage_uploaded_file(
+    application: LocalAnalysisApplication, filename: str, content: bytes
+) -> bool:
+    """Stage an upload, or explain why the file cannot be used instead of raising."""
+    try:
+        with st.spinner("Inspecting file structure and safety limits…"):
+            st.session_state.staged_upload = application.stage_upload(filename, content)
+    except (ApplicationError, DataCoreError) as exc:
+        st.error(f"This file cannot be used: {exc}")
+        return False
+    return True
+
+
 def render_upload(application: LocalAnalysisApplication) -> None:
     st.markdown(
         '<p class="taa-kicker">Local-first · verified · reproducible</p>', unsafe_allow_html=True
@@ -954,11 +1026,11 @@ def render_upload(application: LocalAnalysisApplication) -> None:
         type=["csv", "xlsx"],
         key="dataset-upload",
     )
-    if uploaded and st.button("Inspect file", type="primary"):
-        with st.spinner("Inspecting file structure and safety limits…"):
-            st.session_state.staged_upload = application.stage_upload(
-                uploaded.name, uploaded.getvalue()
-            )
+    if (
+        uploaded
+        and st.button("Inspect file", type="primary")
+        and stage_uploaded_file(application, uploaded.name, uploaded.getvalue())
+    ):
         st.rerun()
 
     staged = st.session_state.get("staged_upload")
@@ -975,11 +1047,16 @@ def render_upload(application: LocalAnalysisApplication) -> None:
     if inspection.sheets:
         sheet_name = st.selectbox("Worksheet", inspection.sheets, key="dataset-sheet")
     if st.button("Ingest and profile", type="primary"):
-        with st.spinner("Creating an immutable source and profiling the working dataset…"):
-            st.session_state.workspace = application.ingest(staged, sheet_name=sheet_name)
-            st.session_state.agent_state = None
-            st.session_state.messages = []
-            del st.session_state.staged_upload
+        try:
+            with st.spinner("Creating an immutable source and profiling the working dataset…"):
+                workspace = application.ingest(staged, sheet_name=sheet_name)
+        except (ApplicationError, DataCoreError) as exc:
+            st.error(f"This file could not be profiled: {exc}")
+            return
+        st.session_state.workspace = workspace
+        st.session_state.agent_state = None
+        st.session_state.messages = []
+        del st.session_state.staged_upload
         st.rerun()
 
 

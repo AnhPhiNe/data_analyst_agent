@@ -139,11 +139,6 @@ def quote_identifier(value: str) -> str:
     return '"' + value.replace('"', '""') + '"'
 
 
-def validate_read_only_sql(sql: str, *, allowed_table: str) -> str:
-    """Return normalized SQL when it is one read-only query over the allowed table."""
-    return analyze_read_only_sql(sql, allowed_table=allowed_table).normalized_sql
-
-
 def analyze_read_only_sql(sql: str, *, allowed_table: str) -> SQLAnalysis:
     """Validate SQL and report canonical text plus referenced column names."""
     candidate = sql.strip()

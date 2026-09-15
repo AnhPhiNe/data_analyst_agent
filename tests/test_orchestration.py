@@ -1095,6 +1095,58 @@ def test_unsupported_statistical_data_fails_without_model_repair_retry(
     assert len(gateway.requests) == 3
 
 
+def test_statistical_parameter_error_is_repaired_with_the_observed_values(
+    tmp_path: Path,
+) -> None:
+    core = TabularDataCore(tmp_path / "session-data")
+    dataset = tmp_path / "shifts.csv"
+    dataset.write_text(
+        "shift,hours\nDay,8\nDay,9\nDay,7\nNight,10\nNight,11\nNight,12\n",
+        encoding="utf-8",
+        newline="",
+    )
+    handle = core.ingest(dataset)
+    request = AgentRunRequest(
+        session_id="parameter-repair",
+        user_request="Do night shifts work longer hours?",
+        dataset_handle=handle,
+        data_profile=core.profile(handle),
+    )
+    plan = {
+        "steps": [
+            {
+                "step_id": "shift-test",
+                "description": "Compare hours between shifts",
+                "expected_tool": "statistical_analysis",
+                "statistical_operation": "t_test",
+                "required_fields": ["shift", "hours"],
+                "intended_output": "Welch t-test",
+                "caveats": [],
+                "requires_approval": True,
+            }
+        ]
+    }
+    misspelled = {"value_field": "hours", "group_field": "shift", "group_order": ["day", "night"]}
+    corrected = {"value_field": "hours", "group_field": "shift", "group_order": ["Day", "Night"]}
+    draft = insight_output(
+        plan_step_id="shift-test",
+        operator="reports",
+        left_metric="welch_t",
+        right_metric=None,
+        evidence_metrics=["welch_t"],
+    )
+    gateway = FakeModelGateway([goal_output(), plan, misspelled, corrected, draft])
+    agent = AgentOrchestrator(gateway, core, checkpointer=InMemorySaver())
+
+    agent.start(request)
+    completed = agent.resume(request.session_id, True)
+
+    assert completed["status"] == AgentRunStatus.COMPLETED
+    assert [action["status"] for action in completed["tool_actions"]] == ["failed", "succeeded"]
+    # The repair prompt names the groups the data actually has.
+    assert "observed groups" in gateway.requests[3].prompt
+
+
 def test_statistical_request_binds_approved_operation_and_fields(tmp_path: Path) -> None:
     core, request = run_request(tmp_path)
     statistical_plan = {

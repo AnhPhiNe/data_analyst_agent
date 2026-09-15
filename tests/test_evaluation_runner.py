@@ -9,6 +9,7 @@ from typing import Any
 
 import pytest
 
+import tabular_analytics_agent.evaluation.runner as runner_module
 from tabular_analytics_agent.application import LocalAnalysisApplication
 from tabular_analytics_agent.evaluation import (
     ExpectedCalculation,
@@ -16,7 +17,12 @@ from tabular_analytics_agent.evaluation import (
     ExpectedProfileFact,
     GoldenCase,
 )
-from tabular_analytics_agent.evaluation.grading import estimate_cost_usd, grade_run, summarize
+from tabular_analytics_agent.evaluation.grading import (
+    CaseRunResult,
+    estimate_cost_usd,
+    grade_run,
+    summarize,
+)
 from tabular_analytics_agent.evaluation.runner import load_cases, main, run_suite
 from tabular_analytics_agent.model_gateway import FakeModelGateway, ModelProviderError
 from tabular_analytics_agent.orchestration import AgentState
@@ -270,6 +276,50 @@ def test_provider_error_is_retried_once_after_the_rate_window(tmp_path: Path) ->
     assert summary.provider_errors == 0
     assert summary.provider_retries == 1
     assert sleeps == [60.0]
+
+
+def run_result(*, provider_error: bool, prompt_tokens: int, output_tokens: int) -> CaseRunResult:
+    return CaseRunResult(
+        case_id="tiny_columns_profile",
+        run_index=0,
+        expected_outcome=ExpectedOutcome.PROFILE,
+        actual_outcome="failed" if provider_error else "profile",
+        status="failed" if provider_error else "completed",
+        provider_error=provider_error,
+        passed=not provider_error,
+        checks=(),
+        model_calls=1,
+        provider_requests=1,
+        total_tokens=prompt_tokens + output_tokens,
+        latency_ms=0,
+        claims=(),
+        error="",
+        prompt_tokens=prompt_tokens,
+        output_tokens=output_tokens,
+    )
+
+
+def test_tokens_of_a_retried_provider_error_stay_in_the_totals(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    attempts = [
+        run_result(provider_error=True, prompt_tokens=100, output_tokens=10),
+        run_result(provider_error=False, prompt_tokens=40, output_tokens=4),
+    ]
+    monkeypatch.setattr(runner_module, "run_case", lambda *args, **kwargs: attempts.pop(0))
+
+    summary = run_suite(
+        LocalAnalysisApplication(tmp_path / "app-data", FakeModelGateway([])),
+        (load_case("tiny_columns_profile.json"),),
+        project_root=ROOT,
+        runs=1,
+        requests_per_minute=60_000,
+        output_dir=tmp_path / "eval",
+        sleep=lambda seconds: None,
+    )
+
+    assert summary.provider_retries == 1
+    assert (summary.total_prompt_tokens, summary.total_output_tokens) == (140, 14)
 
 
 def test_query_grading_rejects_swapped_group_values() -> None:

@@ -17,7 +17,6 @@ from tabular_analytics_agent.domain import (
     InsightAssertion,
     InsightOperator,
     SemanticAnnotation,
-    StaleInsight,
     ToolAction,
     UnsupportedClaim,
     VerificationCheck,
@@ -259,30 +258,6 @@ def reject_insight_draft(*, claim: str, reason: str) -> UnsupportedClaim:
     )
 
 
-def invalidate_stale_insight(
-    insight: VerifiedInsight,
-    *,
-    current_working_dataset_version: int,
-    semantic_annotations: tuple[SemanticAnnotation, ...] = (),
-) -> VerifiedInsight | StaleInsight:
-    """Keep a verified insight only while its dataset and semantics remain current."""
-    reasons: list[str] = []
-    if insight.evidence.working_dataset_version != current_working_dataset_version:
-        reasons.append("Working Dataset version changed")
-    if insight.evidence.semantic_annotation_fingerprint != fingerprint_semantic_annotations(
-        semantic_annotations
-    ):
-        reasons.append("Semantic Annotations changed")
-    if not reasons:
-        return insight
-    return StaleInsight(
-        insight_id=insight.insight_id,
-        claim=insight.claim,
-        evidence=insight.evidence,
-        reason="; ".join(reasons) + "; re-verification is required.",
-    )
-
-
 def _source_fields(action: ToolAction, result: EvidenceResult) -> tuple[str, ...]:
     if isinstance(result, StatisticalResult):
         return result.source_fields
@@ -489,6 +464,7 @@ _METRIC_LABELS = {
     "cramers_v": "Cramér's V",
     "epsilon_squared": "epsilon squared",
     "eta_squared": "eta squared",
+    "kruskal_h": "Kruskal-Wallis H statistic",
     "mann_whitney_u": "Mann-Whitney U statistic",
     "odds_ratio": "odds ratio",
     "odds_ratio_log": "log odds ratio",

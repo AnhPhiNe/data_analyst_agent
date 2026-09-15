@@ -44,10 +44,12 @@ from tabular_analytics_agent.domain import (
     AnalysisSession,
     AnalyticalArtifact,
     AnalyticalGoal,
+    ArtifactType,
     ExecutionBudget,
     SemanticAnnotation,
     SessionStatus,
     ToolAction,
+    canonical_uuid,
 )
 from tabular_analytics_agent.filesystem import (
     delete_tree,
@@ -74,6 +76,10 @@ from tabular_analytics_agent.visualization import (
     ArtifactStore,
     ArtifactStoreError,
     ChartRenderResult,
+    ChartValidationError,
+    make_query_result_reference,
+    render_chart,
+    retarget_chart_intent,
 )
 
 _SUPPORTED_UPLOAD_SUFFIXES = {".csv", ".xlsx"}
@@ -203,7 +209,7 @@ class LocalAnalysisApplication:
                 raise ApplicationError("could not inspect Analysis Session storage") from exc
             if is_link or not entry.is_dir():
                 continue
-            session_id = _canonical_session_id(entry.name)
+            session_id = canonical_uuid(entry.name)
             if session_id is None:
                 continue
             try:
@@ -461,29 +467,28 @@ class LocalAnalysisApplication:
         if state.get("status") != AgentRunStatus.COMPLETED:
             raise ApplicationError("artifacts can be published only from a completed agent run")
         current_workspace = self.sync_workspace(workspace, state)
-        self._save_workspace(current_workspace)
         existing = self._artifact_store.list_artifacts(current_workspace.session.session_id)
         publications: list[AnalyticalArtifact] = []
         for payload in state.get("chart_renders", []):
             rendered = ChartRenderResult.model_validate(payload)
-            insight_ids = _insight_ids_for_source(state, rendered)
-            match = next(
-                (
-                    artifact
-                    for artifact in existing
-                    if artifact.intent == rendered.intent
-                    and artifact.source_result_ref == rendered.source_result_ref
-                ),
+            # One candidate per verified result; a refined candidate keeps its new chart type.
+            artifact = next(
+                (item for item in existing if item.source_result_ref == rendered.source_result_ref),
                 None,
             )
-            artifact = match or self._artifact_store.create_candidate(
-                current_workspace.session,
-                rendered,
-                insight_ids=insight_ids,
-            )
-            publications.append(artifact)
-            if match is None:
+            if artifact is None:
+                try:
+                    artifact = self._artifact_store.create_candidate(
+                        current_workspace.session,
+                        rendered,
+                        insight_ids=_insight_ids_for_source(state, rendered),
+                    )
+                except ArtifactStoreError as exc:
+                    raise ApplicationError(f"could not publish the chart: {exc}") from exc
                 existing = (*existing, artifact)
+                # Only a new candidate changes the saved session; viewing a result does not.
+                self._save_workspace(current_workspace)
+            publications.append(artifact)
         return tuple(publications)
 
     def list_candidates(self, workspace: AnalysisWorkspace) -> tuple[AnalyticalArtifact, ...]:
@@ -493,10 +498,55 @@ class LocalAnalysisApplication:
         return self._artifact_store.list_dashboard(workspace.session)
 
     def pin(self, workspace: AnalysisWorkspace, artifact_id: UUID) -> AnalyticalArtifact:
-        return self._artifact_store.pin(workspace.session, artifact_id)
+        try:
+            return self._artifact_store.pin(workspace.session, artifact_id)
+        except ArtifactStoreError as exc:
+            raise ApplicationError(f"could not pin the chart: {exc}") from exc
 
     def unpin(self, workspace: AnalysisWorkspace, artifact_id: UUID) -> AnalyticalArtifact:
-        return self._artifact_store.unpin(workspace.session.session_id, artifact_id)
+        try:
+            return self._artifact_store.unpin(workspace.session.session_id, artifact_id)
+        except ArtifactStoreError as exc:
+            raise ApplicationError(f"could not unpin the chart: {exc}") from exc
+
+    def refine_candidate(
+        self,
+        workspace: AnalysisWorkspace,
+        artifact_id: UUID,
+        artifact_type: ArtifactType,
+    ) -> AnalyticalArtifact:
+        """Show a candidate's verified result as another chart type, without a model call."""
+        session = workspace.session
+        try:
+            artifact = self._artifact_store.get(session.session_id, artifact_id)
+        except ArtifactStoreError as exc:
+            raise ApplicationError(f"could not change the chart: {exc}") from exc
+        with self._open_orchestrator(workspace) as orchestrator:
+            evidence = orchestrator.query_evidence(
+                str(session.session_id), str(artifact.source_result_ref.query_id)
+            )
+        if evidence is None:
+            raise ApplicationError("the verified result behind this chart is no longer available")
+        result = QueryResult.model_validate(evidence[0])
+        action = ToolAction.model_validate(evidence[1])
+        intent = retarget_chart_intent(artifact.intent, result, artifact_type).model_copy(
+            update={
+                "source_result_ref": make_query_result_reference(
+                    result, session.semantic_annotations
+                )
+            }
+        )
+        try:
+            rendered = render_chart(
+                intent, result, action, semantic_annotations=session.semantic_annotations
+            )
+            return self._artifact_store.refine_candidate(session, artifact_id, rendered)
+        except ChartValidationError as exc:
+            raise ApplicationError(
+                f"A {artifact_type.value} chart cannot show this result: {exc}"
+            ) from exc
+        except ArtifactStoreError as exc:
+            raise ApplicationError(f"could not change the chart: {exc}") from exc
 
     def read_render_spec(self, artifact: AnalyticalArtifact) -> dict[str, Any]:
         return self._artifact_store.read_render_spec(artifact)
@@ -638,23 +688,12 @@ class LocalAnalysisApplication:
             raise ApplicationError("checkpoint path is not a file")
 
 
-def _canonical_session_id(name: str) -> UUID | None:
-    try:
-        session_id = UUID(name)
-    except (ValueError, AttributeError):
-        return None
-    return session_id if str(session_id) == name else None
-
-
 def _require_session_id(value: object) -> UUID:
     """Accept a UUID object or its canonical lowercase text, never a path-like value."""
-    if isinstance(value, UUID):
-        return value
-    if isinstance(value, str):
-        session_id = _canonical_session_id(value)
-        if session_id is not None:
-            return session_id
-    raise ApplicationError("session_id must be a UUID or canonical UUID string")
+    session_id = canonical_uuid(value)
+    if session_id is None:
+        raise ApplicationError("session_id must be a UUID or canonical UUID string")
+    return session_id
 
 
 def _require_state_session(state: AgentState, session_id: UUID) -> None:

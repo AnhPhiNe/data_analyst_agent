@@ -19,7 +19,6 @@ from tabular_analytics_agent.domain import (
     InsightOperator,
     InsightStatus,
     SemanticAnnotation,
-    StaleInsight,
     ToolAction,
     UnsupportedClaim,
     VerificationCheck,
@@ -35,10 +34,9 @@ from tabular_analytics_agent.statistics import (
 )
 from tabular_analytics_agent.verification import (
     available_evidence_values,
-    invalidate_stale_insight,
     publish_insight,
 )
-from tabular_analytics_agent.verification.insights import _display_metric
+from tabular_analytics_agent.verification.insights import _METRIC_LABELS, _display_metric
 
 
 def context() -> tuple[DataProfile, ToolAction, QueryResult]:
@@ -108,6 +106,58 @@ def context() -> tuple[DataProfile, ToolAction, QueryResult]:
         action.model_copy(update={"output_ref": f"query-result:{result.query_id}"}),
         result,
     )
+
+
+def test_every_test_statistic_and_effect_size_has_a_claim_label() -> None:
+    frame = pd.DataFrame(
+        {
+            "value": [3.1, 4.2, 2.8, 5.0, 4.4, 3.9, 6.1, 5.7, 6.4, 7.2, 6.8, 7.9],
+            "two": ["A"] * 6 + ["B"] * 6,
+            "three": ["A", "B", "C"] * 4,
+            "x": [1.0, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+            "y": [2.0, 1, 4, 3, 6, 5, 8, 9, 7, 11, 10, 12],
+            "left": ["p", "q"] * 6,
+            "right": ["m", "m", "n", "n"] * 3,
+            "outcome": ["no", "yes", "no", "no", "yes", "no"]
+            + ["yes", "yes", "no", "yes"] * 1
+            + ["yes", "yes"],
+        }
+    )
+    operation = StatisticalOperation
+    requests = (
+        StatisticalRequest(operation=operation.CORRELATION, x_field="x", y_field="y"),
+        StatisticalRequest(
+            operation=operation.T_TEST,
+            value_field="value",
+            group_field="two",
+            group_order=("A", "B"),
+        ),
+        StatisticalRequest(
+            operation=operation.MANN_WHITNEY,
+            value_field="value",
+            group_field="two",
+            group_order=("A", "B"),
+        ),
+        StatisticalRequest(operation=operation.CHI_SQUARE, x_field="left", y_field="right"),
+        StatisticalRequest(operation=operation.ANOVA, value_field="value", group_field="three"),
+        StatisticalRequest(
+            operation=operation.KRUSKAL_WALLIS, value_field="value", group_field="three"
+        ),
+        StatisticalRequest(operation=operation.LINEAR_REGRESSION, x_field="x", y_field="y"),
+        StatisticalRequest(
+            operation=operation.LOGISTIC_REGRESSION,
+            x_field="x",
+            y_field="outcome",
+            positive_class="yes",
+        ),
+    )
+
+    for request in requests:
+        result = analyze(frame, request)
+        effect = result.effect_size.metric if result.effect_size else None
+        # A statistic without a label would read as its raw identifier, such as "kruskal h".
+        assert result.statistic_name in _METRIC_LABELS, request.operation.value
+        assert effect in _METRIC_LABELS, request.operation.value
 
 
 @pytest.mark.parametrize(
@@ -680,23 +730,3 @@ def test_insight_becomes_stale_after_dataset_or_semantic_revision() -> None:
     assert publication.evidence.semantic_annotation_fingerprint == fingerprint_semantic_annotations(
         annotations
     )
-    assert (
-        invalidate_stale_insight(
-            publication,
-            current_working_dataset_version=1,
-            semantic_annotations=annotations,
-        )
-        is publication
-    )
-
-    stale = invalidate_stale_insight(
-        publication,
-        current_working_dataset_version=2,
-        semantic_annotations=(),
-    )
-
-    assert isinstance(stale, StaleInsight)
-    assert stale.status is InsightStatus.STALE
-    assert "Working Dataset version changed" in stale.reason
-    assert "Semantic Annotations changed" in stale.reason
-    assert "re-verification" in stale.reason

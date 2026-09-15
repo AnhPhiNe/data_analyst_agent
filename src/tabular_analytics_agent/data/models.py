@@ -41,6 +41,9 @@ class UploadInspection(DataModel):
 
 # The single table every session exposes to SQL; the integrity check rejects any other name.
 DATASET_TABLE = "dataset"
+# Row listings may number uploaded rows under this output name (rowid + 1); it is a position,
+# not a measured value.
+ROW_NUMBER_COLUMN = "row_number"
 
 
 class DatasetHandle(DataModel):

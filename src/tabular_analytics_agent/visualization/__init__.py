@@ -9,14 +9,17 @@ from tabular_analytics_agent.visualization.errors import (
 )
 from tabular_analytics_agent.visualization.models import ChartRenderResult
 from tabular_analytics_agent.visualization.renderer import (
+    SUPPORTED_ARTIFACT_TYPES,
     SUPPORTED_FORMATTING_KEYS,
     exact_number_format,
     make_query_result_reference,
     render_chart,
+    retarget_chart_intent,
     validate_chart_intent,
 )
 
 __all__ = [
+    "SUPPORTED_ARTIFACT_TYPES",
     "SUPPORTED_FORMATTING_KEYS",
     "ArtifactNotFoundError",
     "ArtifactStore",
@@ -27,5 +30,6 @@ __all__ = [
     "exact_number_format",
     "make_query_result_reference",
     "render_chart",
+    "retarget_chart_intent",
     "validate_chart_intent",
 ]

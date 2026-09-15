@@ -19,6 +19,7 @@ from tabular_analytics_agent.domain import (
     ArtifactStatus,
     QueryResultReference,
     VerificationStatus,
+    canonical_uuid,
     semantic_fingerprint_matches,
 )
 from tabular_analytics_agent.filesystem import (
@@ -567,13 +568,7 @@ class ArtifactStore:
 
 def _require_session_id(value: object) -> UUID:
     """Accept only a UUID object or its canonical lowercase string form."""
-    if isinstance(value, UUID):
-        return value
-    if isinstance(value, str):
-        try:
-            session_id = UUID(value)
-        except ValueError:
-            session_id = None
-        if session_id is not None and str(session_id) == value:
-            return session_id
-    raise ArtifactStoreError("session_id must be a UUID or canonical UUID string")
+    session_id = canonical_uuid(value)
+    if session_id is None:
+        raise ArtifactStoreError("session_id must be a UUID or canonical UUID string")
+    return session_id

@@ -220,8 +220,12 @@ class InsightDraft(GenerationSchema):
         return assertion
 
 
+# One synthesis call publishes at most this many drafted claims.
+MAX_INSIGHT_DRAFTS = 12
+
+
 class InsightDraftBatch(GenerationSchema):
-    insights: tuple[InsightDraft, ...] = Field(max_length=12)
+    insights: tuple[InsightDraft, ...] = Field(max_length=MAX_INSIGHT_DRAFTS)
 
 
 class ChartIntentDraft(GenerationSchema):

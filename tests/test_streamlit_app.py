@@ -36,3 +36,25 @@ def test_streamlit_reports_an_invalid_resource_limit(
 
     assert not application.exception
     assert "TABULAR_AGENT_MAX_TOOL_ACTIONS" in application.error[0].value
+
+
+def test_rejected_upload_is_explained_instead_of_raised(tmp_path: Path) -> None:
+    def script(root: str, data_dir: str) -> None:
+        import sys
+        from pathlib import Path
+
+        sys.path.insert(0, root)
+        import streamlit_app
+
+        from tabular_analytics_agent.application import LocalAnalysisApplication
+        from tabular_analytics_agent.model_gateway import FakeModelGateway
+
+        application = LocalAnalysisApplication(Path(data_dir), FakeModelGateway([]))
+        streamlit_app.stage_uploaded_file(application, "bad.csv", b"region,,revenue\nNorth,1,2\n")
+
+    root = str(Path(__file__).resolve().parents[1])
+    app = AppTest.from_function(script, args=(root, str(tmp_path / "app-data"))).run(timeout=30)
+
+    assert not app.exception
+    assert "This file cannot be used" in app.error[0].value
+    assert "non-empty header" in app.error[0].value

@@ -4,6 +4,7 @@ from tabular_analytics_agent.statistics.engine import analyze, display_group_lab
 from tabular_analytics_agent.statistics.errors import (
     InsufficientSampleError,
     StatisticalAnalysisError,
+    StatisticalParameterError,
 )
 from tabular_analytics_agent.statistics.models import (
     AlternativeHypothesis,
@@ -27,6 +28,7 @@ __all__ = [
     "StatisticalAnalysisError",
     "StatisticalEstimate",
     "StatisticalOperation",
+    "StatisticalParameterError",
     "StatisticalRequest",
     "StatisticalResult",
     "StatisticalTool",

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 
 from tabular_analytics_agent.data import (
+    ROW_NUMBER_COLUMN,
     DatasetHandle,
 )
 from tabular_analytics_agent.domain import (
@@ -53,7 +54,8 @@ def tool_payload_guidance(step: PlanStep, handle: DatasetHandle) -> str:
         "names (aliases are not source columns) and keep plain source columns, including "
         "grouping keys, unaliased. For a row count use COUNT(*), never COUNT of an identifier "
         "column. To show which "
-        "uploaded rows match, select rowid + 1 AS row_number; rowid is the row's zero-based "
+        f"uploaded rows match, select rowid + 1 AS {ROW_NUMBER_COLUMN}; rowid is the row's "
+        "zero-based "
         "position in the uploaded file, not a source column."
     )
 

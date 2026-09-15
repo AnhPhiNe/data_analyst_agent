@@ -90,6 +90,8 @@ def run_suite(
     output_dir.mkdir(parents=True, exist_ok=True)
     results: list[CaseRunResult] = []
     provider_retries = 0
+    # A retried provider error still used quota, so its tokens stay in the totals.
+    retried_prompt_tokens = retried_output_tokens = 0
 
     def paced_run(case: GoldenCase, run_index: int) -> CaseRunResult:
         started = clock()
@@ -111,13 +113,22 @@ def run_suite(
                 if result.provider_error:
                     # Quota errors are retried once after the 65-second API key cooldown ends.
                     provider_retries += 1
+                    retried_prompt_tokens += result.prompt_tokens
+                    retried_output_tokens += result.output_tokens
                     sleep(provider_retry_delay_seconds)
                     result = paced_run(case, run_index)
                 results.append(result)
                 log.write(result.model_dump_json() + "\n")
                 log.flush()
                 _print_progress(result)
-    summary = summarize(results).model_copy(update={"provider_retries": provider_retries})
+    summary = summarize(results)
+    summary = summary.model_copy(
+        update={
+            "provider_retries": provider_retries,
+            "total_prompt_tokens": summary.total_prompt_tokens + retried_prompt_tokens,
+            "total_output_tokens": summary.total_output_tokens + retried_output_tokens,
+        }
+    )
     if input_price_per_million is not None and output_price_per_million is not None:
         summary = summary.model_copy(
             update={

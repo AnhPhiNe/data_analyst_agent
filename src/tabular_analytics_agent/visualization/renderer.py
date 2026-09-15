@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from decimal import Decimal
 from typing import Any
 
@@ -27,14 +27,16 @@ from tabular_analytics_agent.domain import (
 from tabular_analytics_agent.visualization.errors import ChartValidationError
 from tabular_analytics_agent.visualization.models import ChartRenderResult
 
-_SUPPORTED_TYPES = {
+# The Must-tier chart types, in the order a user chooses between them.
+SUPPORTED_ARTIFACT_TYPES = (
     ArtifactType.KPI,
     ArtifactType.TABLE,
     ArtifactType.HISTOGRAM,
     ArtifactType.BAR,
     ArtifactType.LINE,
     ArtifactType.SCATTER,
-}
+)
+_SUPPORTED_TYPES = frozenset(SUPPORTED_ARTIFACT_TYPES)
 _NUMERIC_TYPE_MARKERS = (
     "TINYINT",
     "SMALLINT",
@@ -220,6 +222,56 @@ def validate_chart_intent(
     return VerificationResult(
         status=VerificationStatus.PASSED if passed else VerificationStatus.FAILED,
         checks=checks,
+    )
+
+
+def retarget_chart_intent(
+    intent: ChartIntent, result: QueryResult, artifact_type: ArtifactType
+) -> ChartIntent:
+    """Re-encode a Chart Intent as another artifact type over the same verified result.
+
+    Fields the intent already used are preferred, then result columns in order; validation still
+    decides whether the new chart can show the result. Formatting is reset because its keys
+    belong to the previous chart type.
+    """
+    names = [column.name for column in result.columns]
+    numeric = [column.name for column in result.columns if _is_numeric(column.data_type)]
+
+    def first(
+        candidates: Iterable[str | None], allowed: list[str], skip: str | None = None
+    ) -> str | None:
+        return next((name for name in candidates if name in allowed and name != skip), None)
+
+    used = (intent.x_field, *intent.y_fields)
+    x_field: str | None = None
+    y_fields: tuple[str, ...] = ()
+    if artifact_type is ArtifactType.KPI:
+        y_field = first((*intent.y_fields, *numeric), numeric)
+        y_fields = (y_field,) if y_field else ()
+    elif artifact_type is ArtifactType.HISTOGRAM:
+        x_field = first((*used, *numeric), numeric)
+    elif artifact_type is ArtifactType.SCATTER:
+        x_field = first((*used, *numeric), numeric)
+        y_field = first((*used, *numeric), numeric, skip=x_field)
+        y_fields = (y_field,) if y_field else ()
+    elif artifact_type in {ArtifactType.BAR, ArtifactType.LINE}:
+        labels = [name for name in names if name not in numeric]
+        x_field = first((intent.x_field, *labels, *names), names)
+        y_fields = tuple(
+            name
+            for name in dict.fromkeys((*intent.y_fields, *numeric))
+            if name in numeric and name != x_field
+        )
+    return ChartIntent.model_validate(
+        {
+            **intent.model_dump(),
+            "artifact_type": artifact_type,
+            "x_field": x_field,
+            "y_fields": y_fields,
+            "color_field": None,
+            "labels": {key: value for key, value in intent.labels.items() if key in names},
+            "formatting_intent": {},
+        }
     )
 
 

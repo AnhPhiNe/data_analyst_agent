@@ -236,6 +236,22 @@ def test_claim_shows_its_sql_filter_beneath_it_instead_of_inside_it(
     assert any(caption.value == "Filters: revenue >= 150" for caption in app.caption)
 
 
+def test_candidate_chart_type_can_be_changed_in_the_workspace(
+    ui_workspace: tuple[AppTest, AnalysisWorkspace, LocalAnalysisApplication, FakeModelGateway],
+) -> None:
+    app, workspace, application, gateway = ui_workspace
+    app.run()
+    app.chat_input[0].set_value("What is total revenue?").run()
+    next(button for button in app.button if button.label == "Approve and run").click().run()
+    next(box for box in app.selectbox if box.label == "Chart type").set_value("table").run()
+    next(button for button in app.button if button.label == "Change chart type").click().run()
+
+    assert not app.exception
+    (candidate,) = application.list_candidates(workspace)
+    assert (candidate.version, candidate.intent.artifact_type.value) == (2, "table")
+    assert len(gateway.requests) == 5
+
+
 def test_session_selection_requires_fresh_delete_confirmation(
     ui_workspace: tuple[AppTest, AnalysisWorkspace, LocalAnalysisApplication, FakeModelGateway],
 ) -> None:

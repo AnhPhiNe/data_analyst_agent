@@ -16,6 +16,7 @@ from scipy import stats
 from tabular_analytics_agent.statistics.errors import (
     InsufficientSampleError,
     StatisticalAnalysisError,
+    StatisticalParameterError,
 )
 from tabular_analytics_agent.statistics.models import (
     AssumptionCheck,
@@ -338,9 +339,12 @@ def _logistic_regression(frame: pd.DataFrame, request: StatisticalRequest) -> di
         raise StatisticalAnalysisError("logistic regression requires a binary outcome field")
     positive = request.positive_class
     if positive is None:
-        raise StatisticalAnalysisError("logistic regression requires an explicit positive_class")
+        raise StatisticalParameterError("logistic regression requires an explicit positive_class")
     if positive not in classes:
-        raise StatisticalAnalysisError("positive_class is not present in the outcome field")
+        raise StatisticalParameterError(
+            "positive_class is not present in the outcome field; observed values: "
+            + ", ".join(repr(value) for value in classes)
+        )
     y = np.asarray((complete[y_field] == positive).to_numpy(), dtype=np.float64)
     if np.std(x) == 0:
         raise StatisticalAnalysisError("logistic regression requires a non-constant predictor")
@@ -520,8 +524,9 @@ def _two_groups(
         raise StatisticalAnalysisError("two-group comparison requires exactly two groups")
     ordered_labels = tuple(_typed_group_label(value) for value in request.group_order)
     if set(ordered_labels) != set(groups):
-        raise StatisticalAnalysisError(
-            "ordered group identities must match exactly the two observed groups"
+        observed = ", ".join(repr(display_group_label(label)) for label in groups)
+        raise StatisticalParameterError(
+            f"group_order must list exactly the two observed groups: {observed}"
         )
     return {label: groups[label] for label in ordered_labels}, missing
 

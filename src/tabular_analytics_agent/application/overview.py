@@ -571,10 +571,16 @@ def _explorer_chart(
         )
     result = core.query(handle, f"SELECT {value} AS measure_value FROM dataset {where}")
     measure = result.rows[0][0] if result.rows else None
-    number = measure if isinstance(measure, int | float) and not isinstance(measure, bool) else 0
+    if not isinstance(measure, int | float) or isinstance(measure, bool):
+        # A sum or average over no rows is empty, not zero.
+        empty = go.Figure()
+        empty.add_annotation(text="No rows match", showarrow=False, font={"size": 18})
+        empty.update_xaxes(visible=False)
+        empty.update_yaxes(visible=False)
+        return _chart(empty, label, f"No rows match the selected filters. {caption}")
     figure = go.Figure(
         go.Indicator(
-            mode="number", value=number, number={"valueformat": exact_number_format(number)}
+            mode="number", value=measure, number={"valueformat": exact_number_format(measure)}
         )
     )
     return _chart(figure, label, caption)

@@ -13,6 +13,7 @@ from tabular_analytics_agent.data.errors import (
 )
 from tabular_analytics_agent.data.models import (
     DATASET_TABLE,
+    ROW_NUMBER_COLUMN,
     DataCoreLimits,
     DatasetHandle,
     QueryColumn,
@@ -28,6 +29,7 @@ from tabular_analytics_agent.data.sql_policy import (
 
 __all__ = [
     "DATASET_TABLE",
+    "ROW_NUMBER_COLUMN",
     "DataCoreError",
     "DataCoreLimits",
     "DatasetHandle",

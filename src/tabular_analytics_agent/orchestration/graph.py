@@ -109,6 +109,7 @@ from tabular_analytics_agent.orchestration.run_state import (
 from tabular_analytics_agent.statistics import (
     InsufficientSampleError,
     StatisticalAnalysisError,
+    StatisticalParameterError,
     StatisticalRequest,
     StatisticalResult,
     StatisticalTool,
@@ -124,7 +125,12 @@ from tabular_analytics_agent.visualization import (
     ChartValidationError,
     make_query_result_reference,
     render_chart,
+    retarget_chart_intent,
 )
+
+# Output token caps for the longest structured responses: an insight batch and a chart intent.
+_INSIGHT_MAX_OUTPUT_TOKENS = 2048
+_CHART_MAX_OUTPUT_TOKENS = 1024
 
 
 def _utc_now() -> datetime:
@@ -224,6 +230,37 @@ class AgentOrchestrator:
             and snapshot.values.get("run_id") == run_id
         ]
         return tuple(reversed(nodes))
+
+    def query_evidence(
+        self, thread_id: str, query_id: str
+    ) -> tuple[dict[str, Any], dict[str, Any]] | None:
+        """Find a verified query result and its Tool Action in any checkpoint of the session.
+
+        A later request clears the current results, so a chart from an earlier request is
+        re-rendered from the checkpoint history.
+        """
+        reference = f"query-result:{query_id}"
+        for snapshot in self._graph.get_state_history(_thread_config(thread_id)):
+            values = snapshot.values
+            result = next(
+                (
+                    item
+                    for item in values.get("query_results", [])
+                    if str(item.get("query_id")) == query_id
+                ),
+                None,
+            )
+            action = next(
+                (
+                    item
+                    for item in values.get("tool_actions", [])
+                    if item.get("output_ref") == reference
+                ),
+                None,
+            )
+            if result is not None and action is not None:
+                return result, action
+        return None
 
 
 def _draft_claim_text(draft: InsightDraft) -> str:
@@ -734,6 +771,20 @@ def build_agent_graph(
             "plan_step_id": step.step_id,
             **tool_request.model_dump(mode="json"),
         }
+
+        def failed_action(error: str, *, duration_ms: int | None = None) -> dict[str, Any]:
+            return ToolAction(
+                action_id=action_id,
+                tool_name=tool_request.tool_name,
+                schema_version="1",
+                working_dataset_version=handle.working_dataset_version,
+                inputs=action_inputs,
+                status=ActionStatus.FAILED,
+                error=error,
+                retry_count=state.get("tool_repair_count", 0),
+                duration_ms=duration_ms,
+            ).model_dump(mode="json")
+
         remaining_run_seconds = remaining_budget_seconds(state, plan.budget, clock())
         effective_tool_timeout = min(
             float(plan.budget.tool_timeout_seconds),
@@ -794,21 +845,8 @@ def build_agent_graph(
                     verification_results=(verification,),
                 )
         except (QueryExecutionError, StatisticalAnalysisError, UnsafeQueryError, ValueError) as exc:
-            failed_action = ToolAction(
-                action_id=action_id,
-                tool_name=tool_request.tool_name,
-                schema_version="1",
-                working_dataset_version=handle.working_dataset_version,
-                inputs=action_inputs,
-                status=ActionStatus.FAILED,
-                error=str(exc),
-                retry_count=state.get("tool_repair_count", 0),
-            )
             updated: AgentState = {
-                "tool_actions": [
-                    *state.get("tool_actions", []),
-                    failed_action.model_dump(mode="json"),
-                ],
+                "tool_actions": [*state.get("tool_actions", []), failed_action(str(exc))],
                 "attempted_action_signatures": attempted,
             }
             if isinstance(exc, InsufficientSampleError):
@@ -822,7 +860,10 @@ def build_agent_graph(
                         code=RefusalCode.INSUFFICIENT_SAMPLE,
                     ),
                 }
-            if isinstance(exc, StatisticalAnalysisError):
+            if isinstance(exc, StatisticalAnalysisError) and not isinstance(
+                exc, StatisticalParameterError
+            ):
+                # Data that cannot support the analysis is not fixed by rewriting parameters.
                 terminal: AgentState = {
                     **updated,
                     "status": AgentRunStatus.FAILED.value,
@@ -834,21 +875,10 @@ def build_agent_graph(
 
         if run_budget_exceeded(state, plan.budget, clock()):
             budget_error = run_budget_error(plan.budget)
-            failed_action = ToolAction(
-                action_id=action_id,
-                tool_name=tool_request.tool_name,
-                schema_version="1",
-                working_dataset_version=handle.working_dataset_version,
-                inputs=action_inputs,
-                status=ActionStatus.FAILED,
-                error=str(budget_error),
-                retry_count=state.get("tool_repair_count", 0),
-                duration_ms=action.duration_ms,
-            )
             terminal_state: AgentState = {
                 "tool_actions": [
                     *state.get("tool_actions", []),
-                    failed_action.model_dump(mode="json"),
+                    failed_action(str(budget_error), duration_ms=action.duration_ms),
                 ],
                 "attempted_action_signatures": attempted,
                 "status": AgentRunStatus.FAILED.value,
@@ -937,7 +967,7 @@ def build_agent_graph(
             response_schema=InsightDraftBatch,
             system_instruction=SYSTEM_INSTRUCTION,
             prompt_template_version="insight-v6",
-            max_output_tokens=2048,
+            max_output_tokens=_INSIGHT_MAX_OUTPUT_TOKENS,
             timeout_seconds=model_call_timeout_seconds(state, plan.budget, clock()),
         )
         trace: ModelCallTrace | None = None
@@ -1109,7 +1139,7 @@ def build_agent_graph(
             response_schema=ChartIntentDraft,
             system_instruction=SYSTEM_INSTRUCTION,
             prompt_template_version="chart-intent-v5",
-            max_output_tokens=1024,
+            max_output_tokens=_CHART_MAX_OUTPUT_TOKENS,
             timeout_seconds=model_call_timeout_seconds(state, plan.budget, clock()),
         )
         trace: ModelCallTrace | None = None
@@ -1152,25 +1182,14 @@ def build_agent_graph(
             except ChartValidationError as exc:
                 # A verified result can always be shown exactly as a table, so an invalid
                 # proposal falls back to one instead of leaving the answer without a chart.
-                result_names = {column.name for column in result.columns}
-                table_intent = ChartIntent.model_validate(
-                    {
-                        **intent.model_dump(),
-                        "artifact_type": ArtifactType.TABLE,
-                        "x_field": None,
-                        "y_fields": (),
-                        "color_field": None,
-                        "labels": {
-                            key: value
-                            for key, value in intent.labels.items()
-                            if key in result_names
-                        },
-                        "formatting_intent": {},
+                table_intent = retarget_chart_intent(intent, result, ArtifactType.TABLE)
+                table_intent = table_intent.model_copy(
+                    update={
                         "validation_constraints": (
-                            *intent.validation_constraints,
+                            *table_intent.validation_constraints,
                             "Shown as a table because the proposed "
                             f"{intent.artifact_type.value} chart was invalid: {safe_error(exc)}",
-                        ),
+                        )
                     }
                 )
                 rendered = render_chart(

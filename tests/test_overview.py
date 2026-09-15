@@ -173,6 +173,21 @@ def test_explorer_grouped_total_respects_filters_with_quoted_values(tmp_path: Pa
     assert count_chart.figure["data"][0]["y"] == [4]
 
 
+def test_explorer_says_when_no_rows_match_instead_of_showing_zero(tmp_path: Path) -> None:
+    core, handle, profile = _shop(tmp_path)
+    nothing = (("store", ("No such store",)),)
+
+    (total,) = build_explorer_charts(
+        core, handle, profile, ExplorerRequest(measure="amount", aggregation="sum", filters=nothing)
+    )
+    (count,) = build_explorer_charts(core, handle, profile, ExplorerRequest(filters=nothing))
+
+    assert "No rows match" in total.caption
+    assert not total.figure["data"]
+    # Counting no rows is a real zero.
+    assert count.figure["data"][0]["value"] == 0
+
+
 def test_explorer_time_series_by_group_and_date_filter(tmp_path: Path) -> None:
     core, handle, profile = _shop(tmp_path)
     request = ExplorerRequest(
