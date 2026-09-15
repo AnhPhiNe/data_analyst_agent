@@ -1,6 +1,6 @@
 # MVP acceptance checklist
 
-This checklist tracks acceptance against Spec v1.1. Implementation, deterministic tests, and live
+This checklist tracks acceptance against Spec v1.5. Implementation, deterministic tests, and live
 acceptance are separate claims. A passing unit suite is not a passing live-agent evaluation.
 
 ## Current implementation batch

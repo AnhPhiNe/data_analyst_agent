@@ -1,6 +1,6 @@
 # Tabular Analytics Agent — Product and Technical Specification
 
-**Status:** Approved — v1.4 targeted amendments (see Section 24)
+**Status:** Approved — v1.5 targeted amendments (see Section 24)
 **Target:** Local-first MVP and AI Engineer portfolio project
 **Primary interface:** Streamlit
 **Last updated:** 2026-09-15
@@ -78,7 +78,7 @@ The maximum size and execution limits must be configurable rather than hard-code
 2. The user uploads a CSV or XLSX Source Dataset.
 3. The application validates the file, stores it immutably, and computes its hash.
 4. The application creates a Data Profile, surfaces quality risks and possible PII, and shows a Data Overview (FR-11).
-5. The application proposes three to five relevant Analytical Goals.
+5. The application proposes relevant Analytical Goals, three to five for most datasets (FR-05).
 6. The user selects a suggestion or provides a different goal, in English or Vietnamese.
 7. Questions answerable from the Data Profile alone — column names, field types, row count, duplicate rows, missing values, unique counts, quality warnings, and whole-column descriptive statistics — are answered directly from the profile without an Analysis Plan or Tool Actions.
 8. For other goals, the agent asks for Semantic Annotations when ambiguity could materially change the answer to that goal.
@@ -155,7 +155,7 @@ Driver Exploration may identify Statistical Associations but must not imply caus
 
 Goals may be written in English or Vietnamese, and Supported Datasets may use Vietnamese headers and values.
 
-After profiling, the application proposes three to five goals derived deterministically from the Data Profile's field kinds (comparison, relationship, trend, two-group significance, data quality, summary, and structure). Suggestions make no model call and never name possible PII or identifier-like fields. The user may select a suggestion or write a different goal.
+After profiling, the application proposes three to five goals derived deterministically from the Data Profile's field kinds (comparison, relationship, trend, two-group significance, data quality, summary, and structure). Suggestions make no model call and never name possible PII or identifier-like fields. A dataset with no numeric field, no grouping field, and no missing values or duplicate rows currently receives only two structure suggestions (known gap, Section 24). The user may select a suggestion or write a different goal.
 
 ### FR-06 — Analysis planning
 
@@ -277,10 +277,10 @@ The MVP uses the following dependency direction:
 Streamlit UI
     -> Application Services and Pydantic Contracts
         -> LangGraph Orchestrator
-            -> LangChain Model and Tool Adapters
+            -> Model Gateway (LangChain) and Typed Tool Interfaces
                 -> Typed Analytical Tools
                     -> DuckDB / Pandas / NumPy / SciPy / Plotly
-                        -> SQLite / Parquet / Session Artifacts
+                        -> SQLite Checkpoints and Artifacts / DuckDB / JSON Session Files
 ```
 
 ### 8.1 Architectural constraints
@@ -289,7 +289,7 @@ Streamlit UI
 - Core operations must be callable without Streamlit for tests and a future FastAPI interface.
 - Public boundaries use typed Pydantic input/output contracts.
 - LangGraph owns workflow state, branching, retries, checkpoints, and human-in-the-loop pauses.
-- LangChain supplies model integrations, message abstractions, tool adapters, and structured output support.
+- LangChain supplies the model integration and message abstractions behind `ModelGateway`. Analytical tools are typed Python interfaces with Pydantic inputs and outputs rather than LangChain tool adapters, so they run and are tested without a model; the gateway validates structured output.
 - Domain and analytical tools do not import the Streamlit UI.
 - Model-provider-specific types must not leak beyond the ModelGateway adapter.
 
@@ -319,6 +319,8 @@ Conditional transitions may:
 - Resume from the nearest safe checkpoint after an application restart.
 
 The graph must not be implemented as an opaque, single prebuilt ReAct loop.
+
+The implemented nodes map to these states as follows: profiling happens during ingestion, before the graph; `interpret_request` and `review_semantics` form CLARIFY; `create_plan` and `approve_plan` form PLAN and AWAIT_APPROVAL; `request_tool` and `execute_tool` form EXECUTE, with query and statistical verification inside execution; `synthesize_insights` verifies and publishes claims; `propose_artifact` proposes a chart; and the UI presents the final state.
 
 ## 10. Core Contracts
 
@@ -427,9 +429,10 @@ The implementation should define versioned equivalents of these models:
 
 The local MVP uses:
 
-- SQLite for session, plan, action, trace, insight, and artifact metadata.
+- A JSON workspace file per session for session metadata, written to a temporary file and then replaced.
+- A SQLite checkpoint database per session for graph state, including plans, Tool Actions, results, model-call traces, and insights, and one SQLite database for artifact metadata.
 - Immutable source files inside session-scoped storage.
-- DuckDB and/or Parquet for Working Dataset versions and result tables.
+- DuckDB for Working Dataset versions. Parquet, named in the original design, is not used: query results are bounded and kept in checkpointed state.
 - JSON for versioned chart specifications and portable evidence metadata.
 
 Writes should use temporary outputs and atomic publication where feasible. Failed or unverified artifacts must not appear as completed dashboard content.
@@ -454,7 +457,7 @@ Before an insight or artifact is published, deterministic checks must verify:
 ### 14.1 Untrusted dataset content
 
 - Treat filenames, sheet names, headers, and cell values as untrusted data rather than instructions.
-- Model metadata includes up to 10 frequent values of each non-PII field, inside the delimited dataset metadata, so filters use exact dataset values instead of translations. PII candidate fields contribute no values.
+- Model metadata includes the profile's most frequent values of each non-PII field (5 by default, set by `TABULAR_AGENT_PROFILE_TOP_VALUES` and capped at 10 in prompts), inside the delimited dataset metadata, so filters use exact dataset values instead of translations. PII candidate fields contribute no values.
 - Delimit and label data samples sent to the model.
 - Never execute instructions discovered inside dataset content.
 
@@ -483,8 +486,8 @@ Limits must be configurable and visible in failure messages.
 - Load API credentials from environment variables or Streamlit Secrets.
 - Never commit `.env` or secrets.
 - Redact credentials from errors and traces.
-- Detect likely emails, phone numbers, identifiers, addresses, and person names heuristically.
-- Mask likely PII in samples sent to the model.
+- Detect likely PII heuristically from email and phone values and from English column names such as `email`, `phone`, `address`, or `full_name`; identifier-like fields are flagged separately (FR-03). Person names and addresses in values, and non-English column names such as `Tên khách hàng`, are not detected yet (known gap, Section 24).
+- Send no sample values from possible PII fields, and exclude results that read them from insight drafting (Section 14.5).
 - Provide an option that sends no row samples to the API: `TABULAR_AGENT_SEND_SAMPLE_VALUES=false` withholds every frequent field value from model prompts. The default sends them, and prompts are unchanged when the option is not set.
 - Do not commit real user data to the repository.
 
@@ -492,7 +495,7 @@ Limits must be configurable and visible in failure messages.
 
 | Step | Sent to the model | Control |
 |---|---|---|
-| Goal interpretation, planning, and tool requests | The user request; field names, ids, kinds, missing rates, unique counts, and warnings; row and duplicate-row counts; up to 10 frequent values of each non-PII field; tool error messages | The sample-value option withholds every frequent value |
+| Goal interpretation, planning, and tool requests | The user request; field names, ids, kinds, missing rates, unique counts, and warnings; row and duplicate-row counts; the profile's frequent values of each non-PII field (5 by default); tool error messages | The sample-value option withholds every frequent value |
 | Insight drafting | Verified result values: statistical estimates and query results of at most 50 rows; results that read PII candidate fields are excluded | None; the model needs the values to select assertions |
 | Chart intent | Result column names, types, and row count; no cell values | None needed |
 
@@ -521,18 +524,18 @@ Limits must be configurable and visible in failure messages.
 
 Every run records:
 
-- Session ID and trace ID.
-- Graph node transitions without exposing private chain-of-thought.
+- Session ID. A run-level trace ID is a known gap (Section 24).
+- A trace for each model call, by graph task, without private chain-of-thought. A complete record of graph node transitions is a known gap.
 - Model identifier and inference settings.
 - Prompt-template version.
 - Tool name, schema version, structured input, and bounded output summary.
 - Working Dataset version and Source Dataset hash.
 - Validation outcomes.
-- Latency, retries, token usage, and estimated cost.
+- Latency, retries, and token usage. Estimated cost is a known gap: the trace field exists but is not filled.
 - Error classification.
 - Created insights and artifacts.
 
-Computations must be reproducible by preserving exact SQL or Tool Action parameters and fixed random seeds where sampling is used. A user should be able to rerun a saved Tool Action without another LLM call.
+Computations must be reproducible by preserving exact SQL or Tool Action parameters and fixed random seeds where sampling is used. A saved Tool Action keeps the exact SQL or statistical parameters needed to rerun it without another model call; an application command that reruns it is a known gap.
 
 The Audit view shows, for the current request, each Tool Action's exact SQL or statistical parameters, approved fields, verification checks, error, and retry count; each Verified Insight's fields, filters, row counts, and evidence values; rejected claims with their reasons; and model-call metadata including prompt-template versions and errors.
 
@@ -543,7 +546,7 @@ LangSmith may be offered as an optional integration but is not an MVP runtime de
 ### 17.1 Dataset tiers
 
 1. **Tiny fixtures:** tables of approximately 5–20 rows with manually verifiable results.
-2. **Classic datasets:** Iris, Titanic, and Student Score.
+2. **Classic datasets:** well-known public datasets. Iris, Titanic, and Student Score were used by development holdout v4, so the release suite uses public datasets not seen in development, such as Palmer Penguins, Tips, or Auto MPG.
 3. **Adversarial tabular datasets:** missing values, duplicates, mixed types, malformed dates, ambiguous headers, high cardinality, prompt-injection text, and outliers.
 4. **Portfolio scenarios:** sales analytics, manufacturing quality, and workforce analytics.
 
@@ -599,7 +602,7 @@ Latency and API cost are recorded and reported but are not hard release gates fo
 - **Recoverability:** Persisted sessions survive UI reloads and recover from safe checkpoints.
 - **Maintainability:** Contracts and artifact formats are versioned.
 - **Usability:** Errors state what failed, why it matters, and what the user can do next.
-- **Portability:** The final MVP can be run from a documented Docker setup.
+- **Portability:** The final MVP can be run from a documented Docker setup. By the user's decision, the image build is verified last, after the release suite.
 
 ## 19. Implementation Roadmap
 
@@ -646,10 +649,10 @@ Latency and API cost are recorded and reported but are not hard release gates fo
 
 ### Milestone 7 — Portfolio release
 
-- Complete sales, manufacturing, and workforce case studies.
-- Add architecture and workflow diagrams.
-- Add Docker packaging and clean-machine verification.
-- Add README, screenshots, demo video, sample traces, limitations, and roadmap.
+- Complete sales, manufacturing, and workforce case studies (deferred after the MVP by the user's decision).
+- Add architecture and workflow diagrams (done).
+- Add Docker packaging and clean-machine verification (packaging and a clean virtual-environment check are done; the image build is verified last).
+- Add README, limitations, and roadmap (done); screenshots, a demo video, and sample traces are deferred after the MVP.
 
 ## 20. Conditions for Migrating to React and FastAPI
 
@@ -695,6 +698,8 @@ The primary demonstration should take five to seven minutes and use a manufactur
 9. Export of the final analytical result.
 
 The repository should also contain sales and workforce case studies, an architecture diagram, a LangGraph workflow diagram, test and evaluation evidence, sample traces, and an explicit future-production roadmap.
+
+By the user's decision, the demonstration video, case studies, and sample traces are deferred after the MVP; they are not acceptance criteria (Section 21).
 
 ## 23. Approval
 
@@ -760,10 +765,18 @@ Adds scope agreed after the Milestone 6 hardening work. No earlier decision is r
 - After holdout v6 (30/36): counting rows or records under any name is a row count that needs no requested-metric mapping (semantic-v13), resolving a conflict the counting rule introduced between interpretation and plan grounding (Section 25.4); and insight synthesis deterministically reports each statistical result's headline estimates — every group mean, or a lone coefficient — that the model leaves out, so correct analyses are not marked incomplete by model variance (FR-10).
 - Milestone 7 deliverables: a two-stage Dockerfile (runtime and release-check targets) with pinned dependency constraints, a product limitations document (criterion 14), and updated architecture and workflow diagrams. A hard holdout (v8: inconsistent spellings, numbers stored as text, vague and multi-step questions) was run for measurement only, scoring 24/36 against 36/36 on the clean post-fix holdout v7; its findings are documented rather than tuned away (Section 17.3).
 - After the hard holdout, the user approved three general fixes, making v8 development evidence: (A) the profile flags values that differ only by case or surrounding spaces, and SQL guidance compares such fields with `LOWER(TRIM(...))` (FR-03; tool-request-v13); (B) planning and SQL guidance state that steps cannot read one another's results, so a question that uses one result to choose rows for another is a single query with a CTE or subquery (plan-v8); (C) an insight catalog entry for a long query result keeps its first rows, in query order and within the value budget, instead of withholding every row. The ambiguous-ranking failure was not changed. Holdout v9 measured the result: 20/36, with every inconsistent-spelling run correct, dependent questions written as one query but a pooled rate still reported per group, one failure from a table-qualified field id that is not rewritten, fix C not exercised, and six chart-only failures, four of them caused by case expectations that excluded a KPI for one-row answers (Section 17.3).
+
+### v1.5 — 2026-09-15
+
+Records the post-review fixes and a specification accuracy check against the code. No earlier decision is reversed.
+
 - Phase 1 of the post-review plan (implemented by another coding agent, then reviewed): chart validation uses the session's confirmed semantic annotations, so charts no longer fail after semantic confirmation; query results and Evidence Trails record WHERE and HAVING predicates per SQL scope (`filter_scopes`) while `filters` keeps the outer query; an unfiltered whole-dataset `COUNT(*)` may run from a plan step without fields and is re-verified against the profiled row count; and field ids qualified by the `dataset` table or its alias are rewritten. Review found that removing the plan-time check let a plan step without fields reach approval and fail after repeated SQL retries; such a step is now replanned with the fields its query reads (Sections 15 and 25.1).
 - Phase 2 of the post-review plan: a KPI derives its number format from the value, so no requested format rounds it, and values a chart cannot show exactly get no KPI (FR-11); Mann–Whitney and Kruskal–Wallis check that group spreads are similar (FR-09); dismissing a clarification is checkpointed as a rejected run, so reopening the session does not revive it (FR-04); and the plan length limit follows the configured Tool Action budget instead of a fixed 12 steps, with a longer plan sent back to planning (Section 25.3). No prompt template changed.
 - Phase 3 of the post-review plan (consolidation): charts and insights share one semantic-annotation fingerprint, and charts stored with the earlier case-sensitive order stay current; SQL identifier quoting, the `dataset` table name, the possible-PII warning, and the 2–20 value grouping rule each have one definition; claims show every significant digit of a float, matching the KPI (FR-10); grading moved out of the runner, and grading version 5 reports every Section 17.4 gate with its own denominator (Section 17.3); and the CI workflow installs with the pinned constraints and builds both Docker targets. No prompt template changed.
 - Final fix round before the release suite, for two failure classes each seen on two datasets in holdouts v6, v8, and v9: a proposed chart that fails validation falls back to the verified result table (FR-11), and a ranking request that names no measure asks which field defines it when two or more numeric fields could (FR-04; semantic-v14). A live check on development fixtures clarified 4 of 4 unnamed-measure runs and answered 4 of 4 named-measure controls; one development run of the ten development cases passed 9 of 10 with no unnecessary clarification.
+- Specification accuracy check. Sections that described the original design now match the code: tools are typed Python interfaces and LangChain serves only the model (Section 8); the conceptual workflow states are mapped to graph nodes (Section 9); session metadata is a JSON file with SQLite checkpoints and artifact records, and Parquet is not used (Section 12); and prompts carry the profile's frequent values, five by default (Sections 14.1 and 14.5). User decisions are recorded: the classic tier uses public datasets not seen in development (Section 17.1); case studies, screenshots, a demo video, and sample traces are deferred after the MVP (Sections 19 and 22); and the Docker image build is verified last (Section 18). Sections 25.3 and 25.4 are in order.
+
+Known gaps at v1.5, specified but not implemented: detection of person names, addresses, and non-English PII column names (Section 14.4); a run-level trace ID, a record of graph node transitions, estimated cost, and an application command to rerun a saved Tool Action (Section 16); and at least three goal suggestions for a dataset with no numeric, grouping, or missing-value facts (FR-05). PII detection and the suggestion count are scheduled right after the release suite; the observability items are deferred after the MVP.
 
 ## 25. Implementation Contracts
 
@@ -785,16 +798,6 @@ Questions fully covered by the Data Profile are answered without a tool (Section
 - New Verified Insights persist their typed assertion so evaluation can distinguish values actually asserted from extra supporting evidence. Legacy insights without a stored assertion remain readable but cannot establish assertion coverage automatically.
 - A statistical p-value belongs to the result's identified primary test statistic. P-value and significance claims name that test explicitly. The current correlation tool tests Pearson correlation; its supplementary Spearman coefficient is descriptive and does not share Pearson's p-value.
 
-### 25.4 Requested Metric Mapping
-
-- Goal interpretation returns `requested_metric_mappings`, one entry per explicitly requested metric, each keeping the user's `requested_label`. Structural questions may return an empty list; dimensions such as region or month need no entry.
-- `direct` names the exact `source_fields` that measure the metric. `derived` names every source field and an explicit reproducible `derivation`. `unavailable` has no source fields or derivation and may give a `reason`.
-- Source fields must exist in the Data Profile after NFC normalization and case folding. A derived metric is never answered from the Data Profile.
-- Every direct or derived mapping must have all of its source fields in the `required_fields` of at least one plan step; otherwise the plan fails. A plan cannot be created while any mapping is unavailable.
-- An unavailable mapping pauses for clarification. A corrected request clears earlier mappings and is interpreted again. Accepting the unavailable metric ends the run with status `refused`, refusal code `unavailable_metric`, and a non-empty reason; the session is recorded as completed. Other execution errors are never relabeled as refusals; insufficient samples use their own typed refusal code (Section 15).
-- Counting rows or records is a row count, not a requested metric, so it produces no mapping and needs no source field. This keeps interpretation, planning, and grounding consistent: the plan counts with `COUNT(*)` and no identifier field, and grounding does not demand a field the count does not read.
-- These checks make the mapping inspectable and grounded in real fields; they do not prove that the language equivalence or the derivation is semantically correct, so the UI shows the mapping for user review.
-
 ### 25.3 Configuration
 
 | Setting | Source | Default |
@@ -808,3 +811,13 @@ Questions fully covered by the Data Profile are answered without a tool (Section
 | Resource limits (`DataCoreLimits`) | `TABULAR_AGENT_<FIELD NAME>`, for example `TABULAR_AGENT_MAX_QUERY_ROWS`; the full list is in `.env.example`; an invalid value stops startup with the variable named | 100 MB file, 10,000 query rows, 30-second query timeout, 512 MB DuckDB memory, 500 MB uncompressed XLSX, compression ratio 100, 5 profile top values |
 | Execution budget (`ExecutionBudget`) | `TABULAR_AGENT_<FIELD NAME>`, for example `TABULAR_AGENT_MAX_TOOL_ACTIONS` | 12 Tool Actions, 2 repairs per action, 30-second model and tool timeouts, 300-second active run time; a plan may have at most `max_tool_actions` steps, and a longer plan is sent back to planning |
 | Evaluation pacing | Evaluation runner `--rpm` option | 12 requests per minute per configured key (below the 15 RPM free-tier limit); a provider error is retried once after 66 seconds |
+
+### 25.4 Requested Metric Mapping
+
+- Goal interpretation returns `requested_metric_mappings`, one entry per explicitly requested metric, each keeping the user's `requested_label`. Structural questions may return an empty list; dimensions such as region or month need no entry.
+- `direct` names the exact `source_fields` that measure the metric. `derived` names every source field and an explicit reproducible `derivation`. `unavailable` has no source fields or derivation and may give a `reason`.
+- Source fields must exist in the Data Profile after NFC normalization and case folding. A derived metric is never answered from the Data Profile.
+- Every direct or derived mapping must have all of its source fields in the `required_fields` of at least one plan step; otherwise the plan fails. A plan cannot be created while any mapping is unavailable.
+- An unavailable mapping pauses for clarification. A corrected request clears earlier mappings and is interpreted again. Accepting the unavailable metric ends the run with status `refused`, refusal code `unavailable_metric`, and a non-empty reason; the session is recorded as completed. Other execution errors are never relabeled as refusals; insufficient samples use their own typed refusal code (Section 15).
+- Counting rows or records is a row count, not a requested metric, so it produces no mapping and needs no source field. This keeps interpretation, planning, and grounding consistent: the plan counts with `COUNT(*)` and no identifier field, and grounding does not demand a field the count does not read.
+- These checks make the mapping inspectable and grounded in real fields; they do not prove that the language equivalence or the derivation is semantically correct, so the UI shows the mapping for user review.

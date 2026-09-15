@@ -206,3 +206,16 @@ datasets from v8, so the two scores are not directly comparable.
 - Still observed: a model can alias a grouping column despite the guidance, for example
   `"Tháng" AS thong`. The values stay correct, but the claim then shows `thong = 1` instead of the
   column name, and grading cannot match the group.
+
+## 11. Specified but not implemented
+
+These parts of the specification are recorded as known gaps instead of being removed from it:
+
+- Person names, addresses, and non-English column names such as `Tên khách hàng` are not
+  detected as possible PII (see Section 4; scheduled right after the release suite).
+- A dataset with no numeric field, no grouping field, and no missing values or duplicate rows
+  gets two goal suggestions instead of three to five (scheduled right after the release
+  suite).
+- There is no run-level trace ID, no complete record of graph node transitions, no estimated
+  cost, and no application command to rerun a saved Tool Action; the saved SQL or statistical
+  parameters can be rerun manually (deferred after the MVP).
