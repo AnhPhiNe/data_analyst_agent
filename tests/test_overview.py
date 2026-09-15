@@ -5,9 +5,19 @@ from __future__ import annotations
 from datetime import date, timedelta
 from pathlib import Path
 
+import pytest
+
 from tabular_analytics_agent.application import LocalAnalysisApplication
-from tabular_analytics_agent.application.overview import DataOverview, build_data_overview
-from tabular_analytics_agent.data import TabularDataCore
+from tabular_analytics_agent.application.overview import (
+    DataOverview,
+    ExplorerRequest,
+    build_data_overview,
+    build_explorer_charts,
+    explorer_options,
+    filter_values,
+)
+from tabular_analytics_agent.data import DatasetHandle, TabularDataCore
+from tabular_analytics_agent.domain import DataProfile
 from tabular_analytics_agent.model_gateway import FakeModelGateway
 
 
@@ -111,6 +121,104 @@ def test_overview_without_numeric_fields_has_no_heatmap(tmp_path: Path) -> None:
         "Most frequent values of city",
         "Most frequent values of note",
     ]
+
+
+_SHOP_CSV = (
+    "store,channel,amount,sold_on,customer_email\n"
+    "O'Brien,web,10,2026-01-05,a@example.com\n"
+    "O'Brien,shop,30,2026-01-20,b@example.com\n"
+    "Main,web,20,2026-02-03,c@example.com\n"
+    "Main,web,40,2026-02-10,d@example.com\n"
+    "Main,shop,60,2026-03-01,e@example.com\n"
+    "Park,web,5,2026-03-15,f@example.com\n"
+)
+
+
+def _shop(tmp_path: Path) -> tuple[TabularDataCore, DatasetHandle, DataProfile]:
+    upload = tmp_path / "shop.csv"
+    upload.write_text(_SHOP_CSV, encoding="utf-8", newline="")
+    core = TabularDataCore(tmp_path / "shop-session")
+    handle = core.ingest(upload)
+    return core, handle, core.profile(handle)
+
+
+def test_explorer_options_exclude_pii_fields(tmp_path: Path) -> None:
+    _, _, profile = _shop(tmp_path)
+
+    options = explorer_options(profile)
+
+    assert options.measures == ("amount",)
+    assert set(options.groups) == {"store", "channel"}
+    assert options.dates == ("sold_on",)
+
+
+def test_explorer_grouped_total_respects_filters_with_quoted_values(tmp_path: Path) -> None:
+    core, handle, profile = _shop(tmp_path)
+    request = ExplorerRequest(
+        measure="amount",
+        aggregation="sum",
+        group="store",
+        filters=(("store", ("O'Brien", "Main")),),
+    )
+
+    chart, box = build_explorer_charts(core, handle, profile, request)
+    bar = chart.figure["data"][0]
+    totals = dict(zip(bar["x"], bar["y"], strict=True))
+
+    assert totals == {"Main": 120.0, "O'Brien": 40.0}
+    assert box.figure["data"][0]["type"] == "box"
+    assert box.figure["data"][0]["median"] == [40.0, 20.0]
+    web_only = ExplorerRequest(group="channel", filters=(("channel", ("web",)),))
+    (count_chart,) = build_explorer_charts(core, handle, profile, web_only)
+    assert count_chart.figure["data"][0]["y"] == [4]
+
+
+def test_explorer_time_series_by_group_and_date_filter(tmp_path: Path) -> None:
+    core, handle, profile = _shop(tmp_path)
+    request = ExplorerRequest(
+        measure="amount",
+        aggregation="average",
+        group="channel",
+        date_field="sold_on",
+        period="month",
+        date_filter=("sold_on", date(2026, 2, 1), date(2026, 3, 31)),
+    )
+
+    chart, _ = build_explorer_charts(core, handle, profile, request)
+    series = {
+        trace["name"]: dict(zip(trace["x"], trace["y"], strict=True))
+        for trace in chart.figure["data"]
+    }
+
+    assert series == {"web": {"2026-02": 30.0, "2026-03": 5.0}, "shop": {"2026-03": 60.0}}
+
+
+@pytest.mark.parametrize(
+    "request_fields",
+    [
+        {"group": "customer_email"},
+        {"measure": "store", "aggregation": "sum"},
+        {"aggregation": "sum"},
+        {"group": 'store" OR 1=1 --'},
+        {"filters": (("customer_email", ("a@example.com",)),)},
+        {"period": "decade", "date_field": "sold_on"},
+    ],
+)
+def test_explorer_rejects_fields_and_options_outside_the_allowed_set(
+    tmp_path: Path, request_fields: dict[str, object]
+) -> None:
+    core, handle, profile = _shop(tmp_path)
+
+    with pytest.raises(ValueError):
+        build_explorer_charts(core, handle, profile, ExplorerRequest(**request_fields))  # type: ignore[arg-type]
+
+
+def test_filter_values_are_ordered_by_frequency(tmp_path: Path) -> None:
+    core, handle, profile = _shop(tmp_path)
+
+    assert filter_values(core, handle, profile, "store") == ("Main", "O'Brien", "Park")
+    with pytest.raises(ValueError):
+        filter_values(core, handle, profile, "customer_email")
 
 
 def test_application_builds_the_overview_without_model_calls(tmp_path: Path) -> None:

@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 import math
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 from typing import Any
 
 import plotly.graph_objects as go
@@ -370,4 +370,291 @@ def _quote(name: str) -> str:
     return '"' + name.replace('"', '""') + '"'
 
 
-__all__ = ["DataOverview", "OverviewChart", "build_data_overview"]
+_MAX_EXPLORER_GROUPS = 20
+_MAX_LINE_GROUPS = 12
+_MAX_FILTER_FIELDS = 3
+_MAX_FILTER_VALUES = 100
+_AGGREGATIONS = {
+    "count": "Row count",
+    "sum": "Total",
+    "average": "Average",
+    "minimum": "Minimum",
+    "maximum": "Maximum",
+}
+_SQL_AGGREGATES = {"sum": "SUM", "average": "AVG", "minimum": "MIN", "maximum": "MAX"}
+PERIODS = ("day", "week", "month", "quarter", "year")
+
+
+@dataclass(frozen=True)
+class ExplorerOptions:
+    """Fields the explorer may use; PII, identifier-like, and constant fields are excluded."""
+
+    measures: tuple[str, ...]
+    groups: tuple[str, ...]
+    dates: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class ExplorerRequest:
+    measure: str | None = None
+    aggregation: str = "count"
+    group: str | None = None
+    date_field: str | None = None
+    period: str = "month"
+    filters: tuple[tuple[str, tuple[str, ...]], ...] = ()
+    date_filter: tuple[str, date, date] | None = None
+
+
+def explorer_options(profile: DataProfile) -> ExplorerOptions:
+    eligible = _eligible_fields(profile)
+    return ExplorerOptions(
+        measures=tuple(f.name for f in eligible if f.kind is FieldKind.NUMERIC),
+        groups=tuple(
+            f.name for f in eligible if f.kind in {FieldKind.CATEGORICAL, FieldKind.BOOLEAN}
+        ),
+        dates=tuple(
+            f.name
+            for f in eligible
+            if f.kind is FieldKind.DATETIME and f.temporal_summary is not None
+        ),
+    )
+
+
+def filter_values(
+    core: TabularDataCore, handle: DatasetHandle, profile: DataProfile, field: str
+) -> tuple[str, ...]:
+    """Return the most frequent values of one group field, for a filter selector."""
+    if field not in explorer_options(profile).groups:
+        raise ValueError(f"Field cannot be filtered in the explorer: {field}")
+    column = _quote(field)
+    result = core.query(
+        handle,
+        f"SELECT CAST({column} AS VARCHAR) AS filter_value, COUNT(*) AS row_count "
+        f"FROM dataset WHERE {column} IS NOT NULL GROUP BY filter_value "
+        f"ORDER BY row_count DESC, filter_value LIMIT {_MAX_FILTER_VALUES}",
+    )
+    return tuple(str(row[0]) for row in result.rows)
+
+
+def build_explorer_charts(
+    core: TabularDataCore,
+    handle: DatasetHandle,
+    profile: DataProfile,
+    request: ExplorerRequest,
+) -> tuple[OverviewChart, ...]:
+    """Build the user's chart and, for a numeric measure by group, a box plot."""
+    _validate_explorer_request(explorer_options(profile), request)
+    value = (
+        "COUNT(*)"
+        if request.aggregation == "count"
+        else f"{_SQL_AGGREGATES[request.aggregation]}({_quote(str(request.measure))})"
+    )
+    label = _AGGREGATIONS[request.aggregation]
+    if request.aggregation != "count":
+        label = f"{label} {request.measure}"
+    conditions = _filter_conditions(request)
+    charts = [_explorer_chart(core, handle, request, value, label, conditions)]
+    if request.measure and request.group:
+        charts.append(_box_plot(core, handle, request.measure, request.group, conditions))
+    return tuple(charts)
+
+
+def _validate_explorer_request(options: ExplorerOptions, request: ExplorerRequest) -> None:
+    if request.aggregation not in _AGGREGATIONS:
+        raise ValueError(f"Unsupported aggregation: {request.aggregation}")
+    if request.aggregation != "count" and request.measure is None:
+        raise ValueError("A numeric measure is required for this aggregation")
+    if request.measure is not None and request.measure not in options.measures:
+        raise ValueError(f"Field cannot be a measure in the explorer: {request.measure}")
+    if request.group is not None and request.group not in options.groups:
+        raise ValueError(f"Field cannot group the explorer: {request.group}")
+    if request.date_field is not None and request.date_field not in options.dates:
+        raise ValueError(f"Field cannot be a time axis in the explorer: {request.date_field}")
+    if request.period not in PERIODS:
+        raise ValueError(f"Unsupported period: {request.period}")
+    if len(request.filters) > _MAX_FILTER_FIELDS:
+        raise ValueError(f"At most {_MAX_FILTER_FIELDS} fields can be filtered")
+    for field, _ in request.filters:
+        if field not in options.groups:
+            raise ValueError(f"Field cannot be filtered in the explorer: {field}")
+    if request.date_filter is not None:
+        field, start, end = request.date_filter
+        if field not in options.dates or start > end:
+            raise ValueError("The date filter needs a date field and a start before the end")
+
+
+def _filter_conditions(request: ExplorerRequest) -> list[str]:
+    conditions = [
+        f"CAST({_quote(field)} AS VARCHAR) IN ({', '.join(_literal(value) for value in values)})"
+        for field, values in request.filters
+        if values
+    ]
+    if request.date_filter is not None:
+        field, start, end = request.date_filter
+        column = _quote(field)
+        conditions.append(
+            f"{column} >= DATE '{start.isoformat()}' "
+            f"AND {column} < DATE '{(end + timedelta(days=1)).isoformat()}'"
+        )
+    return conditions
+
+
+def _explorer_chart(
+    core: TabularDataCore,
+    handle: DatasetHandle,
+    request: ExplorerRequest,
+    value: str,
+    label: str,
+    conditions: list[str],
+) -> OverviewChart:
+    group = _quote(request.group) if request.group else None
+    period = (
+        f"DATE_TRUNC('{request.period}', {_quote(request.date_field)})"
+        if request.date_field
+        else None
+    )
+    required = [f"{column} IS NOT NULL" for column in (group, period) if column]
+    if request.date_field:
+        required[-1] = f"{_quote(request.date_field)} IS NOT NULL"
+    where = _where([*required, *conditions])
+    caption = "Descriptive values from read-only queries; not Verified Insights."
+    if group and period:
+        groups = _top_groups(core, handle, group, where, _MAX_LINE_GROUPS)
+        in_groups = f"CAST({group} AS VARCHAR) IN ({', '.join(map(_literal, groups))})"
+        result = core.query(
+            handle,
+            f"SELECT {period} AS period_start, CAST({group} AS VARCHAR) AS group_value, "
+            f"{value} AS measure_value FROM dataset {_where([*required, *conditions, in_groups])} "
+            "GROUP BY period_start, group_value ORDER BY period_start, group_value",
+        )
+        figure = go.Figure()
+        for name in groups:
+            rows = [row for row in result.rows if row[1] == name]
+            figure.add_trace(
+                go.Scatter(
+                    x=[_period_label(row[0], request.period) for row in rows],
+                    y=[row[2] for row in rows],
+                    mode="lines+markers",
+                    name=name,
+                )
+            )
+        figure.update_xaxes(type="category")
+        title = f"{label} per {request.period} by {request.group}"
+        caption = f"At most {_MAX_LINE_GROUPS} groups with the most rows. {caption}"
+        chart = _chart(figure, title, caption)
+        chart.figure["layout"]["showlegend"] = True
+        return chart
+    if period:
+        result = core.query(
+            handle,
+            f"SELECT {period} AS period_start, {value} AS measure_value FROM dataset {where} "
+            "GROUP BY period_start ORDER BY period_start",
+        )
+        figure = go.Figure(
+            go.Scatter(
+                x=[_period_label(row[0], request.period) for row in result.rows],
+                y=[row[1] for row in result.rows],
+                mode="lines+markers",
+            )
+        )
+        figure.update_xaxes(type="category")
+        return _chart(figure, f"{label} per {request.period}", caption)
+    if group:
+        result = core.query(
+            handle,
+            f"SELECT CAST({group} AS VARCHAR) AS group_value, {value} AS measure_value, "
+            f"COUNT(*) AS row_count FROM dataset {where} GROUP BY group_value "
+            f"ORDER BY row_count DESC, group_value LIMIT {_MAX_EXPLORER_GROUPS}",
+        )
+        figure = go.Figure(
+            go.Bar(x=[str(row[0]) for row in result.rows], y=[row[1] for row in result.rows])
+        )
+        figure.update_xaxes(type="category")
+        return _chart(
+            figure,
+            f"{label} by {request.group}",
+            f"At most {_MAX_EXPLORER_GROUPS} groups with the most rows. {caption}",
+        )
+    result = core.query(handle, f"SELECT {value} AS measure_value FROM dataset {where}")
+    figure = go.Figure(
+        go.Indicator(
+            mode="number",
+            value=result.rows[0][0] if result.rows and result.rows[0][0] is not None else 0,
+            number={"valueformat": ",.12~g"},
+        )
+    )
+    return _chart(figure, label, caption)
+
+
+def _box_plot(
+    core: TabularDataCore,
+    handle: DatasetHandle,
+    measure: str,
+    group: str,
+    conditions: list[str],
+) -> OverviewChart:
+    measure_column, group_column = _quote(measure), _quote(group)
+    where = _where([f"{measure_column} IS NOT NULL", f"{group_column} IS NOT NULL", *conditions])
+    result = core.query(
+        handle,
+        f"SELECT CAST({group_column} AS VARCHAR) AS group_value, MIN({measure_column}) AS low, "
+        f"QUANTILE_CONT({measure_column}, 0.25) AS q1, MEDIAN({measure_column}) AS mid, "
+        f"QUANTILE_CONT({measure_column}, 0.75) AS q3, MAX({measure_column}) AS high, "
+        f"COUNT(*) AS row_count FROM dataset {where} GROUP BY group_value "
+        f"ORDER BY row_count DESC, group_value LIMIT {_MAX_EXPLORER_GROUPS}",
+    )
+    rows = result.rows
+    figure = go.Figure(
+        go.Box(
+            x=[str(row[0]) for row in rows],
+            lowerfence=[row[1] for row in rows],
+            q1=[row[2] for row in rows],
+            median=[row[3] for row in rows],
+            q3=[row[4] for row in rows],
+            upperfence=[row[5] for row in rows],
+        )
+    )
+    figure.update_xaxes(type="category")
+    return _chart(
+        figure,
+        f"Distribution of {measure} by {group}",
+        "Boxes show quartiles and whiskers the minimum and maximum of each group; "
+        f"at most {_MAX_EXPLORER_GROUPS} groups with the most rows.",
+    )
+
+
+def _top_groups(
+    core: TabularDataCore, handle: DatasetHandle, group: str, where: str, limit: int
+) -> list[str]:
+    result = core.query(
+        handle,
+        f"SELECT CAST({group} AS VARCHAR) AS group_value, COUNT(*) AS row_count FROM dataset "
+        f"{where} GROUP BY group_value ORDER BY row_count DESC, group_value LIMIT {limit}",
+    )
+    return [str(row[0]) for row in result.rows]
+
+
+def _period_label(value: object, period: str) -> str:
+    text = str(value)
+    return text[:4] if period == "year" else text[:7] if period == "month" else text[:10]
+
+
+def _where(conditions: list[str]) -> str:
+    return f"WHERE {' AND '.join(conditions)}" if conditions else ""
+
+
+def _literal(value: str) -> str:
+    return "'" + value.replace("'", "''") + "'"
+
+
+__all__ = [
+    "PERIODS",
+    "DataOverview",
+    "ExplorerOptions",
+    "ExplorerRequest",
+    "OverviewChart",
+    "build_data_overview",
+    "build_explorer_charts",
+    "explorer_options",
+    "filter_values",
+]

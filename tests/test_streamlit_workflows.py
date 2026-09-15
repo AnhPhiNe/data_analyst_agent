@@ -111,6 +111,21 @@ def test_data_overview_renders_descriptive_charts_without_model_calls(
     assert not gateway.requests
 
 
+def test_data_explorer_builds_a_grouped_chart_without_model_calls(
+    ui_workspace: tuple[AppTest, AnalysisWorkspace, LocalAnalysisApplication, FakeModelGateway],
+) -> None:
+    app, _, _, gateway = ui_workspace
+    app.run()
+
+    app.selectbox(key="explorer-aggregation").set_value("sum").run()
+    app.selectbox(key="explorer-group").set_value("region").run()
+
+    assert not app.exception
+    assert not app.error
+    assert any("at most 20 groups" in caption.value for caption in app.caption)
+    assert not gateway.requests
+
+
 def test_suggested_goal_starts_analysis_like_a_typed_question(
     ui_workspace: tuple[AppTest, AnalysisWorkspace, LocalAnalysisApplication, FakeModelGateway],
 ) -> None:
@@ -265,10 +280,13 @@ def test_open_session_clears_previous_messages_and_approval_state(
         "plan": {"steps": []},
     }
     app.run()
+    # An explorer choice names a field that the second dataset does not have.
+    app.selectbox(key="explorer-group").set_value("region").run()
     app.selectbox(key="session-selector").select(second.session.session_id).run()
     app.button(key="session-open").click().run()
     assert not app.exception
     assert app.session_state["workspace"].session.session_id == second.session.session_id
+    assert app.selectbox(key="explorer-group").value == "(none)"
     assert not app.session_state["messages"]
     assert not any(button.label == "Approve and run" for button in app.button)
     assert application.load_workspace(first.session.session_id)

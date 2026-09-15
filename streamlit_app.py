@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from datetime import date
 from pathlib import Path
 from typing import Any, cast
 
@@ -26,8 +27,15 @@ from tabular_analytics_agent.application.exports import (
     export_query_result_csv,
     export_verified_insights_json,
 )
-from tabular_analytics_agent.application.overview import DataOverview
+from tabular_analytics_agent.application.overview import (
+    PERIODS,
+    DataOverview,
+    ExplorerRequest,
+    OverviewChart,
+    explorer_options,
+)
 from tabular_analytics_agent.application.suggestions import suggest_goals
+from tabular_analytics_agent.data import QueryExecutionError, QueryTimeoutError, UnsafeQueryError
 from tabular_analytics_agent.model_gateway import (
     DEFAULT_GEMINI_MODEL,
     GeminiModelGateway,
@@ -115,7 +123,8 @@ def reset_session_ui_state() -> None:
                 "messages",
                 "staged_upload",
             }
-            or str(key).startswith("artifact-")
+            # Explorer choices name fields of the previous dataset.
+            or str(key).startswith(("artifact-", "explorer-", "overview-"))
         ):
             st.session_state.pop(key, None)
 
@@ -246,6 +255,129 @@ def profile_table(workspace: AnalysisWorkspace) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+_EXPLORER_CALCULATIONS = {
+    "count": "Count rows",
+    "sum": "Sum",
+    "average": "Average",
+    "minimum": "Minimum",
+    "maximum": "Maximum",
+}
+_NONE = "(none)"
+
+
+@st.cache_data(show_spinner=False, max_entries=64)
+def cached_explorer_charts(
+    _application: LocalAnalysisApplication,
+    _workspace: AnalysisWorkspace,
+    session_id: str,
+    working_dataset_version: int,
+    request: ExplorerRequest,
+) -> tuple[OverviewChart, ...]:
+    return _application.explorer_charts(_workspace, request)
+
+
+@st.cache_data(show_spinner=False, max_entries=64)
+def cached_filter_values(
+    _application: LocalAnalysisApplication,
+    _workspace: AnalysisWorkspace,
+    session_id: str,
+    working_dataset_version: int,
+    field: str,
+) -> tuple[str, ...]:
+    return _application.filter_values(_workspace, field)
+
+
+def render_explorer(application: LocalAnalysisApplication, workspace: AnalysisWorkspace) -> None:
+    profile = workspace.data_profile
+    options = explorer_options(profile)
+    identity = (str(workspace.session.session_id), workspace.dataset_handle.working_dataset_version)
+    with st.expander("Explore the data", expanded=False):
+        st.caption(
+            "Build descriptive charts from read-only queries. No model is called; ask the agent "
+            "to verify a conclusion."
+        )
+        columns = st.columns(4)
+        calculations = list(_EXPLORER_CALCULATIONS) if options.measures else ["count"]
+        aggregation = columns[0].selectbox(
+            "Calculation",
+            calculations,
+            format_func=_EXPLORER_CALCULATIONS.__getitem__,
+            key="explorer-aggregation",
+        )
+        measure = columns[1].selectbox(
+            "Measure",
+            options.measures or [_NONE],
+            disabled=aggregation == "count" or not options.measures,
+            key="explorer-measure",
+        )
+        group = columns[2].selectbox("Group by", [_NONE, *options.groups], key="explorer-group")
+        date_field = columns[3].selectbox("Over time", [_NONE, *options.dates], key="explorer-date")
+        period = "month"
+        if date_field != _NONE:
+            period = st.selectbox(
+                "Period", PERIODS, index=PERIODS.index("month"), key="explorer-period"
+            )
+
+        filter_fields = st.multiselect(
+            "Filter by", options.groups, max_selections=3, key="explorer-filter-fields"
+        )
+        filters = tuple(
+            (
+                field,
+                tuple(
+                    st.multiselect(
+                        f"Values of {field}",
+                        cached_filter_values(application, workspace, *identity, field),
+                        key=f"explorer-filter-{field}",
+                    )
+                ),
+            )
+            for field in filter_fields
+        )
+        date_filter = None
+        range_field = (
+            date_field if date_field != _NONE else (options.dates[0] if options.dates else None)
+        )
+        summary = next((f.temporal_summary for f in profile.fields if f.name == range_field), None)
+        if range_field and summary:
+            earliest = date.fromisoformat(summary.earliest[:10])
+            latest = date.fromisoformat(summary.latest[:10])
+            chosen = st.date_input(
+                f"Date range of {range_field}",
+                value=(earliest, latest),
+                min_value=earliest,
+                max_value=latest,
+                key="explorer-date-range",
+            )
+            if isinstance(chosen, tuple) and len(chosen) == 2 and chosen != (earliest, latest):
+                date_filter = (range_field, chosen[0], chosen[1])
+
+        request = ExplorerRequest(
+            measure=None if aggregation == "count" else measure,
+            aggregation=aggregation,
+            group=None if group == _NONE else group,
+            date_field=None if date_field == _NONE else date_field,
+            period=period,
+            filters=filters,
+            date_filter=date_filter,
+        )
+        try:
+            charts = cached_explorer_charts(application, workspace, *identity, request)
+        except (QueryExecutionError, QueryTimeoutError, UnsafeQueryError, ValueError) as exc:
+            st.error(f"This chart could not be built: {exc}")
+            return
+        chart_columns = st.columns(len(charts))
+        for index, chart in enumerate(charts):
+            with chart_columns[index]:
+                st.plotly_chart(
+                    go.Figure(chart.figure),
+                    width="stretch",
+                    config={"displaylogo": False},
+                    key=f"explorer-chart-{index}",
+                )
+                st.caption(chart.caption)
+
+
 @st.cache_data(show_spinner=False, max_entries=16)
 def data_overview(
     _application: LocalAnalysisApplication,
@@ -295,6 +427,7 @@ def render_dataset_summary(
                     st.session_state["overview_goal"] = chart.suggested_question
         for note in overview.omitted:
             st.caption(note)
+    render_explorer(application, workspace)
 
     with st.expander("Dataset profile", expanded=False):
         st.dataframe(profile_table(workspace), hide_index=True, width="stretch")

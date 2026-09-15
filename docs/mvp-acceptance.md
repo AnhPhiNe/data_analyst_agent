@@ -39,6 +39,9 @@ These items are in integration review until the verification record below is com
   Profile and offered before the first question; a manual Streamlit review remains.
 - The Data Overview (Should tier, FR-11) is implemented in `application/overview.py` and shown
   after ingestion without model calls; a manual Streamlit review on the user's own data remains.
+  Its explorer lets the user choose a measure, calculation, group, time period, value filters,
+  and a date range for any dataset, with a box plot for a numeric measure by group; field names
+  are checked against the eligible fields and filter values are escaped SQL literals.
 - Check every Must-tier workflow in Streamlit: upload, profile, clarification, approval, result,
   chart, pin/unpin, open another session, reopen after restart, export, and confirmed deletion.
 - Run live smoke evaluation with grading version 2 or later: at least 10 cases, 3 datasets,

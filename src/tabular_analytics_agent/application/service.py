@@ -19,7 +19,14 @@ from tabular_analytics_agent.application.models import (
     SessionSummary,
     StagedUpload,
 )
-from tabular_analytics_agent.application.overview import DataOverview, build_data_overview
+from tabular_analytics_agent.application.overview import (
+    DataOverview,
+    ExplorerRequest,
+    OverviewChart,
+    build_data_overview,
+    build_explorer_charts,
+    filter_values,
+)
 from tabular_analytics_agent.data import (
     DataCoreLimits,
     TabularDataCore,
@@ -416,8 +423,28 @@ class LocalAnalysisApplication:
 
     def data_overview(self, workspace: AnalysisWorkspace) -> DataOverview:
         """Build the deterministic Data Overview for a workspace; no model is called."""
-        core = TabularDataCore(self._session_directory(workspace.session.session_id), self._limits)
-        return build_data_overview(core, workspace.dataset_handle, workspace.data_profile)
+        return build_data_overview(
+            self._workspace_core(workspace), workspace.dataset_handle, workspace.data_profile
+        )
+
+    def explorer_charts(
+        self, workspace: AnalysisWorkspace, request: ExplorerRequest
+    ) -> tuple[OverviewChart, ...]:
+        """Build the user's descriptive explorer charts; no model is called."""
+        return build_explorer_charts(
+            self._workspace_core(workspace),
+            workspace.dataset_handle,
+            workspace.data_profile,
+            request,
+        )
+
+    def filter_values(self, workspace: AnalysisWorkspace, field: str) -> tuple[str, ...]:
+        return filter_values(
+            self._workspace_core(workspace), workspace.dataset_handle, workspace.data_profile, field
+        )
+
+    def _workspace_core(self, workspace: AnalysisWorkspace) -> TabularDataCore:
+        return TabularDataCore(self._session_directory(workspace.session.session_id), self._limits)
 
     @contextmanager
     def _open_orchestrator(self, workspace: AnalysisWorkspace) -> Iterator[AgentOrchestrator]:
