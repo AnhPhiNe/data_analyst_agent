@@ -416,6 +416,85 @@ def test_headline_statistical_estimate_is_reported_even_if_the_model_omits_it(
     assert "pearson_r" in asserted
 
 
+def partial_report() -> dict[str, object]:
+    """The model reports the first row's revenue and leaves out the rest."""
+    return insight_output(
+        operator="reports",
+        left_metric="row[0].revenue",
+        right_metric=None,
+        evidence_metrics=["row[0].revenue"],
+    )
+
+
+def test_small_grouped_result_is_stated_in_full_when_the_model_states_part_of_it(
+    tmp_path: Path,
+) -> None:
+    core, request = run_request(tmp_path)
+    gateway = FakeModelGateway(
+        [goal_output(), plan_output(), tool_output(), partial_report(), chart_output()]
+    )
+    agent = AgentOrchestrator(gateway, core, checkpointer=InMemorySaver())
+
+    agent.start(request)
+    completed = agent.resume(request.session_id, True)
+
+    assert completed["status"] == AgentRunStatus.COMPLETED
+    assert [item["claim"] for item in completed["verified_insights"]] == [
+        "Revenue for region = North is 150.",
+        "Revenue for region = South is 150.",
+    ]
+
+
+def test_single_row_answer_also_states_its_label_but_not_its_row_number(tmp_path: Path) -> None:
+    core, request = run_request(tmp_path)
+    gateway = FakeModelGateway(
+        [
+            goal_output(),
+            plan_output(),
+            tool_output(
+                "SELECT rowid + 1 AS row_number, region, revenue FROM dataset "
+                "ORDER BY revenue DESC LIMIT 1"
+            ),
+            partial_report(),
+            chart_output(),
+        ]
+    )
+    agent = AgentOrchestrator(gateway, core, checkpointer=InMemorySaver())
+
+    agent.start(request)
+    completed = agent.resume(request.session_id, True)
+
+    assert completed["status"] == AgentRunStatus.COMPLETED
+    assert [item["claim"] for item in completed["verified_insights"]] == [
+        "Revenue for region = South is 150.",
+        "Region is South.",
+    ]
+
+
+def test_result_that_reads_possible_pii_is_not_completed(tmp_path: Path) -> None:
+    core, request = run_request(tmp_path)
+    gateway = FakeModelGateway(
+        [
+            goal_output(),
+            plan_output(required_fields=["email", "revenue"]),
+            tool_output(
+                "SELECT email, SUM(revenue) AS revenue FROM dataset GROUP BY email ORDER BY email"
+            ),
+            partial_report(),
+            chart_output(),
+        ]
+    )
+    agent = AgentOrchestrator(gateway, core, checkpointer=InMemorySaver())
+
+    agent.start(request)
+    completed = agent.resume(request.session_id, True)
+
+    assert completed["status"] == AgentRunStatus.COMPLETED
+    assert [item["assertion"]["left_metric"] for item in completed["verified_insights"]] == [
+        "row[0].revenue"
+    ]
+
+
 def test_headline_metrics_are_group_means_or_the_lone_coefficient() -> None:
     grouped = StatisticalResult.model_validate(
         {

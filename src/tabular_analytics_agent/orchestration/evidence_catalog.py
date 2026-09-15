@@ -45,23 +45,22 @@ MAX_MODEL_ASSUMPTIONS = 50
 
 
 MAX_MODEL_CAVEATS = 20
+
+
+# A small result's whole answer fits in this many values, so it can be stated in full.
+MAX_COMPLETED_RESULT_VALUES = 20
 _ROW_METRIC = re.compile(r"^row\[(\d+)\]\.")
 
 
 def insight_evidence_catalog(state: AgentState, profile: DataProfile) -> list[dict[str, Any]]:
-    pii_fields = {field.casefold() for field in profile.pii_candidates}
     candidates: list[tuple[ToolAction, QueryResult | StatisticalResult, tuple[str, ...]]] = []
     for raw_action in state.get("tool_actions", []):
         action = ToolAction.model_validate(raw_action)
         if action.status is not ActionStatus.SUCCEEDED:
             continue
         result = evidence_result_for_action(state, action)
-        source_fields = (
-            result.source_fields
-            if isinstance(result, StatisticalResult)
-            else tuple(str(value) for value in action.inputs.get("required_fields", ()))
-        )
-        if any(field.casefold() in pii_fields for field in source_fields):
+        source_fields = evidence_source_fields(action, result)
+        if reads_possible_pii(source_fields, profile):
             continue
         candidates.append((action, result, source_fields))
 
@@ -161,6 +160,52 @@ def insight_evidence_catalog(state: AgentState, profile: DataProfile) -> list[di
 def _row_index(metric: str) -> int | None:
     match = _ROW_METRIC.match(metric)
     return int(match.group(1)) if match else None
+
+
+def evidence_source_fields(
+    action: ToolAction, result: QueryResult | StatisticalResult
+) -> tuple[str, ...]:
+    """Name the dataset fields a Tool Action's evidence was computed from."""
+    if isinstance(result, StatisticalResult):
+        return result.source_fields
+    return tuple(str(value) for value in action.inputs.get("required_fields", ()))
+
+
+def reads_possible_pii(source_fields: tuple[str, ...], profile: DataProfile) -> bool:
+    """Evidence computed from a possible PII field is never used to draft claims."""
+    pii_fields = {field.casefold() for field in profile.pii_candidates}
+    return any(field.casefold() in pii_fields for field in source_fields)
+
+
+def unasserted_small_result_metrics(result: QueryResult, asserted: set[str]) -> list[str]:
+    """Return the row values the model left out of a small result it answered from.
+
+    Once the model asserts a row value from a complete grouped or single-row result of at most
+    MAX_COMPLETED_RESULT_VALUES values, the other values are reported too, so a correct answer
+    is not stated in part. Group labels identify rows and row_number only numbers them, so
+    neither is reported, and neither is an empty value.
+    """
+    if result.truncated or not (result.group_by_columns or result.row_count == 1):
+        return []
+    cells = {
+        f"row[{row_index}].{column.name}"
+        for row_index in range(len(result.rows))
+        for column in result.columns
+    }
+    # An identifier the result does not contain, such as row[9] of three rows, is no answer.
+    if not asserted & cells:
+        return []
+    metrics = [
+        f"row[{row_index}].{column.name}"
+        for row_index, row in enumerate(result.rows)
+        for column, value in zip(result.columns, row, strict=True)
+        if column.name not in result.group_by_columns
+        and column.name != "row_number"
+        and value is not None
+    ]
+    if len(metrics) > MAX_COMPLETED_RESULT_VALUES:
+        return []
+    return [metric for metric in metrics if metric not in asserted]
 
 
 def evidence_result_for_action(

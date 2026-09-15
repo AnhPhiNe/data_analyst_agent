@@ -299,3 +299,21 @@ the stored release runs keep their grades:
 
 Still open: the unavailable-metric question is in English, groups are named by raw field names,
 and the model can still assert an uninformative direction or list rows before a test.
+
+### Final fix round
+
+Only one failure class above was seen on two or more datasets: a correct small result stated in
+part (the release materials and batch questions, and the month comparison in holdout v8). Once the
+model asserts a value from a complete grouped or single-row result of at most 20 values, the other
+values are now reported too. Group labels, `row_number`, results the model did not answer from,
+and results computed from possible PII are left out. A new small holdout measures this round.
+
+These failures were each seen on one dataset and are not fixed, because fixing them would tune the
+agent to the release suite:
+
+- numbers stored with a unit, such as `12.5 kg`, are summed without the unit-bearing values;
+- dates written in several formats in one column are filtered by one format only;
+- removing duplicate rows across every column fails, because the SQL policy forbids
+  `SELECT DISTINCT *`;
+- an abbreviated measure name, such as `tb` for average, can be treated as unavailable;
+- a requested test can be answered with averages instead.

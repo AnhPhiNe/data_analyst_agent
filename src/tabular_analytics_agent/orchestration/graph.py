@@ -67,7 +67,10 @@ from tabular_analytics_agent.orchestration.evidence_catalog import (
     chart_result_metadata,
     chart_source_for_verified_insight,
     evidence_result_for_action,
+    evidence_source_fields,
     insight_evidence_catalog,
+    reads_possible_pii,
+    unasserted_small_result_metrics,
     unknown_insight_metrics,
 )
 from tabular_analytics_agent.orchestration.field_ids import (
@@ -1029,22 +1032,34 @@ def build_agent_graph(
                         semantic_annotations=annotations,
                     )
                 )
-            # Deterministically report the headline statistical estimates the model left out,
-            # so a correct analysis is not marked incomplete because of model variance.
+            # Deterministically report the headline statistical estimates, and the rest of a
+            # small query result, that the model left out, so a correct answer is not partial.
+            asserted_by_step: dict[str, set[str]] = {}
+            for draft in response.output.insights:
+                asserted_by_step.setdefault(draft.plan_step_id, set()).update(
+                    metric
+                    for metric in (draft.assertion.left_metric, draft.assertion.right_metric)
+                    if metric
+                )
             asserted_metrics = {
-                metric
-                for draft in response.output.insights
-                for metric in (draft.assertion.left_metric, draft.assertion.right_metric)
-                if metric
+                metric for metrics in asserted_by_step.values() for metric in metrics
             }
-            for action in actions.values():
+            for step_id, action in actions.items():
                 result = evidence_result_for_action(state, action)
-                if not isinstance(result, StatisticalResult):
+                if isinstance(result, StatisticalResult):
+                    missing = [
+                        metric
+                        for metric in _headline_statistical_metrics(result)
+                        if metric not in asserted_metrics
+                    ]
+                    asserted_metrics.update(missing)
+                elif reads_possible_pii(evidence_source_fields(action, result), profile):
                     continue
-                for metric in _headline_statistical_metrics(result):
-                    if metric in asserted_metrics:
-                        continue
-                    asserted_metrics.add(metric)
+                else:
+                    missing = unasserted_small_result_metrics(
+                        result, asserted_by_step.get(step_id, set())
+                    )
+                for metric in missing:
                     publications.append(
                         publish_insight(
                             assertion=InsightAssertion(

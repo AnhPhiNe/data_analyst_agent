@@ -353,3 +353,14 @@ the outstanding Must-tier flows and reliability gates.
   release result stands. The changed and new tests failed against the previous commit in a
   separate clone (19 failures). 440 tests passed (2 skipped), branch-inclusive coverage 91.04%,
   Ruff, formatting, and strict mypy passed.
+- Final fix round after the release suite (2026-09-15), limited by the agreed rule to the one
+  failure class seen on two or more datasets: once the model asserts a row value from a complete
+  grouped or single-row query result of at most 20 values, synthesis reports the result's other
+  values. Group labels, `row_number`, empty values, results computed from possible PII, and
+  results the model did not answer from are left out; an existing test showed that a metric the
+  result does not contain, such as `row[9]` of three rows, must not count as an answer. The five
+  failure classes seen on one dataset are documented in `docs/limitations.md` Section 12 and not
+  fixed. No prompt template changed. The new behavior tests failed against the previous commit in
+  a separate clone (the unit tests at import). 446 tests passed (2 skipped), branch-inclusive
+  coverage 91.08%, Ruff, formatting, and strict mypy passed. A new small holdout written outside
+  the repository measures this round before the MVP is closed.
