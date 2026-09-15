@@ -239,6 +239,12 @@ Row-level values are described by their SQL `GROUP BY` keys (for example `year =
   - Scatter plots for at most 3 field pairs with an absolute coefficient of at least 0.5, each offered as a question for the agent to test.
   - One bar chart of the first eligible numeric field averaged by the first categorical field with 2 to 20 groups.
   - Row counts over time for at most 2 datetime fields.
+- **Data Overview explorer (Should tier).** Below the automatic charts, the user builds descriptive charts for any uploaded dataset without naming an industry:
+  - A measure (row count or an eligible numeric field) and an aggregation (count, sum, average, minimum, or maximum).
+  - An optional group field (categorical or boolean), showing at most the 20 groups with the most rows, and an optional datetime field with a day, week, month, quarter, or year period. With both, a line chart draws at most 12 groups.
+  - Filters on up to 3 categorical fields and a date range, applied to the explorer charts only; the automatic charts always describe the whole dataset.
+  - A box plot of the chosen numeric field across the chosen groups, drawn from quartiles computed in SQL.
+  - Filter values are escaped as SQL literals and every query passes the read-only SQL policy and query limits. Results are descriptive, never Verified Insights, and no model is called.
 
 ### FR-12 — Conversational follow-up
 
@@ -556,7 +562,7 @@ Each case declares its expected outcome — answered with Verified Insights, ans
 
 ### 17.3 Evaluation process
 
-Grading version 3 matches an expected grouped query value by its group identity and value, whatever output name the model chose, and never counts a `GROUP BY` label column as the measured value. An ungrouped expected value matches a single-row result, or a multi-row result only through the named metric or an explicitly allowed alias. Statistical metrics use their exact metric identifiers. Version 3 replaced alias-list matching after correct values under unlisted aliases (for example `departed_count` or `avg_1`) were graded as missing. Insight coverage requires a persisted assertion operand and evidence from the same successful Tool Action/result, not merely a matching number elsewhere. Profile cases declare concrete expected facts. Failed runs and rejected insight drafts do not count as safe refusals. Refusal credit requires a typed refusal code and a non-empty reason: `unavailable_metric` also requires an unavailable mapping, and `insufficient_sample` comes only from the statistical tool's typed sample-size error. Other failure categories never receive refusal credit, and error messages are never matched as text. Earlier grading reports are not directly comparable with version 2. This deterministic grader does not replace semantic review of metric meaning, filters, or the rendered UI.
+Grading version 3 matches an expected grouped query value by its group identity and value, whatever output name the model chose, and never counts a `GROUP BY` label column as the measured value. An ungrouped expected value matches a single-row result, or a multi-row result only through the named metric or an explicitly allowed alias. Statistical metrics use their exact metric identifiers; since version 4, JSON-encoded group labels inside them are compared after decoding, so `group[str:"Có"]` matches its ASCII-escaped spelling. Version 3 replaced alias-list matching after correct values under unlisted aliases (for example `departed_count` or `avg_1`) were graded as missing. Insight coverage requires a persisted assertion operand and evidence from the same successful Tool Action/result, not merely a matching number elsewhere. Profile cases declare concrete expected facts. Failed runs and rejected insight drafts do not count as safe refusals. Refusal credit requires a typed refusal code and a non-empty reason: `unavailable_metric` also requires an unavailable mapping, and `insufficient_sample` comes only from the statistical tool's typed sample-size error. Other failure categories never receive refusal credit, and error messages are never matched as text. Earlier grading reports are not directly comparable with version 2. This deterministic grader does not replace semantic review of metric meaning, filters, or the rendered UI.
 
 1. Smoke stage: at least 10 cases across at least 3 datasets, including Vietnamese headers, dirty data with prompt-injection text, and a refusal case, each run 3 times.
 2. Error analysis: read failed runs and their traces, group failures by cause, and fix the most frequent cause first.
@@ -744,6 +750,8 @@ Adds scope agreed after the Milestone 6 hardening work. No earlier decision is r
 - A deterministic Data Overview after ingestion, with fixed chart-selection limits and a descriptive correlation heatmap (Should tier; Section 6 and FR-11).
 - A local model adapter is recorded as the path to keeping all data on the machine (Could tier; Section 4.1).
 - Profiling fix found while preparing holdout v5, before any live run: a column whose values are all ISO dates is a datetime field whatever its name or language, and ISO dates are no longer mistaken for phone numbers. Vietnamese date columns such as `Ngày` had been profiled as text and flagged as possible PII (FR-03 and Section 14.4).
+- After holdout v5 (29/36 first run): grading version 4 matches statistical group labels after decoding their JSON, so escaped non-ASCII labels match plain ones (32/36 re-graded; Section 17.3); and counting rows uses COUNT(*) with no identifier field in the plan, a failure class seen on two datasets (FR-06 and Section 25.1).
+- Data Overview explorer: user-chosen measure, aggregation, group, time period, filters, and a box plot, so the overview serves any dataset (Should tier; FR-11).
 
 ## 25. Implementation Contracts
 

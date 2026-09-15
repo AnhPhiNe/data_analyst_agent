@@ -47,8 +47,8 @@ def tool_payload_guidance(step: PlanStep, handle: DatasetHandle) -> str:
         "grouping. Copy filter values exactly from the field's sample_values in the dataset "
         "metadata; never translate them. Alias calculated columns with short ASCII snake_case "
         "names (aliases are not source columns) and keep plain source columns, including "
-        "grouping keys, unaliased. For a row count use COUNT(*) without adding an unapproved "
-        "identifier column. To show which "
+        "grouping keys, unaliased. For a row count use COUNT(*), never COUNT of an identifier "
+        "column. To show which "
         "uploaded rows match, select rowid + 1 AS row_number; rowid is the row's zero-based "
         "position in the uploaded file, not a source column."
     )

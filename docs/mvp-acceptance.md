@@ -125,3 +125,21 @@ the outstanding Must-tier flows and reliability gates.
   passed (2 skipped), branch-inclusive coverage 90.76%, Ruff, formatting, and mypy passed. Known
   overview limit: in tables under 20 rows an integer id column is not flagged as identifier-like,
   so it can appear as a numeric chart.
+- Holdout v5 first run (2026-09-15, grading version 3, commit b15c455, 30 requests per minute):
+  29/36 runs passed (80.6%); outcome, chart, forbidden claims, and profile facts 100%;
+  calculations and schema grounding 88.9%; insight coverage 85.2%. Five rate-limit retries, no
+  remaining provider error. Failures: (1) the Vietnamese two-group significance case, 0/3, is a
+  grader defect: the agent ran a Welch t-test with the correct group means, but statistical group
+  labels are JSON-encoded with ASCII escapes (`group[str:"Có"]`) while the case spells
+  `group[str:"Có"]`, so exact metric matching failed; (2) the e-wallet order count, 0/3, returned
+  the correct count but read the identifier field `Mã đơn` (COUNT of that field), outside the
+  case's allowed fields, a pattern related to the extra counting field seen in holdout v3;
+  (3) one ANOVA run asserted only some group means (model variance). Expectations are unchanged.
+- Grading version 4 (2026-09-15) compares statistical group labels after decoding their JSON, so
+  escaped and plain spellings of the same value match. Re-grading the stored holdout v5 runs
+  without any model call gives 32/36 (88.9%): calculations 100%, insight coverage 96.3%, schema
+  grounding 88.9%. Only the three Vietnamese t-test runs changed. Both scores are reported; the
+  first-run score under grading version 3 remains 29/36.
+- Counting rule (plan-v7, tool-request-v12): counting rows lists no identifier field and uses
+  COUNT(*). It addresses a failure class seen on two datasets (holdout v3 and v5), so holdout v5
+  is development evidence for counting questions from now on; holdout v6 must measure it.
