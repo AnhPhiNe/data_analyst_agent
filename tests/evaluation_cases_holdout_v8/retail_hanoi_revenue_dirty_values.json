@@ -1,0 +1,24 @@
+{
+  "case_id": "holdout-v8-retail-hanoi-revenue-dirty-values-v1",
+  "dataset_path": "tests/fixtures/eval_holdout_v8/ban_le_chuoi.csv",
+  "dataset_sha256": "45c0e7aaa707e983b9028a3d0c32ac5f630d53d230ab909b15b1341c49cf78cd",
+  "user_request": "tong doanh thu o ha noi la bao nhieu",
+  "goal_family": "summary",
+  "required_calculations": [
+    {
+      "metric": "total_revenue",
+      "expected": 122903000
+    }
+  ],
+  "allowed_fields": [
+    "Thành phố",
+    "Doanh thu"
+  ],
+  "supported_conclusions": [
+    "Tổng doanh thu ở Hà Nội là 122903000, gộp cả các cách viết khác nhau của tên thành phố."
+  ],
+  "valid_chart_types": [
+    "kpi",
+    "table"
+  ]
+}

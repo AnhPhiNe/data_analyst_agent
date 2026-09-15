@@ -1,0 +1,25 @@
+{
+  "case_id": "holdout-v8-ecommerce-top-countries-average-order-v1",
+  "dataset_path": "tests/fixtures/eval_holdout_v8/ecommerce_orders_wide.csv",
+  "dataset_sha256": "06bbd727bd0363185afb31c3e9daa864b126bd77d313e0132fc24d02779808d0",
+  "user_request": "What is the average order total for orders from the two countries with the most orders?",
+  "goal_family": "summary",
+  "required_calculations": [
+    {
+      "metric": "avg_order_total",
+      "expected": 134.87929906542055,
+      "absolute_tolerance": 0.01
+    }
+  ],
+  "allowed_fields": [
+    "country",
+    "order_total"
+  ],
+  "supported_conclusions": [
+    "The average order total across the two busiest countries is reported."
+  ],
+  "valid_chart_types": [
+    "kpi",
+    "table"
+  ]
+}

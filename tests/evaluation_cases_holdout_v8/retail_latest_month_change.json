@@ -1,0 +1,38 @@
+{
+  "case_id": "holdout-v8-retail-latest-month-change-v1",
+  "dataset_path": "tests/fixtures/eval_holdout_v8/ban_le_chuoi.csv",
+  "dataset_sha256": "45c0e7aaa707e983b9028a3d0c32ac5f630d53d230ab909b15b1341c49cf78cd",
+  "user_request": "Doanh thu tháng gần nhất thay đổi thế nào so với tháng liền trước?",
+  "goal_family": "comparison",
+  "required_calculations": [
+    {
+      "metric": "Doanh thu",
+      "group": {
+        "field": "Tháng",
+        "value": "2026-05"
+      },
+      "expected": 62752000
+    },
+    {
+      "metric": "Doanh thu",
+      "group": {
+        "field": "Tháng",
+        "value": "2026-06"
+      },
+      "expected": 58454000
+    }
+  ],
+  "allowed_fields": [
+    "Tháng",
+    "Doanh thu",
+    "Ngày"
+  ],
+  "supported_conclusions": [
+    "Doanh thu của hai tháng gần nhất được so sánh."
+  ],
+  "valid_chart_types": [
+    "bar",
+    "line",
+    "table"
+  ]
+}

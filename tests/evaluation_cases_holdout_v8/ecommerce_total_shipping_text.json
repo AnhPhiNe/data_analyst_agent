@@ -1,0 +1,24 @@
+{
+  "case_id": "holdout-v8-ecommerce-total-shipping-text-v1",
+  "dataset_path": "tests/fixtures/eval_holdout_v8/ecommerce_orders_wide.csv",
+  "dataset_sha256": "06bbd727bd0363185afb31c3e9daa864b126bd77d313e0132fc24d02779808d0",
+  "user_request": "How much did we collect in shipping fees in total?",
+  "goal_family": "summary",
+  "required_calculations": [
+    {
+      "metric": "total_shipping",
+      "expected": 1557.4900000000002,
+      "absolute_tolerance": 0.01
+    }
+  ],
+  "allowed_fields": [
+    "shipping_fee"
+  ],
+  "supported_conclusions": [
+    "Total shipping fees are reported."
+  ],
+  "valid_chart_types": [
+    "kpi",
+    "table"
+  ]
+}

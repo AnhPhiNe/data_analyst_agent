@@ -1,0 +1,47 @@
+{
+  "case_id": "holdout-v8-retail-top-regions-average-order-v1",
+  "dataset_path": "tests/fixtures/eval_holdout_v8/ban_le_chuoi.csv",
+  "dataset_sha256": "45c0e7aaa707e983b9028a3d0c32ac5f630d53d230ab909b15b1341c49cf78cd",
+  "user_request": "Trong 3 khu vực có tổng doanh thu cao nhất, giá trị đơn hàng trung bình của mỗi khu vực là bao nhiêu?",
+  "goal_family": "comparison",
+  "required_calculations": [
+    {
+      "metric": "Doanh thu",
+      "group": {
+        "field": "Khu vực",
+        "value": "Đông Nam Bộ"
+      },
+      "expected": 1448645.1612903227,
+      "absolute_tolerance": 0.01
+    },
+    {
+      "metric": "Doanh thu",
+      "group": {
+        "field": "Khu vực",
+        "value": "Đồng bằng sông Hồng"
+      },
+      "expected": 1311764.705882353,
+      "absolute_tolerance": 0.01
+    },
+    {
+      "metric": "Doanh thu",
+      "group": {
+        "field": "Khu vực",
+        "value": "Duyên hải miền Trung"
+      },
+      "expected": 1033794.8717948718,
+      "absolute_tolerance": 0.01
+    }
+  ],
+  "allowed_fields": [
+    "Khu vực",
+    "Doanh thu"
+  ],
+  "supported_conclusions": [
+    "Giá trị đơn trung bình của ba khu vực doanh thu cao nhất được báo cáo."
+  ],
+  "valid_chart_types": [
+    "bar",
+    "table"
+  ]
+}

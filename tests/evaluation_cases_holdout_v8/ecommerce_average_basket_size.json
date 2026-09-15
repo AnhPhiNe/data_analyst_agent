@@ -1,0 +1,24 @@
+{
+  "case_id": "holdout-v8-ecommerce-average-basket-size-v1",
+  "dataset_path": "tests/fixtures/eval_holdout_v8/ecommerce_orders_wide.csv",
+  "dataset_sha256": "06bbd727bd0363185afb31c3e9daa864b126bd77d313e0132fc24d02779808d0",
+  "user_request": "What is the average basket size?",
+  "goal_family": "summary",
+  "required_calculations": [
+    {
+      "metric": "avg_items",
+      "expected": 3.7625,
+      "absolute_tolerance": 1e-06
+    }
+  ],
+  "allowed_fields": [
+    "items_per_order"
+  ],
+  "supported_conclusions": [
+    "The average number of items per order is reported."
+  ],
+  "valid_chart_types": [
+    "kpi",
+    "table"
+  ]
+}

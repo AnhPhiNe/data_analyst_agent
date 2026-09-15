@@ -1,0 +1,24 @@
+{
+  "case_id": "holdout-v8-retail-total-profit-text-cost-v1",
+  "dataset_path": "tests/fixtures/eval_holdout_v8/ban_le_chuoi.csv",
+  "dataset_sha256": "45c0e7aaa707e983b9028a3d0c32ac5f630d53d230ab909b15b1341c49cf78cd",
+  "user_request": "Tổng lợi nhuận (doanh thu trừ chi phí) của toàn bộ đơn hàng là bao nhiêu?",
+  "goal_family": "summary",
+  "required_calculations": [
+    {
+      "metric": "total_profit",
+      "expected": 113696000
+    }
+  ],
+  "allowed_fields": [
+    "Doanh thu",
+    "Chi phí"
+  ],
+  "supported_conclusions": [
+    "Tổng lợi nhuận là 113696000."
+  ],
+  "valid_chart_types": [
+    "kpi",
+    "table"
+  ]
+}

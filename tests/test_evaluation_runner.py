@@ -29,6 +29,7 @@ HOLDOUT_V4_CASES = ROOT / "tests" / "evaluation_cases_holdout_v4"
 HOLDOUT_V5_CASES = ROOT / "tests" / "evaluation_cases_holdout_v5"
 HOLDOUT_V6_CASES = ROOT / "tests" / "evaluation_cases_holdout_v6"
 HOLDOUT_V7_CASES = ROOT / "tests" / "evaluation_cases_holdout_v7"
+HOLDOUT_V8_CASES = ROOT / "tests" / "evaluation_cases_holdout_v8"
 
 
 def load_case(filename: str) -> GoldenCase:
@@ -98,6 +99,7 @@ def test_every_committed_case_is_bound_to_its_dataset() -> None:
     holdout_v5 = load_cases(HOLDOUT_V5_CASES)
     holdout_v6 = load_cases(HOLDOUT_V6_CASES)
     holdout_v7 = load_cases(HOLDOUT_V7_CASES)
+    holdout_v8 = load_cases(HOLDOUT_V8_CASES)
     cases = (
         *development,
         *holdout,
@@ -106,6 +108,7 @@ def test_every_committed_case_is_bound_to_its_dataset() -> None:
         *holdout_v5,
         *holdout_v6,
         *holdout_v7,
+        *holdout_v8,
     )
 
     assert holdout_v3
@@ -113,6 +116,7 @@ def test_every_committed_case_is_bound_to_its_dataset() -> None:
     assert holdout_v5
     assert holdout_v6
     assert holdout_v7
+    assert holdout_v8
     # Each holdout set's datasets were unseen by every earlier case set when it was committed.
     earlier_datasets = {case.dataset_path for case in (*development, *holdout)}
     assert not earlier_datasets & {case.dataset_path for case in holdout_v3}
@@ -124,6 +128,8 @@ def test_every_committed_case_is_bound_to_its_dataset() -> None:
     assert not earlier_datasets & {case.dataset_path for case in holdout_v6}
     earlier_datasets |= {case.dataset_path for case in holdout_v6}
     assert not earlier_datasets & {case.dataset_path for case in holdout_v7}
+    earlier_datasets |= {case.dataset_path for case in holdout_v7}
+    assert not earlier_datasets & {case.dataset_path for case in holdout_v8}
 
     assert development
     assert load_cases(HOLDOUT_CASES)

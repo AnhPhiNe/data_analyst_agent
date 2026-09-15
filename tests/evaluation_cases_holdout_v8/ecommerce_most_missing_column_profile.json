@@ -1,0 +1,15 @@
+{
+  "case_id": "holdout-v8-ecommerce-most-missing-column-profile-v1",
+  "dataset_path": "tests/fixtures/eval_holdout_v8/ecommerce_orders_wide.csv",
+  "dataset_sha256": "06bbd727bd0363185afb31c3e9daa864b126bd77d313e0132fc24d02779808d0",
+  "user_request": "Which column has the most missing values, and how many are missing?",
+  "goal_family": "data_quality",
+  "expected_outcome": "profile",
+  "required_profile_facts": [
+    {
+      "fact": "missing_count",
+      "field": "notes",
+      "expected": 399
+    }
+  ]
+}
