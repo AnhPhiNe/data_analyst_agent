@@ -12,6 +12,7 @@ from tabular_analytics_agent.data.errors import (
     UnsupportedFileError,
 )
 from tabular_analytics_agent.data.models import (
+    DATASET_TABLE,
     DataCoreLimits,
     DatasetHandle,
     QueryColumn,
@@ -19,9 +20,10 @@ from tabular_analytics_agent.data.models import (
     QueryResult,
     UploadInspection,
 )
-from tabular_analytics_agent.data.sql_policy import replace_column_references
+from tabular_analytics_agent.data.sql_policy import quote_identifier, replace_column_references
 
 __all__ = [
+    "DATASET_TABLE",
     "DataCoreError",
     "DataCoreLimits",
     "DatasetHandle",
@@ -37,5 +39,6 @@ __all__ = [
     "UnsafeQueryError",
     "UnsupportedFileError",
     "UploadInspection",
+    "quote_identifier",
     "replace_column_references",
 ]

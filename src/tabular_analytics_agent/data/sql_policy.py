@@ -12,6 +12,7 @@ from sqlglot import expressions as exp
 from sqlglot.optimizer.scope import Scope, traverse_scope
 
 from tabular_analytics_agent.data.errors import UnsafeQueryError
+from tabular_analytics_agent.data.models import DATASET_TABLE
 from tabular_analytics_agent.domain import FilterScope
 
 _DENIED_FUNCTIONS = {
@@ -123,7 +124,7 @@ def replace_column_references(sql: str, replacements: Mapping[str, str]) -> str:
             if column.db or column.catalog or scope is None:
                 continue
             source = source_for_qualifier(scope, column.table)
-            if not isinstance(source, exp.Table) or source.name.casefold() != "dataset":
+            if not isinstance(source, exp.Table) or source.name.casefold() != DATASET_TABLE:
                 continue
         elif scope is not None and name.casefold() in aliases_for_scope(scope):
             continue
@@ -131,6 +132,11 @@ def replace_column_references(sql: str, replacements: Mapping[str, str]) -> str:
         column.set("this", exp.to_identifier(target, quoted=True))
         changed = True
     return statement.sql(dialect="duckdb") if changed else sql
+
+
+def quote_identifier(value: str) -> str:
+    """Quote a field or table name for DuckDB SQL."""
+    return '"' + value.replace('"', '""') + '"'
 
 
 def validate_read_only_sql(sql: str, *, allowed_table: str) -> str:

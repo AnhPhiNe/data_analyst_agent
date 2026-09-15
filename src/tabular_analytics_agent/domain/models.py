@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Iterable
 from datetime import datetime
 from enum import StrEnum
 from typing import Annotated, Any, Literal, Self
@@ -138,6 +139,7 @@ class TemporalSummary(DomainModel):
 
 IDENTIFIER_LIKE_WARNING = "identifier-like unique field"
 INCONSISTENT_SPELLING_WARNING = "inconsistent spelling (values differ only by case or spaces)"
+POSSIBLE_PII_WARNING = "possible PII"
 
 
 class FieldProfile(DomainModel):
@@ -434,13 +436,30 @@ class QueryResultReference(DomainModel):
         return f"query-result:{self.query_id}"
 
 
-def fingerprint_semantic_annotations(
-    annotations: tuple[SemanticAnnotation, ...],
-) -> str:
+def fingerprint_semantic_annotations(annotations: Iterable[SemanticAnnotation]) -> str:
     """Hash confirmed semantic context independent of annotation input order."""
+    return _annotation_hash(annotations, case_sensitive=False)
+
+
+def semantic_fingerprint_matches(
+    fingerprint: str, annotations: Iterable[SemanticAnnotation]
+) -> bool:
+    """Compare a stored fingerprint, also accepting the case-sensitive order that charts stored
+    before insights and charts shared one fingerprint."""
+    annotations = tuple(annotations)
+    return fingerprint in {
+        _annotation_hash(annotations, case_sensitive=False),
+        _annotation_hash(annotations, case_sensitive=True),
+    }
+
+
+def _annotation_hash(annotations: Iterable[SemanticAnnotation], *, case_sensitive: bool) -> str:
     canonical = sorted(
         (annotation.model_dump(mode="json") for annotation in annotations),
-        key=lambda item: str(item["field_name"]),
+        key=lambda item: (
+            str(item["field_name"]) if case_sensitive else str(item["field_name"]).casefold(),
+            json.dumps(item, sort_keys=True),
+        ),
     )
     serialized = json.dumps(canonical, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(serialized.encode("utf-8")).hexdigest()

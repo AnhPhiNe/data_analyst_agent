@@ -3,6 +3,7 @@
 from tabular_analytics_agent.domain.models import (
     IDENTIFIER_LIKE_WARNING,
     INCONSISTENT_SPELLING_WARNING,
+    POSSIBLE_PII_WARNING,
     ActionStatus,
     AnalysisPlan,
     AnalysisSession,
@@ -39,11 +40,13 @@ from tabular_analytics_agent.domain.models import (
     VerificationStatus,
     VerifiedInsight,
     fingerprint_semantic_annotations,
+    semantic_fingerprint_matches,
 )
 
 __all__ = [
     "IDENTIFIER_LIKE_WARNING",
     "INCONSISTENT_SPELLING_WARNING",
+    "POSSIBLE_PII_WARNING",
     "ActionStatus",
     "AnalysisPlan",
     "AnalysisSession",
@@ -80,4 +83,5 @@ __all__ = [
     "VerificationStatus",
     "VerifiedInsight",
     "fingerprint_semantic_annotations",
+    "semantic_fingerprint_matches",
 ]

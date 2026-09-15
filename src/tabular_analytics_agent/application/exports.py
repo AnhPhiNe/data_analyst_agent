@@ -19,9 +19,14 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, ValidationError, model_validator
 
 from tabular_analytics_agent.data import QueryResult
-from tabular_analytics_agent.domain import AnalysisSession, DataProfile, ToolAction, VerifiedInsight
+from tabular_analytics_agent.domain import (
+    AnalysisSession,
+    DataProfile,
+    ToolAction,
+    VerifiedInsight,
+    fingerprint_semantic_annotations,
+)
 from tabular_analytics_agent.statistics import StatisticalResult
-from tabular_analytics_agent.verification import semantic_annotation_fingerprint
 
 EXPORT_SCHEMA_VERSION: Final[str] = "1"
 EXPORT_TYPE: Final[str] = "verified_insights"
@@ -96,7 +101,7 @@ class ExportRequest(BaseModel):
 def evidence_results(request: ExportRequest) -> tuple[EvidenceResult, ...]:
     """Return the current results referenced by the request's Verified Insights, in order."""
     version = request.session.working_dataset_version
-    fingerprint = semantic_annotation_fingerprint(request.session.semantic_annotations)
+    fingerprint = fingerprint_semantic_annotations(request.session.semantic_annotations)
     actions = {action.action_id: action for action in request.tool_actions}
     results: dict[str, EvidenceResult] = {
         **{f"query-result:{item.query_id}": item for item in request.query_results},
@@ -145,7 +150,7 @@ def export_verified_insights_json(request: ExportRequest) -> bytes:
             "session_id": str(request.session.session_id),
             "source_dataset_id": str(dataset.dataset_id),
             "working_dataset_version": request.session.working_dataset_version,
-            "semantic_annotation_fingerprint": semantic_annotation_fingerprint(
+            "semantic_annotation_fingerprint": fingerprint_semantic_annotations(
                 request.session.semantic_annotations
             ),
         },

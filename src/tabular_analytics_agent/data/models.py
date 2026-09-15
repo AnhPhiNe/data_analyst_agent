@@ -39,12 +39,16 @@ class UploadInspection(DataModel):
     warnings: tuple[str, ...] = ()
 
 
+# The single table every session exposes to SQL; the integrity check rejects any other name.
+DATASET_TABLE = "dataset"
+
+
 class DatasetHandle(DataModel):
     dataset: DatasetIdentity
     source_path: Path
     working_database_path: Path
     working_dataset_version: PositiveInt = 1
-    table_name: NonEmptyText = "dataset"
+    table_name: NonEmptyText = DATASET_TABLE
     selected_sheet: str | None = None
 
 

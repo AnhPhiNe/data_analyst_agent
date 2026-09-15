@@ -33,6 +33,7 @@ from tabular_analytics_agent.data.errors import (
     UnsupportedFileError,
 )
 from tabular_analytics_agent.data.models import (
+    DATASET_TABLE,
     DataCoreLimits,
     DatasetHandle,
     QueryColumn,
@@ -40,10 +41,11 @@ from tabular_analytics_agent.data.models import (
     QueryResult,
     UploadInspection,
 )
-from tabular_analytics_agent.data.sql_policy import analyze_read_only_sql
+from tabular_analytics_agent.data.sql_policy import analyze_read_only_sql, quote_identifier
 from tabular_analytics_agent.domain import (
     IDENTIFIER_LIKE_WARNING,
     INCONSISTENT_SPELLING_WARNING,
+    POSSIBLE_PII_WARNING,
     CategoryFrequency,
     DataProfile,
     DatasetIdentity,
@@ -218,7 +220,7 @@ class TabularDataCore:
                 for name, data_type, *_ in description
             )
             pii_candidates = tuple(
-                field.name for field in fields if "possible PII" in field.warnings
+                field.name for field in fields if POSSIBLE_PII_WARNING in field.warnings
             )
             return DataProfile(
                 profile_id=uuid4(),
@@ -451,7 +453,7 @@ class TabularDataCore:
         )
         if working_path != expected_working_path:
             raise DatasetIntegrityError("Working Dataset path does not match its version")
-        if handle.table_name != "dataset":
+        if handle.table_name != DATASET_TABLE:
             raise DatasetIntegrityError("Working Dataset table identity is invalid")
         if not source_path.is_file():
             raise DatasetIntegrityError("Source Dataset is missing")
@@ -487,7 +489,7 @@ class TabularDataCore:
         data_type: str,
         row_count: int,
     ) -> FieldProfile:
-        quoted = _quote_identifier(name)
+        quoted = quote_identifier(name)
         normalized_type = data_type.split("(", maxsplit=1)[0].upper()
         is_text = normalized_type in {"VARCHAR", "CHAR", "TEXT"}
         null_expression = f"{quoted} IS NULL"
@@ -536,7 +538,7 @@ class TabularDataCore:
             if spelling_warning:
                 warnings.append(spelling_warning)
         if looks_like_pii:
-            warnings.append("possible PII")
+            warnings.append(POSSIBLE_PII_WARNING)
 
         numeric_summary = None
         temporal_summary = None
@@ -832,10 +834,6 @@ _INTEGER_TYPES = frozenset(
         "UBIGINT",
     }
 )
-
-
-def _quote_identifier(value: str) -> str:
-    return '"' + value.replace('"', '""') + '"'
 
 
 def _require_row(row: tuple[Any, ...] | None) -> tuple[Any, ...]:

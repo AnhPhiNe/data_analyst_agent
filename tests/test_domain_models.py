@@ -1,5 +1,7 @@
 """Tests through the public domain interface."""
 
+import hashlib
+import json
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
@@ -36,6 +38,7 @@ from tabular_analytics_agent.domain import (
     VerificationStatus,
     VerifiedInsight,
     fingerprint_semantic_annotations,
+    semantic_fingerprint_matches,
 )
 
 
@@ -411,6 +414,26 @@ def test_insight_assertion_requires_operator_specific_operands() -> None:
             left_metric="row[0].revenue",
             right_metric="row[0].revenue",
         )
+
+
+def test_semantic_fingerprint_ignores_order_and_accepts_the_legacy_chart_order() -> None:
+    alpha = SemanticAnnotation(field_name="alpha", meaning="First", confirmed_by_user=True)
+    zeta = SemanticAnnotation(field_name="Zeta", meaning="Last", confirmed_by_user=True)
+    fingerprint = fingerprint_semantic_annotations((zeta, alpha))
+    # Charts stored before insights and charts shared one fingerprint sorted names
+    # case-sensitively, so "Zeta" came before "alpha".
+    legacy_payload = json.dumps(
+        [zeta.model_dump(mode="json"), alpha.model_dump(mode="json")],
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    legacy = hashlib.sha256(legacy_payload.encode("utf-8")).hexdigest()
+
+    assert fingerprint == fingerprint_semantic_annotations((alpha, zeta))
+    assert legacy != fingerprint
+    assert semantic_fingerprint_matches(fingerprint, (alpha, zeta))
+    assert semantic_fingerprint_matches(legacy, (alpha, zeta))
+    assert not semantic_fingerprint_matches(legacy, (alpha,))
 
 
 def test_artifact_requires_timezone_aware_timestamp() -> None:

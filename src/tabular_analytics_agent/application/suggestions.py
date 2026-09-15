@@ -2,10 +2,23 @@
 
 from __future__ import annotations
 
-from tabular_analytics_agent.domain import IDENTIFIER_LIKE_WARNING, DataProfile, FieldKind
+from tabular_analytics_agent.domain import (
+    IDENTIFIER_LIKE_WARNING,
+    DataProfile,
+    FieldKind,
+    FieldProfile,
+)
 
 _MAX_SUGGESTIONS = 5
 _MAX_GROUP_CATEGORIES = 20
+
+
+def is_group_field(field: FieldProfile) -> bool:
+    """A categorical or boolean field with 2 to 20 values splits results into readable groups."""
+    return (
+        field.kind in {FieldKind.CATEGORICAL, FieldKind.BOOLEAN}
+        and 2 <= field.unique_count <= _MAX_GROUP_CATEGORIES
+    )
 
 
 def suggest_goals(profile: DataProfile) -> tuple[str, ...]:
@@ -23,12 +36,7 @@ def suggest_goals(profile: DataProfile) -> tuple[str, ...]:
     measures = [
         field.name for field in usable if field.kind is FieldKind.NUMERIC and field.unique_count > 1
     ]
-    groups = [
-        field
-        for field in usable
-        if field.kind in {FieldKind.CATEGORICAL, FieldKind.BOOLEAN}
-        and 2 <= field.unique_count <= _MAX_GROUP_CATEGORIES
-    ]
+    groups = [field for field in usable if is_group_field(field)]
     dates = [field.name for field in usable if field.kind is FieldKind.DATETIME]
     binary_groups = [field.name for field in groups if field.unique_count == 2]
 

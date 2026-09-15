@@ -31,6 +31,7 @@ from tabular_analytics_agent.domain import (
     SessionStatus,
     ToolAction,
     VerifiedInsight,
+    fingerprint_semantic_annotations,
 )
 from tabular_analytics_agent.model_gateway import FakeModelGateway
 from tabular_analytics_agent.orchestration import ApprovalDecision
@@ -42,7 +43,6 @@ from tabular_analytics_agent.statistics import (
 )
 from tabular_analytics_agent.verification import (
     publish_insight,
-    semantic_annotation_fingerprint,
     verify_query_evidence,
 )
 
@@ -229,7 +229,7 @@ def test_json_exports_current_verified_scope_without_rows_or_traces(tmp_path: Pa
         "session_id": str(session.session_id),
         "source_dataset_id": str(profile.dataset.dataset_id),
         "working_dataset_version": 1,
-        "semantic_annotation_fingerprint": semantic_annotation_fingerprint(
+        "semantic_annotation_fingerprint": fingerprint_semantic_annotations(
             session.semantic_annotations
         ),
     }

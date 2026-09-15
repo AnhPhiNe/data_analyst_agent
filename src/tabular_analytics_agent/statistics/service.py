@@ -9,7 +9,12 @@ from uuid import uuid4
 import pandas as pd
 from pydantic import BaseModel, ConfigDict, model_validator
 
-from tabular_analytics_agent.data import DatasetHandle, QueryResult, TabularDataCore
+from tabular_analytics_agent.data import (
+    DatasetHandle,
+    QueryResult,
+    TabularDataCore,
+    quote_identifier,
+)
 from tabular_analytics_agent.domain import (
     ActionStatus,
     DataProfile,
@@ -80,10 +85,10 @@ class StatisticalTool:
             raise StatisticalAnalysisError(f"unknown statistical fields: {', '.join(unknown)}")
         _validate_field_types(request, field_profiles)
 
-        quoted_fields = ", ".join(_quote_identifier(field) for field in request.source_fields)
+        quoted_fields = ", ".join(quote_identifier(field) for field in request.source_fields)
         sample_size = self._data_core.limits.max_query_rows
         extraction_sql = (
-            f"SELECT {quoted_fields} FROM {_quote_identifier(handle.table_name)} "
+            f"SELECT {quoted_fields} FROM {quote_identifier(handle.table_name)} "
             f"USING SAMPLE reservoir({sample_size} ROWS) REPEATABLE({request.random_seed})"
         )
         started = time.perf_counter()
@@ -223,7 +228,3 @@ def _verify_statistical_result(
         else VerificationStatus.FAILED
     )
     return VerificationResult(status=status, checks=checks)
-
-
-def _quote_identifier(value: str) -> str:
-    return '"' + value.replace('"', '""') + '"'

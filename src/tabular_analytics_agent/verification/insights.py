@@ -2,11 +2,8 @@
 
 from __future__ import annotations
 
-import hashlib
-import json
 import math
 import re
-from collections.abc import Iterable
 from typing import Literal
 from uuid import uuid4
 
@@ -27,6 +24,7 @@ from tabular_analytics_agent.domain import (
     VerificationResult,
     VerificationStatus,
     VerifiedInsight,
+    fingerprint_semantic_annotations,
 )
 from tabular_analytics_agent.statistics import (
     AssumptionStatus,
@@ -39,16 +37,6 @@ from tabular_analytics_agent.verification.query_evidence import (
 
 InsightPublication = VerifiedInsight | UnsupportedClaim
 EvidenceResult = QueryResult | StatisticalResult
-
-
-def semantic_annotation_fingerprint(annotations: Iterable[SemanticAnnotation]) -> str:
-    """Return a stable fingerprint so semantic revisions invalidate dependent insights."""
-    normalized = sorted(
-        (annotation.model_dump(mode="json") for annotation in annotations),
-        key=lambda item: (str(item["field_name"]).casefold(), json.dumps(item, sort_keys=True)),
-    )
-    payload = json.dumps(normalized, sort_keys=True, separators=(",", ":"))
-    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
 def available_evidence_values(result: EvidenceResult) -> tuple[EvidenceValue, ...]:
@@ -224,7 +212,7 @@ def publish_insight(
             trail_id=uuid4(),
             dataset_id=profile.dataset.dataset_id,
             working_dataset_version=action.working_dataset_version,
-            semantic_annotation_fingerprint=semantic_annotation_fingerprint(semantic_annotations),
+            semantic_annotation_fingerprint=fingerprint_semantic_annotations(semantic_annotations),
             source_fields=source_fields,
             filters=_filters(action, result),
             filter_scopes=_filter_scopes(result),
@@ -280,7 +268,7 @@ def invalidate_stale_insight(
     reasons: list[str] = []
     if insight.evidence.working_dataset_version != current_working_dataset_version:
         reasons.append("Working Dataset version changed")
-    if insight.evidence.semantic_annotation_fingerprint != semantic_annotation_fingerprint(
+    if insight.evidence.semantic_annotation_fingerprint != fingerprint_semantic_annotations(
         semantic_annotations
     ):
         reasons.append("Semantic Annotations changed")
@@ -485,7 +473,8 @@ def _numeric_evidence(value: str | int | float | bool | None) -> float | None:
 
 def _format_evidence_value(value: str | int | float | bool | None) -> str:
     if isinstance(value, float):
-        return f"{value:.6g}"
+        # Every significant digit, as a KPI shows it; repr is the shortest exact form.
+        return repr(value).removesuffix(".0")
     return str(value)
 
 

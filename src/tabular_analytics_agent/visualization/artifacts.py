@@ -19,7 +19,7 @@ from tabular_analytics_agent.domain import (
     ArtifactStatus,
     QueryResultReference,
     VerificationStatus,
-    fingerprint_semantic_annotations,
+    semantic_fingerprint_matches,
 )
 from tabular_analytics_agent.filesystem import (
     delete_tree,
@@ -392,12 +392,14 @@ class ArtifactStore:
                     session.working_dataset_version,
                 ),
             ).fetchall()
-        semantic_fingerprint = fingerprint_semantic_annotations(session.semantic_annotations)
         artifacts = (self._parse_artifact(row) for row in rows)
         return tuple(
             artifact
             for artifact in artifacts
-            if artifact.source_result_ref.semantic_annotation_fingerprint == semantic_fingerprint
+            if semantic_fingerprint_matches(
+                artifact.source_result_ref.semantic_annotation_fingerprint,
+                session.semantic_annotations,
+            )
         )
 
     def _initialize(self) -> None:
@@ -541,8 +543,9 @@ class ArtifactStore:
         if (
             session.source_dataset_id != source.dataset_id
             or session.working_dataset_version != source.working_dataset_version
-            or fingerprint_semantic_annotations(session.semantic_annotations)
-            != source.semantic_annotation_fingerprint
+            or not semantic_fingerprint_matches(
+                source.semantic_annotation_fingerprint, session.semantic_annotations
+            )
         ):
             raise ArtifactTransitionError(
                 "artifact source is stale or does not belong to the current Analysis Session"

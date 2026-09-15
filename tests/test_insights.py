@@ -26,6 +26,7 @@ from tabular_analytics_agent.domain import (
     VerificationResult,
     VerificationStatus,
     VerifiedInsight,
+    fingerprint_semantic_annotations,
 )
 from tabular_analytics_agent.statistics import (
     StatisticalOperation,
@@ -36,7 +37,6 @@ from tabular_analytics_agent.verification import (
     available_evidence_values,
     invalidate_stale_insight,
     publish_insight,
-    semantic_annotation_fingerprint,
 )
 
 
@@ -107,6 +107,25 @@ def context() -> tuple[DataProfile, ToolAction, QueryResult]:
         action.model_copy(update={"output_ref": f"query-result:{result.query_id}"}),
         result,
     )
+
+
+def test_claim_shows_every_significant_digit_of_a_float() -> None:
+    profile, action, result = context()
+    precise = result.model_copy(update={"rows": (("North", 1234567.8), ("South", 150.0))})
+
+    publication = publish_insight(
+        assertion=InsightAssertion(operator=InsightOperator.REPORTS, left_metric="row[0].revenue"),
+        evidence_metrics=("row[0].revenue",),
+        caveats=(),
+        profile=profile,
+        action=action,
+        result=precise,
+        current_working_dataset_version=1,
+    )
+
+    assert isinstance(publication, VerifiedInsight)
+    # A six-significant-digit format rendered 1.23457e+06, disagreeing with the KPI chart.
+    assert publication.claim.endswith(" is 1234567.8.")
 
 
 def test_query_claim_is_published_with_complete_reproducible_evidence() -> None:
@@ -601,7 +620,7 @@ def test_insight_becomes_stale_after_dataset_or_semantic_revision() -> None:
         semantic_annotations=annotations,
     )
     assert isinstance(publication, VerifiedInsight)
-    assert publication.evidence.semantic_annotation_fingerprint == semantic_annotation_fingerprint(
+    assert publication.evidence.semantic_annotation_fingerprint == fingerprint_semantic_annotations(
         annotations
     )
     assert (

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from tabular_analytics_agent.data import QueryResult
+from tabular_analytics_agent.data import DATASET_TABLE, QueryResult
 from tabular_analytics_agent.data.sql_policy import is_whole_dataset_count
 from tabular_analytics_agent.domain import (
     DataProfile,
@@ -80,7 +80,7 @@ def verified_dataset_count_matches_profile(profile: DataProfile, result: QueryRe
     """Revalidate a whole-dataset count marker against SQL and the profiled row total."""
     if (
         result.dataset_count_scope != "whole_dataset"
-        or not is_whole_dataset_count(result.sql, allowed_table="dataset")
+        or not is_whole_dataset_count(result.sql, allowed_table=DATASET_TABLE)
         or result.truncated
         or result.row_count != 1
         or len(result.rows) != 1

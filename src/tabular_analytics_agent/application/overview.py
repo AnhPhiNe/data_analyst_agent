@@ -14,12 +14,14 @@ from typing import Any
 
 import plotly.graph_objects as go
 
+from tabular_analytics_agent.application.suggestions import is_group_field
 from tabular_analytics_agent.data import (
     DatasetHandle,
     QueryExecutionError,
     QueryTimeoutError,
     TabularDataCore,
     UnsafeQueryError,
+    quote_identifier,
 )
 from tabular_analytics_agent.domain import (
     IDENTIFIER_LIKE_WARNING,
@@ -33,7 +35,6 @@ _MAX_FIELD_CHARTS = 8
 _MAX_CORRELATION_FIELDS = 15
 _MAX_SCATTER_PAIRS = 3
 _MIN_ABSOLUTE_CORRELATION = 0.5
-_MAX_GROUP_CATEGORIES = 20
 _MAX_TIME_FIELDS = 2
 _HISTOGRAM_BINS = 20
 _MAX_SCATTER_POINTS = 2_000
@@ -101,12 +102,7 @@ def build_data_overview(
             lambda pair=pair: _scatter_chart(core, handle, pair, coefficients[pair]),
         )
 
-    groups = [
-        f
-        for f in eligible
-        if f.kind in {FieldKind.CATEGORICAL, FieldKind.BOOLEAN}
-        and 2 <= f.unique_count <= _MAX_GROUP_CATEGORIES
-    ]
+    groups = [f for f in eligible if is_group_field(f)]
     if numeric and groups:
         add(
             f"Average {numeric[0].name} by {groups[0].name}",
@@ -193,7 +189,7 @@ def _histogram(
     if summary.maximum <= summary.minimum:
         return None
     width = (summary.maximum - summary.minimum) / _HISTOGRAM_BINS
-    column = _quote(field.name)
+    column = quote_identifier(field.name)
     result = core.query(
         handle,
         f"SELECT LEAST(FLOOR(({column} - ({summary.minimum!r})) / {width!r}), "
@@ -224,7 +220,7 @@ def _correlations(
         for second in fields[index + 1 :]
     ]
     expressions = ", ".join(
-        f"CORR({_quote(first)}, {_quote(second)}) AS r_{index}"
+        f"CORR({quote_identifier(first)}, {quote_identifier(second)}) AS r_{index}"
         for index, (first, second) in enumerate(pairs)
     )
     result = core.query(handle, f"SELECT {expressions} FROM dataset")
@@ -274,7 +270,7 @@ def _scatter_chart(
     pair: tuple[str, str],
     coefficient: float,
 ) -> OverviewChart:
-    first, second = (_quote(name) for name in pair)
+    first, second = (quote_identifier(name) for name in pair)
     result = core.query(
         handle,
         f"SELECT {first}, {second} FROM dataset "
@@ -305,7 +301,7 @@ def _group_average_chart(
     measure: FieldProfile,
     group: FieldProfile,
 ) -> OverviewChart:
-    measure_column, group_column = _quote(measure.name), _quote(group.name)
+    measure_column, group_column = quote_identifier(measure.name), quote_identifier(group.name)
     result = core.query(
         handle,
         f"SELECT {group_column}, AVG({measure_column}) AS average_value FROM dataset "
@@ -330,7 +326,7 @@ def _time_chart(
         return None
     span = date.fromisoformat(summary.latest[:10]) - date.fromisoformat(summary.earliest[:10])
     unit, label_length = ("day", 10) if span.days <= _DAILY_SPAN_DAYS else ("month", 7)
-    column = _quote(field.name)
+    column = quote_identifier(field.name)
     result = core.query(
         handle,
         f"SELECT DATE_TRUNC('{unit}', {column}) AS period, COUNT(*) AS row_count "
@@ -365,10 +361,6 @@ def _figure_json(figure: go.Figure, title: str) -> dict[str, Any]:
     )
     payload: dict[str, Any] = json.loads(figure.to_json())
     return payload
-
-
-def _quote(name: str) -> str:
-    return '"' + name.replace('"', '""') + '"'
 
 
 _MAX_EXPLORER_GROUPS = 20
@@ -427,7 +419,7 @@ def filter_values(
     """Return the most frequent values of one group field, for a filter selector."""
     if field not in explorer_options(profile).groups:
         raise ValueError(f"Field cannot be filtered in the explorer: {field}")
-    column = _quote(field)
+    column = quote_identifier(field)
     result = core.query(
         handle,
         f"SELECT CAST({column} AS VARCHAR) AS filter_value, COUNT(*) AS row_count "
@@ -448,7 +440,7 @@ def build_explorer_charts(
     value = (
         "COUNT(*)"
         if request.aggregation == "count"
-        else f"{_SQL_AGGREGATES[request.aggregation]}({_quote(str(request.measure))})"
+        else f"{_SQL_AGGREGATES[request.aggregation]}({quote_identifier(str(request.measure))})"
     )
     label = _AGGREGATIONS[request.aggregation]
     if request.aggregation != "count":
@@ -486,13 +478,14 @@ def _validate_explorer_request(options: ExplorerOptions, request: ExplorerReques
 
 def _filter_conditions(request: ExplorerRequest) -> list[str]:
     conditions = [
-        f"CAST({_quote(field)} AS VARCHAR) IN ({', '.join(_literal(value) for value in values)})"
+        f"CAST({quote_identifier(field)} AS VARCHAR) "
+        f"IN ({', '.join(_literal(value) for value in values)})"
         for field, values in request.filters
         if values
     ]
     if request.date_filter is not None:
         field, start, end = request.date_filter
-        column = _quote(field)
+        column = quote_identifier(field)
         conditions.append(
             f"{column} >= DATE '{start.isoformat()}' "
             f"AND {column} < DATE '{(end + timedelta(days=1)).isoformat()}'"
@@ -508,15 +501,15 @@ def _explorer_chart(
     label: str,
     conditions: list[str],
 ) -> OverviewChart:
-    group = _quote(request.group) if request.group else None
+    group = quote_identifier(request.group) if request.group else None
     period = (
-        f"DATE_TRUNC('{request.period}', {_quote(request.date_field)})"
+        f"DATE_TRUNC('{request.period}', {quote_identifier(request.date_field)})"
         if request.date_field
         else None
     )
     required = [f"{column} IS NOT NULL" for column in (group, period) if column]
     if request.date_field:
-        required[-1] = f"{_quote(request.date_field)} IS NOT NULL"
+        required[-1] = f"{quote_identifier(request.date_field)} IS NOT NULL"
     where = _where([*required, *conditions])
     caption = "Descriptive values from read-only queries; not Verified Insights."
     if group and period:
@@ -594,7 +587,7 @@ def _box_plot(
     group: str,
     conditions: list[str],
 ) -> OverviewChart:
-    measure_column, group_column = _quote(measure), _quote(group)
+    measure_column, group_column = quote_identifier(measure), quote_identifier(group)
     where = _where([f"{measure_column} IS NOT NULL", f"{group_column} IS NOT NULL", *conditions])
     result = core.query(
         handle,
