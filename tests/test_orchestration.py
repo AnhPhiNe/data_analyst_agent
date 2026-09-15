@@ -21,6 +21,8 @@ from tabular_analytics_agent.orchestration import (
     ApprovalDecision,
     open_sqlite_checkpointer,
 )
+from tabular_analytics_agent.orchestration.graph import _headline_statistical_metrics
+from tabular_analytics_agent.statistics import StatisticalResult
 
 
 def write_sales(path: Path) -> Path:
@@ -355,6 +357,117 @@ def test_statistics_only_insight_completes_without_chart_instead_of_crashing(
         "No Verified Insight is backed by a chartable Query Result" in (completed["artifact_error"])
     )
     assert len(gateway.requests) == 5
+
+
+def test_headline_statistical_estimate_is_reported_even_if_the_model_omits_it(
+    tmp_path: Path,
+) -> None:
+    core, request = run_request(tmp_path)
+    plan = {
+        "steps": [
+            {
+                "step_id": "raw-values",
+                "description": "Return revenue and quantity values",
+                "expected_tool": "read_only_sql",
+                "required_fields": ["revenue", "quantity"],
+                "intended_output": "Revenue and quantity rows",
+                "caveats": [],
+                "requires_approval": True,
+            },
+            {
+                "step_id": "correlation",
+                "description": "Measure the revenue-quantity correlation",
+                "expected_tool": "statistical_analysis",
+                "statistical_operation": "correlation",
+                "required_fields": ["revenue", "quantity"],
+                "intended_output": "Correlation statistics",
+                "caveats": [],
+                "requires_approval": True,
+            },
+        ]
+    }
+    # The model reports only significance and leaves out the coefficient itself.
+    significance_only = {
+        "insights": [
+            {
+                "plan_step_id": "correlation",
+                "assertion": {"operator": "statistically_significant", "left_metric": "p_value"},
+                "evidence_metrics": ["p_value", "adjusted_alpha"],
+                "caveats": [],
+            }
+        ]
+    }
+    gateway = FakeModelGateway(
+        [
+            goal_output(),
+            plan,
+            tool_output("SELECT revenue, quantity FROM dataset"),
+            {"x_field": "revenue", "y_field": "quantity"},
+            significance_only,
+        ]
+    )
+    agent = AgentOrchestrator(gateway, core, checkpointer=InMemorySaver())
+
+    agent.start(request)
+    completed = agent.resume(request.session_id, True)
+
+    assert completed["status"] == AgentRunStatus.COMPLETED
+    asserted = {insight["assertion"]["left_metric"] for insight in completed["verified_insights"]}
+    # The model reported only significance; the coefficient is added deterministically.
+    assert "pearson_r" in asserted
+
+
+def test_headline_metrics_are_group_means_or_the_lone_coefficient() -> None:
+    grouped = StatisticalResult.model_validate(
+        {
+            "result_id": str(uuid4()),
+            "operation": "anova",
+            "source_fields": ["score", "team"],
+            "sample_size": 30,
+            "missing_row_count": 0,
+            "missing_data_handling": "complete cases",
+            "estimates": [
+                {"metric": 'group[str:"A"].mean', "value": 1.0},
+                {"metric": 'group[str:"B"].mean', "value": 2.0},
+                {"metric": "eta_squared", "value": 0.3},
+            ],
+            "statistic_name": "anova_f",
+            "statistic": 5.0,
+            "p_value": 0.01,
+            "adjusted_alpha": 0.05,
+            "statistically_significant": True,
+            "parameters": {},
+        }
+    )
+    correlation = StatisticalResult.model_validate(
+        {
+            "result_id": str(uuid4()),
+            "operation": "correlation",
+            "source_fields": ["a", "b"],
+            "sample_size": 30,
+            "missing_row_count": 0,
+            "missing_data_handling": "complete cases",
+            "estimates": [{"metric": "spearman_rho", "value": 0.4}],
+            "statistic_name": "pearson_r",
+            "statistic": 0.5,
+            "parameters": {},
+        }
+    )
+
+    assert _headline_statistical_metrics(grouped) == ['group[str:"A"].mean', 'group[str:"B"].mean']
+    assert _headline_statistical_metrics(correlation) == ["pearson_r"]
+
+
+def test_interpretation_prompt_says_counting_records_needs_no_mapping(tmp_path: Path) -> None:
+    core, request = run_request(tmp_path)
+    gateway = FakeModelGateway([goal_output()])
+    agent = AgentOrchestrator(gateway, core, checkpointer=InMemorySaver())
+
+    agent.start(request)
+    prompt = gateway.requests[0].prompt
+
+    assert "Counting rows or records is a row count, not a metric" in prompt
+    assert gateway.requests[0].prompt_template_version == "semantic-v13"
 
 
 def test_structure_question_is_answered_from_profile_without_tools(tmp_path: Path) -> None:

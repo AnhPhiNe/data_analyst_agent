@@ -28,6 +28,8 @@ from tabular_analytics_agent.domain import (
     ChartIntent,
     DataProfile,
     ExecutionBudget,
+    InsightAssertion,
+    InsightOperator,
     PlanStatus,
     PlanStep,
     SemanticAnnotation,
@@ -214,6 +216,24 @@ def _draft_claim_text(draft: InsightDraft) -> str:
     return f"{assertion.left_metric} {assertion.operator.value} {right}".strip()
 
 
+def _headline_statistical_metrics(result: StatisticalResult) -> list[str]:
+    """The estimates a statistical result should always report, without relying on the model.
+
+    Group comparisons headline each group's mean; a single-coefficient result (correlation or
+    regression) headlines its coefficient. This guarantees coverage the model sometimes omits.
+    """
+    group_means = [
+        estimate.metric
+        for estimate in result.estimates
+        if estimate.metric.startswith("group[") and estimate.metric.endswith(".mean")
+    ]
+    if group_means:
+        return group_means
+    if result.statistic_name is not None and result.statistic is not None:
+        return [result.statistic_name]
+    return []
+
+
 def build_agent_graph(
     model_gateway: ModelGateway,
     data_core: TabularDataCore,
@@ -271,12 +291,15 @@ def build_agent_graph(
                 "clarification question only for an explicitly unsupported capability. Dimensions "
                 "such as region, month, or category, and dataset-level profile facts such as row "
                 "count, duplicate rows, or missing-value counts, are not metrics and need no "
-                "mapping. Return "
+                "mapping. Counting rows or records is a row count, not a metric: a request to "
+                "count the dataset's records under any name, such as how many orders, readings, "
+                "tickets, or late returns there are, needs no mapping and no identifier field. "
+                "Return "
                 "null clarification_question in all other cases."
             ),
             response_schema=GoalInterpretation,
             system_instruction=SYSTEM_INSTRUCTION,
-            prompt_template_version="semantic-v12",
+            prompt_template_version="semantic-v13",
             timeout_seconds=model_call_timeout_seconds(state, budget, clock()),
         )
         trace: ModelCallTrace | None = None
@@ -952,6 +975,36 @@ def build_agent_graph(
                         semantic_annotations=annotations,
                     )
                 )
+            # Deterministically report the headline statistical estimates the model left out,
+            # so a correct analysis is not marked incomplete because of model variance.
+            asserted_metrics = {
+                metric
+                for draft in response.output.insights
+                for metric in (draft.assertion.left_metric, draft.assertion.right_metric)
+                if metric
+            }
+            for action in actions.values():
+                result = evidence_result_for_action(state, action)
+                if not isinstance(result, StatisticalResult):
+                    continue
+                for metric in _headline_statistical_metrics(result):
+                    if metric in asserted_metrics:
+                        continue
+                    asserted_metrics.add(metric)
+                    publications.append(
+                        publish_insight(
+                            assertion=InsightAssertion(
+                                operator=InsightOperator.REPORTS, left_metric=metric
+                            ),
+                            evidence_metrics=(metric,),
+                            caveats=(),
+                            profile=profile,
+                            action=action,
+                            result=result,
+                            current_working_dataset_version=current_version,
+                            semantic_annotations=annotations,
+                        )
+                    )
         except (ModelGatewayError, ValidationError, ValueError) as exc:
             return with_failure_trace(failed_state(state, exc, clock()), state, exc, trace)
         verified = [

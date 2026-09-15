@@ -163,3 +163,11 @@ the outstanding Must-tier flows and reliability gates.
   coverage, also seen in holdout v3 and v5).
   Gates met on this set: forbidden claims and profile facts; end-to-end success (85%),
   calculation accuracy (95%), and chart validity (95%) are not met.
+- After holdout v6, two root fixes (not per-case patches): (A) counting rows or records needs no
+  requested-metric mapping (semantic-v13), removing the interpretation/grounding conflict the
+  counting rule introduced; (B) synthesis deterministically reports each statistical result's
+  headline estimates (group means, or a lone coefficient) the model omits, addressing partial
+  insight coverage seen across holdout v3, v5, and v6. No rule was added for the single row-listing
+  failure (seen once). These change model-facing behavior, so holdout v6 is development evidence
+  from now on and holdout v7 must produce the post-fix score. 368 tests passed (2 skipped),
+  branch-inclusive coverage 90.90%, Ruff, formatting, and mypy passed.

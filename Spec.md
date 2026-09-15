@@ -219,6 +219,8 @@ Every Verified Insight contains:
 
 If required evidence is missing or validation fails, the conclusion is an Unsupported Claim and must not be displayed as a Verified Insight. A malformed insight draft becomes an Unsupported Claim without discarding the other drafts of the same run.
 
+Besides the model's drafts, synthesis deterministically reports each statistical result's headline estimates — every group mean for a group comparison, or the single coefficient for a correlation or regression — that the model did not already assert. These extra Verified Insights use the same verification and deterministic rendering, so headline statistical values are covered regardless of model variance.
+
 Row-level values are described by their SQL `GROUP BY` keys (for example `year = 2024`); ungrouped results fall back to their text columns, and single-row results omit row positions. Claims about filtered query results name the SQL `WHERE`/`HAVING` conditions, which are also recorded as Evidence Trail filters, and statistics that relate two fields name both fields. When the model drafts no claim about a verified row listing, the verified result table itself is presented as the answer. Row listings may select `rowid + 1 AS row_number` to identify rows of the uploaded file.
 
 ### FR-11 — Charts and dashboard
@@ -752,6 +754,7 @@ Adds scope agreed after the Milestone 6 hardening work. No earlier decision is r
 - Profiling fix found while preparing holdout v5, before any live run: a column whose values are all ISO dates is a datetime field whatever its name or language, and ISO dates are no longer mistaken for phone numbers. Vietnamese date columns such as `Ngày` had been profiled as text and flagged as possible PII (FR-03 and Section 14.4).
 - After holdout v5 (29/36 first run): grading version 4 matches statistical group labels after decoding their JSON, so escaped non-ASCII labels match plain ones (32/36 re-graded; Section 17.3); and counting rows uses COUNT(*) with no identifier field in the plan, a failure class seen on two datasets (FR-06 and Section 25.1).
 - Data Overview explorer: user-chosen measure, aggregation, group, time period, filters, and a box plot, so the overview serves any dataset (Should tier; FR-11).
+- After holdout v6 (30/36): counting rows or records under any name is a row count that needs no requested-metric mapping (semantic-v13), resolving a conflict the counting rule introduced between interpretation and plan grounding (Section 25.4); and insight synthesis deterministically reports each statistical result's headline estimates — every group mean, or a lone coefficient — that the model leaves out, so correct analyses are not marked incomplete by model variance (FR-10).
 
 ## 25. Implementation Contracts
 
@@ -780,6 +783,7 @@ Questions fully covered by the Data Profile are answered without a tool (Section
 - Source fields must exist in the Data Profile after NFC normalization and case folding. A derived metric is never answered from the Data Profile.
 - Every direct or derived mapping must have all of its source fields in the `required_fields` of at least one plan step; otherwise the plan fails. A plan cannot be created while any mapping is unavailable.
 - An unavailable mapping pauses for clarification. A corrected request clears earlier mappings and is interpreted again. Accepting the unavailable metric ends the run with status `refused`, refusal code `unavailable_metric`, and a non-empty reason; the session is recorded as completed. Other execution errors are never relabeled as refusals; insufficient samples use their own typed refusal code (Section 15).
+- Counting rows or records is a row count, not a requested metric, so it produces no mapping and needs no source field. This keeps interpretation, planning, and grounding consistent: the plan counts with `COUNT(*)` and no identifier field, and grounding does not demand a field the count does not read.
 - These checks make the mapping inspectable and grounded in real fields; they do not prove that the language equivalence or the derivation is semantically correct, so the UI shows the mapping for user review.
 
 ### 25.3 Configuration
