@@ -445,6 +445,57 @@ def test_statistical_grading_binds_metric_and_assertion(metric: str, expected: A
     assert not grade_run(case, state).passed
 
 
+def test_statistical_group_labels_match_with_or_without_escaped_unicode() -> None:
+    # The statistics engine JSON-encodes group labels with ASCII escapes; cases spell them plainly.
+    escaped = f"group[str:{json.dumps('Có')}].mean"
+    readable = f"group[str:{json.dumps('Có', ensure_ascii=False)}].mean"
+    other = f"group[str:{json.dumps('Không', ensure_ascii=False)}].mean"
+    assert escaped != readable
+    case = load_case("tiny_sales_summary.json").model_copy(
+        update={
+            "required_calculations": (ExpectedCalculation(metric=readable, expected=4.5),),
+            "valid_chart_types": (),
+        }
+    )
+    state: AgentState = {
+        "status": "completed",
+        "statistical_results": [
+            {
+                "result_id": "stats-1",
+                "estimates": [{"metric": escaped, "value": 4.5}],
+                "statistic_name": "welch_t",
+                "statistic": 3.0,
+                "p_value": 0.01,
+                "adjusted_alpha": 0.05,
+                "statistically_significant": True,
+            }
+        ],
+        "tool_actions": [
+            {
+                "action_id": "stats-action",
+                "status": "succeeded",
+                "output_ref": "statistical-result:stats-1",
+            }
+        ],
+        "verified_insights": [
+            {
+                "claim": "group mean",
+                "assertion": {"operator": "reports", "left_metric": escaped},
+                "evidence": {
+                    "tool_action_ids": ["stats-action"],
+                    "values": [{"metric": escaped, "value": 4.5}],
+                },
+            }
+        ],
+    }
+
+    assert grade_run(case, state).passed
+    other_group = case.model_copy(
+        update={"required_calculations": (ExpectedCalculation(metric=other, expected=4.5),)}
+    )
+    assert not grade_run(other_group, state).passed
+
+
 @pytest.mark.parametrize(
     "fact_data",
     [

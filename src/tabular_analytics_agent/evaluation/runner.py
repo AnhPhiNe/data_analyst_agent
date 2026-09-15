@@ -7,7 +7,9 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import json
 import math
+import re
 import time
 import unicodedata
 from collections.abc import Callable, Mapping, Sequence
@@ -34,7 +36,9 @@ from tabular_analytics_agent.orchestration import AgentRunStatus, AgentState, Re
 
 _MAX_PLAN_APPROVALS = 3
 Scalar = str | int | float | bool | None
-_GRADING_VERSION = "3"
+_GRADING_VERSION = "4"
+# Statistical group labels are JSON-encoded ("group[str:<json>]"), with or without escapes.
+_GROUP_LABEL = re.compile(r'group\[(\w+):("(?:[^"\\]|\\.)*")\]')
 _MISSING = object()
 
 
@@ -688,10 +692,18 @@ def _scalar_equal(left: object, right: object) -> bool:
 
 
 def _text_equal(left: str, right: str) -> bool:
-    return (
-        unicodedata.normalize("NFC", left).casefold()
-        == unicodedata.normalize("NFC", right).casefold()
-    )
+    return _comparable_text(left) == _comparable_text(right)
+
+
+def _comparable_text(value: str) -> str:
+    def decode_label(match: re.Match[str]) -> str:
+        try:
+            label = json.loads(match.group(2))
+        except json.JSONDecodeError:
+            return match.group(0)
+        return f"group[{match.group(1)}:{json.dumps(label, ensure_ascii=False)}]"
+
+    return unicodedata.normalize("NFC", _GROUP_LABEL.sub(decode_label, value)).casefold()
 
 
 def _crashed_result(case: GoldenCase, run_index: int, error: Exception) -> CaseRunResult:
