@@ -156,9 +156,10 @@ agent operation, publishing charts, and deleting a session. Around it:
 ### Evaluation
 
 Golden cases pin a dataset hash, the question, and expected values computed independently. The
-runner uploads the dataset through the application, approves plans, and grades outcome,
-calculations, insight coverage, schema grounding, forbidden claims, profile facts, and charts
-(grading version 4). Provider errors are retried once and reported separately.
+runner uploads the dataset through the application, approves plans, and retries provider errors
+once, reporting them separately. `grading.py` grades outcome, calculations, insight coverage,
+schema grounding, forbidden claims, profile facts, and charts, and reports each Section 17.4 gate
+with its own numerator and denominator (grading version 5).
 
 ### Delivery
 

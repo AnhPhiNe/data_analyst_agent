@@ -109,6 +109,10 @@ at most 50 rows.
   missing.
 - Evaluation runs are paced for the free tier and use the author's API keys; results depend on the
   model version available on the run date.
+- The tool execution gate counts a planned run that ends in failure against the gate whichever step
+  failed, because runs do not record which repair budget ran out. Evidence completeness checks that
+  each Verified Insight names its Tool Actions; the published-insight contract already requires a
+  full Evidence Trail, so this gate mainly guards stored or hand-edited state.
 
 ## 10. What the hard holdout exposed
 

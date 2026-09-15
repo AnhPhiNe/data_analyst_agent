@@ -44,10 +44,11 @@ These items are in integration review until the verification record below is com
   are checked against the eligible fields and filter values are escaped SQL literals.
 - Check every Must-tier workflow in Streamlit: upload, profile, clarification, approval, result,
   chart, pin/unpin, open another session, reopen after restart, export, and confirmed deletion.
-- Live evaluation is done: 97 committed cases (10 development, 15 first holdout, 2 contaminated,
-  and 12 or 10 in each of holdout sets v3 to v8), each run 3 times with provider failures reported
+- Live evaluation is done: 109 committed cases (10 development, 15 first holdout, 2 contaminated,
+  and 12 or 10 in each of holdout sets v3 to v9), each run 3 times with provider failures reported
   separately. Holdout expectations were never changed after a run.
-- Section 17.4 quality gates were all met on the post-fix holdout v7 (36/36, every check 100%).
+- Section 17.4 quality gates were all met on the post-fix holdout v7 (36/36, every check 100%), and
+  still are when re-graded with grading version 5, which gives each gate its own denominator.
   Earlier holdout sets (v3–v6) are development evidence after the fixes derived from them; their
   denominators are recorded above.
 - Review semantic correctness and filter use in addition to deterministic number/evidence checks.
@@ -260,3 +261,27 @@ the outstanding Must-tier flows and reliability gates.
   (documented in `docs/limitations.md`). Every new test was run against the previous commit in a
   separate clone and failed there. 416 tests passed (2 skipped), branch-inclusive coverage 90.93%,
   Ruff, formatting, and strict mypy passed. No prompt template changed, so no live run was needed.
+- Phase 3 of the post-review plan (2026-09-15, consolidation): charts and insights share one
+  semantic-annotation fingerprint, and charts stored with the earlier case-sensitive order stay
+  current; SQL identifier quoting, the `dataset` table name, the possible-PII warning, and the
+  2–20 value grouping rule each have one definition; claims show every significant digit of a
+  float, matching the KPI; grading moved from `runner.py` into `grading.py`; and the existing CI
+  workflow installs with `constraints.txt` and builds both Docker targets (not yet run, because the
+  repository has no remote). Grading version 5 reports every Section 17.4 gate with its own
+  denominator. Offline re-grades of the stored runs changed no pass or fail relative to version 4:
+
+  | Gate (threshold) | v5 | v6 | v7 | v8 (hard) | v9 |
+  |---|---|---|---|---|---|
+  | Calculation accuracy (≥95%) | 63/63 | 53/66 | 69/69 | 25/33 | 35/39 |
+  | Schema grounding (100%) | 51/54 | 45/46 | 48/48 | 42/44 | 61/62 |
+  | Unsupported-claim rate (≤2%) | 0/67 | 0/59 | 0/77 | 0/36 | 0/53 |
+  | Tool execution success (≥95%) | 27/27 | 24/24 | 27/27 | 27/27 | 34/36 |
+  | Chart validity (≥95%) | 18/18 | 17/21 | 18/18 | 20/24 | 18/30 |
+  | Evidence completeness (100%) | 67/67 | 59/59 | 77/77 | 36/36 | 53/53 |
+  | Clarification recall (≥90%) | 3/3 | 3/3 | 3/3 | 6/9 | 0/3 |
+  | End-to-end success (≥85%) | 32/36 | 30/36 | 36/36 | 24/36 | 20/36 |
+
+  Only v7 meets every gate. Counting fields rather than runs shows that schema grounding missed on
+  v5, v6, v8, and v9 even where per-run checks looked close. No unnecessary clarification occurred.
+  The new tests failed against the previous commit in a separate clone (the fingerprint and gate
+  tests at import, because their interfaces are new).
