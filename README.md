@@ -67,10 +67,14 @@ in pandas and SciPy and committed before the first run. Every case runs 3 times 
 | v6 | 30/36 (83.3%) | library loans (Vietnamese), energy meters; exposed a regression, then fixed |
 | v7 | 36/36 (100%) | admissions (Vietnamese), farm harvest; clear questions, clean data |
 | v8 | 24/36 (66.7%) | hard set: inconsistent spellings, numbers stored as text, vague and multi-step questions |
+| v9 | 20/36 (55.6%) | hotel bookings (Vietnamese), SaaS subscriptions; measured three fixes made after v8 |
 
 v7 and v8 bracket the realistic range: reliable on clear questions over clean data, much weaker on
-inconsistent values and vague requests. The samples are small (36 runs per set), so treat each
-score as a range, not a precise rate. v8 was measured only; the agent was not tuned to it.
+inconsistent values and vague requests. v9 confirmed that inconsistent spellings are now handled
+and found new weak points: pooled multi-step answers, table-qualified field ids, and chart choice
+for one-row results (six v9 failures were chart-only, with correct numbers). The samples are small
+(36 runs per set), so treat each score as a range, not a precise rate. Details are in
+[docs/limitations.md](./docs/limitations.md).
 
 ## Quick start
 
@@ -189,3 +193,9 @@ Results are written to `.eval/<timestamp>/`. Never commit API keys, `.env`, or r
 - Result passing between plan steps for multi-step questions.
 - Per-organization privacy settings and authentication.
 - A React and FastAPI front end once the conditions in Spec Section 20 are met.
+- Screenshots, a demo video, and sales, manufacturing, and workforce case studies, which are not
+  part of this MVP release.
+
+## License
+
+MIT. See [LICENSE](./LICENSE).

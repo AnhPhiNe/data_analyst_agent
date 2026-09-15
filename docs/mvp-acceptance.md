@@ -60,8 +60,11 @@ These items are in integration review until the verification record below is com
   development machine. The clean-environment check of the documented setup is in the
   verification record.
 - Documented limitations (`docs/limitations.md`), the portfolio README, and the architecture and
-  agent workflow diagrams (`docs/architecture.md`) are written. Still open: screenshots, a demo
-  video, sample traces, and the sales, manufacturing, and workforce case studies.
+  agent workflow diagrams (`docs/architecture.md`) are written, and an MIT `LICENSE` file matches
+  the license declared in `pyproject.toml`. By the user's decision, screenshots, a demo video,
+  sample traces, and the sales, manufacturing, and workforce case studies are left out of the MVP
+  release; they are not among the Section 21 acceptance criteria and are listed in the README
+  roadmap.
 
 HTML report export, extra chart families, and quota-aware gateway work remain Should-tier.
 Additional providers, PDF, and notebook exports remain Could-tier. They do not take priority over
@@ -216,3 +219,19 @@ the outstanding Must-tier flows and reliability gates.
   were not changed. 370 tests passed (2 skipped), branch-inclusive coverage 90.95%, Ruff,
   formatting, and strict mypy passed. Holdout v8 is development evidence from now on; holdout v9
   measures the fixes.
+- Holdout v9 first run (2026-09-15, grading version 4, commit 7baa469, 30 requests per minute):
+  20/36 runs passed (55.6%); outcome 88.9%, calculations 87.9%, insight coverage 87.9%, schema
+  grounding 97.0%, chart 60.0%, forbidden claims 100%. Five rate-limit retries, no remaining
+  provider error. Effect of the fixes: (A) every run over inconsistent spellings computed the right
+  value (Đà Lạt revenue 3/3, Pro-plan MRR 3/3, and the non-Pro account count 3/3, one of which failed
+  schema grounding for approving an identifier field); (B) every dependent question was written with
+  a CTE or subquery, but the churn rate asked for "counted together" was reported per industry in
+  all 3 runs, and one pooled-average run failed because a table-qualified field id (`d.c5`) is not
+  rewritten to its field name; (C) was not exercised, because both ranking questions were answered
+  with `ORDER BY ... LIMIT 1`, a one-row result. Six failures are chart-only, with correct
+  calculations and insights: the two ranking cases list bar and table as valid charts, and the agent
+  drew a one-row KPI in 4 runs and an invalid KPI intent in 2. Excluding KPI for a one-row answer
+  was a case-design error; it is recorded here and not corrected, because holdout expectations are
+  never edited after a run. The remaining failures are the vague best-branch request (answered or
+  failed instead of clarified, 3/3, deliberately not addressed) and two chart intents that garbled
+  the Vietnamese column name `Kênh đặt`.

@@ -28,6 +28,7 @@ The same question can receive a different plan, SQL, chart type, or set of repor
 | v6 | 30/36 (83.3%) | failures included a regression later fixed |
 | v7 | 36/36 (100%) | clear questions and clean data, written to test the latest fixes |
 | v8 (hard) | 24/36 (66.7%) | messy values, vague and multi-step questions; see Section 10 |
+| v9 | 20/36 (55.6%) | measured the post-v8 fixes; 6 failures were chart-only; see Section 10 |
 
 The gap between v7 and v8 is the most useful reading of these numbers: the agent is reliable on
 clear questions over clean data and much weaker when values are inconsistent or the question is
@@ -160,3 +161,25 @@ Three general fixes followed, so holdout v8 is now development evidence:
 Vague ranking requests such as "best customer" were deliberately left unchanged, because a rule
 that asks for clarification on every superlative would also block clear questions such as "highest
 revenue region". Holdout v9 measures what the fixes changed.
+
+### What holdout v9 showed
+
+Holdout v9 passed 20 of 36 runs. Its calculation and insight coverage rates were both 87.9%, but
+the headline score is low because of failures the fixes did not target. It uses different
+datasets from v8, so the two scores are not directly comparable.
+
+- **Inconsistent spellings are now handled.** Every run that filtered on a field spelled with
+  different case or trailing spaces used `LOWER(TRIM(...))` and computed the right value.
+- **Dependent questions use one query, but "pooled" is still misread.** Every run wrote a CTE or
+  subquery. Asked for one churn rate across three industries "counted together", all runs still
+  reported a rate per industry.
+- **Table-qualified field ids fail.** Field ids such as `c5` are rewritten to real names only when
+  unqualified. One run wrote `d.c5` inside a CTE join, the query failed, and the repair budget ran
+  out.
+- **Charts remain the weakest step.** For one-row ranking answers, the agent drew a KPI where the
+  cases (written by the project author) allowed only bar or table charts, and twice produced an
+  invalid KPI intent. Two chart intents garbled the Vietnamese column name `Kênh đặt` instead of
+  using its id.
+- **Vague requests are still answered.** "Which branch is performing best?" was answered by
+  assuming revenue in two runs and failed in the third.
+- The long-result fix was not exercised: both ranking questions returned a single row.
