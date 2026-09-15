@@ -9,11 +9,12 @@ claim text.
 
 ## Status
 
-The MVP scope in [Spec.md](./Spec.md) is implemented: 11 of the 14 acceptance criteria in Spec
-Section 21 were already met, and packaging, setup documentation, and the limitations document are
-added in this release. Automated tests do not call a model. The Docker image has not been built on
-the development machine because Docker is not installed there; the check target that would verify
-it is included. Evidence for every claim is in
+The MVP scope in [Spec.md](./Spec.md) is implemented, and 12 of the 14 acceptance criteria in Spec
+Section 21 are met. Two remain open: criterion 11, because the 40-case release suite missed three of
+the eight quality gates (calculation accuracy 88.1%, tool execution 94.7%, chart validity 91.5%),
+and criterion 12, because Docker is not installed on the development machine, so the image has
+never been built; the check target that would verify it is included, and a clean virtual-environment
+check was run instead. Automated tests do not call a model. Evidence for every claim is in
 [docs/mvp-acceptance.md](./docs/mvp-acceptance.md), and known weaknesses are in
 [docs/limitations.md](./docs/limitations.md).
 
@@ -26,8 +27,7 @@ it is included. Evidence for every claim is in
 - **Data Overview.** Right after upload, deterministic charts describe the data, including a
   correlation heatmap. An explorer lets you chart any measure by group, time period, and filters.
   No model is called.
-- **Goal suggestions.** Up to five questions are proposed from the profile (three or more for most
-  datasets).
+- **Goal suggestions.** Three to five questions are proposed from the profile.
 - **Clarification.** When a requested metric does not exist, or a field meaning changes the
   answer, the agent asks instead of guessing.
 - **Inspectable plans.** Each question becomes a plan of typed steps. Steps flagged for review
@@ -36,7 +36,9 @@ it is included. Evidence for every claim is in
   operations in NumPy and SciPy with assumption checks and multiple-testing correction.
 - **Verified Insights.** Every conclusion links to its evidence: the exact query or test, source
   fields, filters, and values. Claims that fail a gate are shown as unsupported.
-- **Dashboard and export.** Validated Plotly charts can be pinned. Results export to CSV and JSON.
+- **Dashboard and export.** Validated Plotly charts can be pinned, and a candidate can be shown as
+  another chart type over the same verified result without another model call. Results export to CSV
+  and JSON.
 - **Durable sessions.** Checkpointed with LangGraph and SQLite; sessions survive restarts and can be
   deleted.
 
@@ -69,13 +71,19 @@ in pandas and SciPy and committed before the first run. Every case runs 3 times 
 | v7 | 36/36 (100%) | admissions (Vietnamese), farm harvest; clear questions, clean data |
 | v8 | 24/36 (66.7%) | hard set: inconsistent spellings, numbers stored as text, vague and multi-step questions |
 | v9 | 20/36 (55.6%) | hotel bookings (Vietnamese), SaaS subscriptions; measured three fixes made after v8 |
+| Release | 103/118 (87.3%) | 40 cases on nine unseen datasets, questions written outside the repository, measured once |
 
 v7 and v8 bracket the realistic range: reliable on clear questions over clean data, much weaker on
 inconsistent values and vague requests. v9 confirmed that inconsistent spellings are now handled
 and found new weak points: pooled multi-step answers, table-qualified field ids (since fixed), and chart choice
 for one-row results (six v9 failures were chart-only, with correct numbers). The samples are small
-(36 runs per set), so treat each score as a range, not a precise rate. Details are in
-[docs/limitations.md](./docs/limitations.md).
+(36 runs per set), so treat each score as a range, not a precise rate.
+
+The release suite is the headline measurement: 103 of 118 graded runs passed (95% interval about
+80–92%), with 2 provider errors reported separately. Five gates were met; calculation accuracy,
+tool execution success, and chart validity were not. Its expectations were never edited, and a
+strict re-check of output names reads calculation accuracy as 85.8% rather than 88.1%. Every run was
+also read by hand. Details are in [docs/limitations.md](./docs/limitations.md).
 
 ## Quick start
 

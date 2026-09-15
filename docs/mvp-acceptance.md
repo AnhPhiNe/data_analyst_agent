@@ -1,6 +1,6 @@
 # MVP acceptance checklist
 
-This checklist tracks acceptance against Spec v1.5. Implementation, deterministic tests, and live
+This checklist tracks acceptance against Spec v1.6. Implementation, deterministic tests, and live
 acceptance are separate claims. A passing unit suite is not a passing live-agent evaluation.
 
 ## Current implementation batch
@@ -43,7 +43,11 @@ These items are in integration review until the verification record below is com
   and a date range for any dataset, with a box plot for a numeric measure by group; field names
   are checked against the eligible fields and filter values are escaped SQL literals.
 - Check every Must-tier workflow in Streamlit: upload, profile, clarification, approval, result,
-  chart, pin/unpin, open another session, reopen after restart, export, and confirmed deletion.
+  chart, pin/unpin, change a candidate's chart type, open another session, reopen after restart,
+  export, and confirmed deletion.
+- A Candidate Artifact can be shown as another supported chart type over the same verified result
+  (Spec Section 21, criterion 8), re-rendered from the checkpoint history with no model call; an
+  invalid choice, such as a KPI for a multi-row result, is refused with the validation reason.
 - Live evaluation is done: 109 committed cases (10 development, 15 first holdout, 2 contaminated,
   and 12 or 10 in each of holdout sets v3 to v9), each run 3 times with provider failures reported
   separately. Holdout expectations were never changed after a run. The 40-case release suite
@@ -376,3 +380,21 @@ the outstanding Must-tier flows and reliability gates.
   commit in a separate clone. 447 tests passed (2 skipped), branch-inclusive coverage 91.14%,
   Ruff, formatting, and strict mypy passed. The final holdout measures the prompt change together
   with the final fix round.
+- Fixes from the full project review (2026-09-16), with no prompt template or grading rule changed:
+  Streamlit explains a rejected upload, a failed profiling, pin, publication, or run instead of
+  surfacing a traceback (reproduced first with an AppTest probe); a candidate chart can be shown as
+  another supported type over the same verified result, re-rendered from checkpoint history without
+  a model call, which completes criterion 8; a CSV whose content begins like a known binary format
+  is refused by name; a statistical parameter error is repaired by the model while unsupported data
+  still stops the run; evaluation token totals keep a retried provider error's tokens; the
+  Kruskal–Wallis statistic has a claim label, guarded by a test that every statistic the engine
+  reports has one; the explorer states when no rows match; viewing a stored result no longer
+  rewrites the session file; and dead code, duplicated identifier parsing, the `row_number`
+  convention, and repeated literal thresholds were removed or given one definition. The grader was
+  deliberately left unchanged: a strict re-check of the stored release runs (the matched column must
+  carry the expected name or an alias, or be the result's only measured column) found 151 of 176
+  expected values instead of 155, so calculation accuracy reads 85.8% instead of 88.1%, with 2 of
+  118 runs of one case affected; this and the ungraded allowed-filter and supported-conclusion
+  fields are documented in `docs/limitations.md` Section 9 and Spec Section 17.2. The nine new or
+  changed tests failed against the previous commit in a separate clone. 454 tests passed
+  (2 skipped), branch-inclusive coverage 91.18%, Ruff, formatting, and strict mypy passed.

@@ -67,6 +67,8 @@ result values of at most 50 rows.
   Insight.
 - An identifier-like warning requires at least 20 non-missing rows, so an id column in a smaller
   table is treated as an ordinary field.
+- Values are checked for email and phone shapes in the first 50 non-missing rows of a column, so
+  personal data that appears only in later rows of an otherwise ordinary column is not detected.
 
 ## 5. Data preparation is limited
 
@@ -88,7 +90,9 @@ result values of at most 50 rows.
 
 - Queries return at most 10,000 rows; statistical tests use a deterministic reservoir sample of at
   most that many rows. Limits are configurable (Spec Section 25.3).
-- A question uses about 4 to 5 model calls. The free tier allows 15 requests per minute per API key;
+- A question uses 3 to 5 model calls; the release suite averaged 3.5 per run. Failed Tool Actions
+  count toward the Tool Action budget, so a long plan whose steps need repairs can exhaust it.
+- The free tier allows 15 requests per minute per API key;
   several keys rotate, but keys created in the same Google project may share one quota. Using
   several keys must comply with the provider's terms.
 
@@ -113,6 +117,8 @@ result values of at most 50 rows.
 - Session files, checkpoints, and artifacts are stored unencrypted on local disk.
 - Deleting a session removes its files and artifact records in sequence, not in one transaction,
   and is not a forensic secure erase.
+- A file that is inspected but never ingested leaves a session folder on disk that the application
+  does not list and cannot delete; remove it from the data directory by hand.
 
 ## 9. Evaluation caveats
 
@@ -127,6 +133,18 @@ result values of at most 50 rows.
   failed, because runs do not record which repair budget ran out. Evidence completeness checks that
   each Verified Insight names its Tool Actions; the published-insight contract already requires a
   full Evidence Trail, so this gate mainly guards stored or hand-edited state.
+- Grading is lenient about output names. A grouped or single-row expected value is matched by its
+  group and value, so a different column holding the same value also counts. Re-checking the stored
+  release runs with a strict name check found 151 of 176 expected values instead of 155, so
+  calculation accuracy reads 85.8% instead of 88.1%; 2 of 118 runs, both of the powder-coating
+  defect-rate case, matched only through a differently named column. The official grades stand as
+  measured.
+- A case's allowed filters and supported conclusions are recorded but never graded, so a correct
+  number reached with the wrong filter, or a conclusion outside the case's list, is not caught
+  automatically. Filters and claim wording are reviewed by hand instead.
+- Insight coverage is now partly guaranteed by the agent itself: after the final fix round, a small
+  grouped or single-row result reports its remaining values deterministically, so that gate measures
+  the model's own coverage less than it did before.
 
 ## 10. What the hard holdout exposed
 
@@ -324,3 +342,24 @@ agent to the release suite:
   `SELECT DISTINCT *`;
 - an abbreviated measure name, such as `tb` for average, can be treated as unavailable;
 - a requested test can be answered with averages instead.
+
+### Fixes from the full project review
+
+A review of every module, the grader, the tests, the documentation, and the packaging followed the
+release run. No prompt template or grading rule changed in this round:
+
+- Streamlit explains a rejected upload, a failed profiling, pin, publication, or run instead of
+  showing a traceback. A reproduction test covers the rejected upload.
+- A candidate chart can be shown as another supported chart type over the same verified result,
+  re-rendered from the checkpoint history without a model call. This completes the "create, refine,
+  and pin" acceptance criterion.
+- A CSV whose content begins like a known binary format, such as an XLSX renamed to `.csv`, is
+  refused by name.
+- A statistical parameter error, such as a group order the data does not contain, is now repaired by
+  the model; data that cannot support the analysis still stops the run.
+- Evaluation token totals include a retried provider error's tokens, and the Kruskal–Wallis
+  statistic has a claim label, with a test that every statistic the engine reports has one.
+- The explorer states when no rows match instead of showing zero, and viewing a stored result no
+  longer rewrites the session file or reorders the session list.
+- Dead code (the stale-insight model, an unused SQL helper) was removed, and identifier parsing, the
+  `row_number` convention, and repeated literal thresholds now have one definition each.

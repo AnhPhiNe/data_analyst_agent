@@ -68,7 +68,9 @@ contracts directly.
 `TabularDataCore` is the single interface for inspecting, ingesting, profiling, and querying one
 session's dataset.
 
-- Uploads are checked for size, extension, encoding, header validity, and XLSX zip-bomb limits.
+- Uploads are checked for size, extension, encoding, header validity, and XLSX zip-bomb limits. A
+  CSV has no file signature, so its content must decode as text without NUL bytes and must not begin
+  like a known binary format.
   Source copies are read-only and hash-bound; every read verifies the Working Dataset identity.
 - Profiling infers field kinds, missing values, duplicates, outliers, identifier-like fields, and
   possible PII. A column whose values are all ISO dates is a datetime field in any language.
@@ -100,13 +102,16 @@ Tool Action succeeded and passed its own gates, the output reference identifies 
 dataset and Working Dataset version match, the fields exist, and the asserted metrics exist in the
 evidence and satisfy the operator. Claim text is rendered from the evidence, so the model cannot add
 numbers, direction, significance, or causal language. Failed drafts become Unsupported Claims.
-Changing confirmed annotations or the dataset version marks earlier insights stale.
+Export and the dashboard refuse evidence from an earlier Working Dataset version or annotation set,
+so a result is never silently reused after either changes.
 
 ### Visualization
 
 The renderer validates a Chart Intent against a verified query result (field existence and types,
 encoding shape, result completeness, readability limits) and emits Plotly JSON. It never runs SQL
-or aggregates values. `ArtifactStore` keeps Candidate and Pinned Artifacts in SQLite with immutable,
+or aggregates values. `retarget_chart_intent` re-encodes an intent for another supported chart type
+over the same result, so a candidate can be shown as a table, bar, line, KPI, histogram, or scatter
+without a model call. `ArtifactStore` keeps Candidate and Pinned Artifacts in SQLite with immutable,
 versioned render specifications, grounded to the current session dataset and annotations.
 
 ### Model gateway
@@ -134,9 +139,13 @@ routes; supporting modules keep each concern small:
   uses one result to choose rows for another is written as one query with a CTE or subquery.
 - `field_ids.py` resolves exact names and ids; `run_state.py` owns failure, refusal, repair, trace,
   and budget state transitions.
+- `AgentOrchestrator.query_evidence` finds a verified query result and its Tool Action in any
+  checkpoint of the session, so a chart from an earlier request can be re-rendered.
 
-Synthesis publishes the model's drafts and then deterministically reports each statistical result's
-headline estimates that the model left out: every group mean, or the single coefficient. Repairs are
+Synthesis publishes the model's drafts and then deterministically reports evidence the model left
+out: each statistical result's headline estimates (every group mean, or the single coefficient), and
+the remaining values of a complete grouped or single-row query result of at most 20 values that the
+model answered from in part. Repairs are
 bounded: a plan with unknown fields is replanned, a SQL step without fields whose query is not a
 whole-dataset `COUNT(*)` is replanned with the fields the query reads, a failed or empty filtered query is retried with
 the exact error, and insight drafts that name unknown metrics are regenerated once.
@@ -159,7 +168,8 @@ Golden cases pin a dataset hash, the question, and expected values computed inde
 runner uploads the dataset through the application, approves plans, and retries provider errors
 once, reporting them separately. `grading.py` grades outcome, calculations, insight coverage,
 schema grounding, forbidden claims, profile facts, and charts, and reports each Section 17.4 gate
-with its own numerator and denominator (grading version 5).
+with its own numerator and denominator (grading version 6). A case's allowed filters and supported
+conclusions are recorded for manual review rather than graded.
 
 ### Delivery
 
