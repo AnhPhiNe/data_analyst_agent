@@ -285,3 +285,14 @@ the outstanding Must-tier flows and reliability gates.
   v5, v6, v8, and v9 even where per-run checks looked close. No unnecessary clarification occurred.
   The new tests failed against the previous commit in a separate clone (the fingerprint and gate
   tests at import, because their interfaces are new).
+- Final fix round before the release suite (2026-09-15), limited to failure classes seen on two
+  datasets: invalid chart proposals (v6 library, v8 retail, v9 hotel and SaaS) now fall back to the
+  verified result table, and ranking requests that name no measure (v8 best customer, v9 best
+  branch) ask which field defines the ranking (semantic-v14). The four v9 one-row KPI renders were
+  a case-design error and were not treated as agent failures. Live checks used development
+  fixtures only: the ranking rule clarified 4/4 unnamed-measure runs and answered 4/4
+  named-measure controls, and one run of the ten development cases passed 9/10 with no
+  unnecessary clarification; the failure aliased the grouping column `Tháng` as `thong`, a class
+  seen before on this case and not changed. The new tests failed against the previous commit in a
+  separate clone. 420 tests passed (2 skipped), branch-inclusive coverage 91.04%, Ruff,
+  formatting, and strict mypy passed. The code is frozen for the release suite from this commit.

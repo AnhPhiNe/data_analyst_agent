@@ -84,7 +84,9 @@ at most 50 rows.
 ## 7. Charts and the Data Overview
 
 - The agent proposes KPI, table, histogram, bar, line, or scatter charts, and the chosen type can
-  vary. Answers backed only by a statistical test have no chart.
+  vary. Answers backed only by a statistical test have no chart. When a proposed chart fails
+  validation, the verified result is shown as a table instead, with the reason recorded in the
+  chart's constraints; a result too large for a table (over 500 rows) gets no chart.
 - A KPI shows every significant digit of the stored value. Whole numbers above 2^53 (about 9
   quadrillion) cannot be drawn exactly, so they get no KPI chart. DuckDB `DECIMAL` results are
   converted to floating point, so a value with more than about 15 significant digits loses
@@ -191,3 +193,16 @@ datasets from v8, so the two scores are not directly comparable.
 - **Vague requests are still answered.** "Which branch is performing best?" was answered by
   assuming revenue in two runs and failed in the third.
 - The long-result fix was not exercised: both ranking questions returned a single row.
+
+### Changes made before the release suite
+
+- An invalid chart proposal now falls back to the verified result table.
+- A ranking request that names no measure, such as "which region is best", asks which field defines
+  the ranking when two or more numeric fields could. Checked only on development fixtures: 4 of 4
+  such runs asked and 4 of 4 controls that named the measure were answered. An English request
+  was clarified as an unavailable "performance" metric rather than by listing the candidate fields,
+  so the question it asks is less helpful than the Vietnamese one. The release suite measures this
+  on unseen data.
+- Still observed: a model can alias a grouping column despite the guidance, for example
+  `"Tháng" AS thong`. The values stay correct, but the claim then shows `thong = 1` instead of the
+  column name, and grading cannot match the group.
