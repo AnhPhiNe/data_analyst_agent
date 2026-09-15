@@ -1,0 +1,23 @@
+{
+  "case_id": "holdout-v6-library-late-return-count-v1",
+  "dataset_path": "tests/fixtures/eval_holdout_v6/thu_vien.csv",
+  "dataset_sha256": "fa2b91dc3a30f8c8307828ac32a8a790c1090579b8fa92a8b00df9da97643845",
+  "user_request": "Có bao nhiêu phiếu mượn bị trả trễ?",
+  "goal_family": "summary",
+  "required_calculations": [
+    {
+      "metric": "late_count",
+      "expected": 83
+    }
+  ],
+  "allowed_fields": [
+    "Trả trễ"
+  ],
+  "supported_conclusions": [
+    "Có 83 phiếu mượn bị trả trễ."
+  ],
+  "valid_chart_types": [
+    "kpi",
+    "table"
+  ]
+}

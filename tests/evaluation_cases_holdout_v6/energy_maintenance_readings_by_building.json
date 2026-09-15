@@ -1,0 +1,56 @@
+{
+  "case_id": "holdout-v6-energy-maintenance-readings-by-building-v1",
+  "dataset_path": "tests/fixtures/eval_holdout_v6/energy_meters.csv",
+  "dataset_sha256": "c5b55467576cfff9a8ddc9f5ce6ba9b2ddca1dafb57a52e8c34455a69bf40cb0",
+  "user_request": "How many readings were taken while the meter was under maintenance, for each building?",
+  "goal_family": "comparison",
+  "required_calculations": [
+    {
+      "metric": "reading_count",
+      "group": {
+        "field": "building",
+        "value": "Lab"
+      },
+      "expected": 10,
+      "absolute_tolerance": 0.0
+    },
+    {
+      "metric": "reading_count",
+      "group": {
+        "field": "building",
+        "value": "Office A"
+      },
+      "expected": 8,
+      "absolute_tolerance": 0.0
+    },
+    {
+      "metric": "reading_count",
+      "group": {
+        "field": "building",
+        "value": "Office B"
+      },
+      "expected": 9,
+      "absolute_tolerance": 0.0
+    },
+    {
+      "metric": "reading_count",
+      "group": {
+        "field": "building",
+        "value": "Warehouse"
+      },
+      "expected": 6,
+      "absolute_tolerance": 0.0
+    }
+  ],
+  "allowed_fields": [
+    "building",
+    "meter_status"
+  ],
+  "supported_conclusions": [
+    "Lab has the most maintenance readings."
+  ],
+  "valid_chart_types": [
+    "bar",
+    "table"
+  ]
+}

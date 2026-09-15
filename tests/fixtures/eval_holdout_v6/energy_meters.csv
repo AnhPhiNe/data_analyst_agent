@@ -1,0 +1,362 @@
+reading_id,reading_date,building,meter_status,outdoor_temp_c,occupancy,kwh,anomaly_flag
+R7000,2026-01-01,Lab,active,23.1,237,881.14,False
+R7001,2026-01-01,Lab,active,19.2,169,845.29,False
+R7002,2026-01-02,Lab,active,5.3,240,707.12,False
+R7003,2026-01-03,Office A,active,27.3,88,708.54,False
+R7004,2026-01-03,Lab,active,20.0,112,711.19,False
+R7005,2026-01-04,Lab,active,18.6,197,896.93,False
+R7006,2026-01-04,Office A,active,23.6,24,613.63,False
+R7007,2026-01-05,Lab,active,12.1,4,722.21,False
+R7008,2026-01-08,Warehouse,maintenance,23.0,212,513.23,False
+R7009,2026-01-09,Lab,active,16.7,200,720.83,False
+R7010,2026-01-10,Warehouse,active,15.8,218,440.73,False
+R7011,2026-01-10,Lab,active,35.3,26,955.98,False
+R7012,2026-01-10,Lab,active,21.3,36,798.39,False
+R7013,2026-01-11,Lab,active,31.0,140,932.57,False
+R7014,2026-01-14,Office B,active,22.4,60,653.17,False
+R7015,2026-01-14,Office B,active,20.6,249,597.77,False
+R7016,2026-01-14,Office A,active,15.4,115,561.7,False
+R7017,2026-01-18,Lab,active,11.1,246,693.65,False
+R7018,2026-01-18,Warehouse,active,21.6,203,489.85,False
+R7019,2026-01-19,Office A,active,14.4,42,602.76,False
+R7020,2026-01-21,Office B,active,34.2,239,726.28,False
+R7021,2026-01-23,Office A,active,17.0,75,582.68,False
+R7022,2026-01-23,Office A,active,34.3,154,752.04,False
+R7023,2026-01-25,Lab,active,27.1,115,837.38,False
+R7024,2026-01-25,Lab,maintenance,27.1,53,855.28,True
+R7025,2026-01-26,Warehouse,active,31.4,242,509.43,False
+R7026,2026-01-29,Office B,active,17.8,152,543.31,False
+R7027,2026-01-30,Office A,active,28.7,118,707.13,False
+R7028,2026-01-31,Lab,maintenance,10.7,203,698.4,False
+R7029,2026-02-01,Lab,active,27.5,61,862.99,True
+R7030,2026-02-05,Office B,active,11.6,230,510.79,False
+R7031,2026-02-06,Office B,active,18.0,33,546.8,False
+R7032,2026-02-07,Office B,active,34.1,41,781.89,False
+R7033,2026-02-12,Office A,active,13.0,150,528.19,False
+R7034,2026-02-13,Lab,active,17.9,138,857.4,False
+R7035,2026-02-14,Office A,maintenance,29.6,182,687.07,False
+R7036,2026-02-14,Lab,active,14.7,74,714.92,False
+R7037,2026-02-16,Lab,active,23.3,247,785.83,True
+R7038,2026-02-19,Lab,maintenance,30.8,5,873.2,False
+R7039,2026-02-20,Office A,active,20.3,187,650.3,False
+R7040,2026-02-21,Lab,active,7.9,82,738.94,True
+R7041,2026-02-23,Lab,active,33.6,232,920.7,False
+R7042,2026-02-23,Warehouse,active,14.7,186,401.79,False
+R7043,2026-02-23,Warehouse,active,25.4,196,437.04,True
+R7044,2026-02-24,Warehouse,active,30.7,232,532.59,False
+R7045,2026-02-25,Warehouse,active,24.8,29,446.82,False
+R7046,2026-02-25,Lab,active,8.4,56,742.01,False
+R7047,2026-02-27,Office A,active,29.3,29,716.98,False
+R7048,2026-02-27,Office A,active,19.3,157,604.78,False
+R7049,2026-02-28,Lab,active,23.2,136,780.19,False
+R7050,2026-03-02,Office A,active,23.6,122,701.2,False
+R7051,2026-03-04,Office B,active,36.1,46,738.06,False
+R7052,2026-03-05,Warehouse,active,11.4,121,311.94,False
+R7053,2026-03-06,Lab,active,19.8,17,779.15,False
+R7054,2026-03-06,Warehouse,active,23.5,91,418.7,False
+R7055,2026-03-07,Office A,active,29.4,137,638.78,False
+R7056,2026-03-07,Warehouse,active,22.7,48,467.09,False
+R7057,2026-03-08,Office A,active,28.1,153,675.55,False
+R7058,2026-03-09,Warehouse,active,10.9,9,367.5,True
+R7059,2026-03-09,Office A,active,9.0,59,512.44,False
+R7060,2026-03-11,Lab,active,24.7,181,937.42,False
+R7061,2026-03-11,Office B,active,24.2,5,657.7,False
+R7062,2026-03-12,Warehouse,active,27.3,143,605.83,True
+R7063,2026-03-12,Lab,active,20.6,194,778.08,False
+R7064,2026-03-13,Office A,active,25.1,146,626.13,False
+R7065,2026-03-13,Warehouse,active,18.9,160,474.48,False
+R7066,2026-03-13,Office A,active,27.5,149,629.18,False
+R7067,2026-03-14,Office B,active,17.3,38,555.89,False
+R7068,2026-03-14,Lab,active,26.7,127,825.98,True
+R7069,2026-03-14,Office B,maintenance,23.8,194,586.33,True
+R7070,2026-03-15,Lab,active,26.5,160,861.57,False
+R7071,2026-03-16,Office B,active,17.4,149,535.26,False
+R7072,2026-03-16,Warehouse,active,15.5,114,353.92,True
+R7073,2026-03-17,Office B,active,13.0,197,492.98,False
+R7074,2026-03-17,Warehouse,active,23.9,191,523.84,False
+R7075,2026-03-18,Office B,active,14.2,108,527.07,False
+R7076,2026-03-19,Lab,active,24.7,186,870.48,True
+R7077,2026-03-23,Office A,active,9.7,79,464.74,False
+R7078,2026-03-23,Lab,active,27.3,2,901.4,True
+R7079,2026-03-23,Warehouse,active,23.5,58,428.83,True
+R7080,2026-03-23,Lab,active,9.1,229,663.55,False
+R7081,2026-03-23,Office A,active,25.6,28,677.27,False
+R7082,2026-03-24,Office B,maintenance,13.7,57,523.1,False
+R7083,2026-03-25,Lab,active,25.9,34,783.19,False
+R7084,2026-03-25,Office B,active,13.6,0,542.03,False
+R7085,2026-03-26,Lab,active,25.0,143,875.55,False
+R7086,2026-03-27,Office A,active,22.1,78,583.8,False
+R7087,2026-03-27,Office B,maintenance,29.8,235,625.83,False
+R7088,2026-03-29,Lab,active,15.5,221,789.64,True
+R7089,2026-03-29,Office B,active,21.4,3,640.45,False
+R7090,2026-03-30,Office B,active,21.9,2,605.64,False
+R7091,2026-04-01,Office B,active,21.9,48,537.2,False
+R7092,2026-04-02,Warehouse,active,29.2,179,458.82,True
+R7093,2026-04-05,Office B,active,25.0,83,590.89,False
+R7094,2026-04-05,Warehouse,active,21.4,11,449.63,False
+R7095,2026-04-06,Office A,active,30.0,161,735.43,False
+R7096,2026-04-06,Office B,maintenance,25.2,201,662.32,False
+R7097,2026-04-07,Lab,active,23.0,74,818.63,False
+R7098,2026-04-07,Office B,active,11.3,247,521.01,False
+R7099,2026-04-08,Office B,active,29.5,150,616.22,True
+R7100,2026-04-08,Lab,active,29.2,49,829.48,True
+R7101,2026-04-10,Lab,active,13.9,175,785.94,False
+R7102,2026-04-12,Office A,active,31.0,99,700.96,False
+R7103,2026-04-12,Office A,active,10.9,249,593.12,False
+R7104,2026-04-12,Lab,active,17.8,128,856.1,False
+R7105,2026-04-13,Office B,active,22.0,231,565.82,False
+R7106,2026-04-13,Office B,maintenance,19.7,15,610.61,False
+R7107,2026-04-13,Office B,active,23.6,119,637.03,False
+R7108,2026-04-14,Office A,active,27.8,40,603.41,False
+R7109,2026-04-15,Lab,active,10.5,37,671.45,False
+R7110,2026-04-15,Lab,active,28.2,213,935.0,False
+R7111,2026-04-15,Office A,maintenance,16.3,244,601.87,False
+R7112,2026-04-16,Office A,active,37.8,29,830.72,False
+R7113,2026-04-16,Warehouse,active,21.6,100,431.8,False
+R7114,2026-04-18,Lab,active,23.0,80,797.86,True
+R7115,2026-04-18,Warehouse,active,21.5,212,375.15,False
+R7116,2026-04-18,Warehouse,active,7.5,207,298.98,False
+R7117,2026-04-21,Office A,maintenance,27.4,182,639.07,False
+R7118,2026-04-21,Warehouse,active,21.3,19,504.09,False
+R7119,2026-04-21,Warehouse,active,13.3,150,372.95,False
+R7120,2026-04-24,Lab,active,19.7,28,804.78,True
+R7121,2026-04-25,Office A,active,19.8,26,659.72,False
+R7122,2026-04-28,Office A,active,30.4,3,644.82,False
+R7123,2026-04-29,Office B,active,28.2,45,641.44,True
+R7124,2026-04-29,Office A,active,32.6,106,744.24,False
+R7125,2026-05-01,Warehouse,active,40.8,50,622.44,True
+R7126,2026-05-01,Lab,active,14.9,106,788.06,True
+R7127,2026-05-03,Office B,active,36.3,233,637.32,False
+R7128,2026-05-07,Office B,active,21.2,64,618.52,False
+R7129,2026-05-07,Lab,active,31.7,79,898.31,False
+R7130,2026-05-08,Office B,active,18.8,225,634.48,True
+R7131,2026-05-08,Office B,active,19.8,112,565.62,False
+R7132,2026-05-08,Office B,active,19.2,49,542.68,False
+R7133,2026-05-09,Office A,active,33.4,112,737.99,False
+R7134,2026-05-09,Office A,active,23.4,32,646.03,False
+R7135,2026-05-11,Office B,active,14.3,232,456.21,True
+R7136,2026-05-12,Warehouse,active,17.6,39,383.58,False
+R7137,2026-05-13,Lab,active,5.5,168,631.98,False
+R7138,2026-05-14,Office A,active,26.8,95,656.38,False
+R7139,2026-05-15,Warehouse,active,39.8,142,616.88,False
+R7140,2026-05-15,Warehouse,active,20.5,112,421.63,False
+R7141,2026-05-18,Office B,active,17.6,101,573.99,False
+R7142,2026-05-18,Office B,active,29.3,185,635.63,False
+R7143,2026-05-19,Warehouse,active,25.6,205,609.78,True
+R7144,2026-05-20,Office A,active,23.8,208,586.54,False
+R7145,2026-05-20,Lab,active,22.1,34,787.3,False
+R7146,2026-05-21,Office B,active,20.2,231,628.33,False
+R7147,2026-05-22,Warehouse,active,28.7,199,516.96,False
+R7148,2026-05-24,Warehouse,maintenance,28.3,27,511.57,False
+R7149,2026-05-25,Office B,active,30.2,176,670.73,False
+R7150,2026-05-25,Lab,active,12.9,110,751.14,False
+R7151,2026-05-28,Warehouse,active,13.7,145,368.52,False
+R7152,2026-05-29,Warehouse,active,16.8,248,387.28,False
+R7153,2026-05-31,Warehouse,active,21.9,170,352.55,False
+R7154,2026-05-31,Warehouse,active,25.1,35,455.9,False
+R7155,2026-06-01,Lab,active,21.9,57,814.68,False
+R7156,2026-06-01,Office B,active,23.3,28,599.98,False
+R7157,2026-06-03,Office A,active,18.3,92,615.09,False
+R7158,2026-06-04,Lab,active,15.7,74,783.62,False
+R7159,2026-06-04,Lab,active,23.7,58,797.12,False
+R7160,2026-06-06,Office B,active,34.1,185,787.96,False
+R7161,2026-06-06,Office B,active,17.8,179,472.22,True
+R7162,2026-06-06,Warehouse,active,24.5,29,471.48,False
+R7163,2026-06-06,Office B,active,35.6,39,689.07,False
+R7164,2026-06-07,Lab,active,26.2,144,840.29,True
+R7165,2026-06-07,Office B,active,23.2,115,589.84,False
+R7166,2026-06-08,Office B,active,17.3,138,516.0,False
+R7167,2026-06-09,Office A,active,35.2,84,753.82,False
+R7168,2026-06-09,Office B,active,28.0,151,649.71,False
+R7169,2026-06-10,Office B,active,22.2,161,621.85,False
+R7170,2026-06-11,Lab,active,21.7,178,731.38,False
+R7171,2026-06-12,Lab,maintenance,20.5,196,766.85,False
+R7172,2026-06-13,Lab,active,27.9,167,844.81,False
+R7173,2026-06-13,Office A,active,32.4,153,747.11,False
+R7174,2026-06-13,Office B,maintenance,19.7,112,584.87,False
+R7175,2026-06-14,Office B,active,21.7,177,550.41,False
+R7176,2026-06-14,Office A,active,18.0,19,586.57,False
+R7177,2026-06-14,Office B,active,31.4,199,688.51,False
+R7178,2026-06-15,Lab,active,33.9,22,889.97,False
+R7179,2026-06-15,Warehouse,active,24.4,232,483.4,False
+R7180,2026-06-15,Office A,active,34.1,183,661.8,False
+R7181,2026-06-16,Office A,maintenance,26.3,134,681.47,False
+R7182,2026-06-18,Office B,active,22.9,156,583.35,False
+R7183,2026-06-18,Lab,maintenance,12.7,11,729.2,False
+R7184,2026-06-20,Warehouse,active,30.5,233,509.81,False
+R7185,2026-06-23,Warehouse,maintenance,16.0,33,404.69,True
+R7186,2026-06-24,Lab,active,20.5,19,792.66,False
+R7187,2026-06-25,Office A,maintenance,15.1,249,563.66,False
+R7188,2026-06-29,Office A,active,33.1,153,712.92,False
+R7189,2026-06-29,Warehouse,active,18.8,74,441.31,False
+R7190,2026-06-29,Office A,active,20.8,62,555.41,False
+R7191,2026-07-02,Office A,active,34.3,50,755.01,False
+R7192,2026-07-03,Office A,active,24.6,247,668.8,False
+R7193,2026-07-04,Warehouse,active,19.8,126,475.45,False
+R7194,2026-07-05,Office B,active,18.7,101,501.13,False
+R7195,2026-07-06,Office A,active,16.0,151,557.25,False
+R7196,2026-07-07,Lab,active,18.0,88,795.1,False
+R7197,2026-07-08,Warehouse,active,10.0,45,361.99,False
+R7198,2026-07-08,Office B,active,36.6,50,705.54,False
+R7199,2026-07-08,Office A,active,16.9,153,581.48,False
+R7200,2026-07-08,Office A,active,21.0,219,567.74,False
+R7201,2026-07-09,Warehouse,active,27.8,48,453.61,False
+R7202,2026-07-09,Lab,active,18.8,215,788.32,False
+R7203,2026-07-09,Lab,active,23.8,217,885.78,False
+R7204,2026-07-11,Lab,active,22.1,39,843.19,False
+R7205,2026-07-12,Office B,active,23.6,0,590.17,False
+R7206,2026-07-12,Office A,active,15.5,167,566.19,False
+R7207,2026-07-16,Office B,active,29.2,203,686.07,False
+R7208,2026-07-18,Office B,active,11.1,52,547.06,True
+R7209,2026-07-19,Lab,active,24.6,132,848.81,False
+R7210,2026-07-19,Office A,active,23.5,184,676.51,False
+R7211,2026-07-20,Office B,active,31.5,188,690.05,False
+R7212,2026-07-22,Lab,active,27.6,195,878.88,False
+R7213,2026-07-23,Office B,active,32.6,123,665.84,False
+R7214,2026-07-23,Lab,active,34.1,69,888.93,False
+R7215,2026-07-24,Warehouse,active,16.3,218,411.72,False
+R7216,2026-07-24,Warehouse,active,18.0,14,385.42,False
+R7217,2026-07-24,Office B,active,33.0,59,711.37,False
+R7218,2026-07-26,Warehouse,active,27.0,129,498.42,False
+R7219,2026-07-29,Lab,active,39.7,164,975.77,False
+R7220,2026-08-01,Lab,maintenance,13.8,11,737.67,False
+R7221,2026-08-02,Lab,active,16.3,39,819.42,False
+R7222,2026-08-02,Lab,active,27.8,36,862.76,True
+R7223,2026-08-03,Lab,active,19.7,100,787.79,True
+R7224,2026-08-03,Warehouse,active,26.2,66,522.58,False
+R7225,2026-08-03,Office A,active,23.7,55,622.28,False
+R7226,2026-08-03,Lab,active,20.8,193,780.32,False
+R7227,2026-08-05,Office A,active,24.9,224,705.97,False
+R7228,2026-08-05,Office B,active,25.1,42,689.75,False
+R7229,2026-08-05,Warehouse,active,24.4,209,469.75,False
+R7230,2026-08-08,Warehouse,active,15.8,142,408.99,False
+R7231,2026-08-09,Office A,active,22.3,87,658.16,False
+R7232,2026-08-09,Warehouse,active,22.1,114,496.48,True
+R7233,2026-08-11,Warehouse,active,25.9,61,447.24,False
+R7234,2026-08-13,Office B,active,24.7,168,591.59,False
+R7235,2026-08-13,Office B,maintenance,18.8,99,583.38,False
+R7236,2026-08-15,Warehouse,active,13.0,166,355.63,False
+R7237,2026-08-17,Lab,active,3.2,209,654.49,False
+R7238,2026-08-19,Office B,active,15.3,21,558.47,False
+R7239,2026-08-19,Lab,active,18.5,206,777.15,False
+R7240,2026-08-20,Lab,active,7.9,15,733.1,False
+R7241,2026-08-21,Warehouse,active,12.6,173,443.3,False
+R7242,2026-08-21,Office B,active,26.6,77,564.65,False
+R7243,2026-08-23,Office B,active,27.6,152,645.04,False
+R7244,2026-08-23,Lab,active,27.4,211,871.49,False
+R7245,2026-08-24,Warehouse,maintenance,27.4,113,447.09,False
+R7246,2026-08-29,Office B,maintenance,19.6,49,588.77,False
+R7247,2026-08-29,Lab,active,23.6,96,791.47,False
+R7248,2026-08-29,Office B,active,12.6,225,510.21,False
+R7249,2026-09-01,Office B,active,29.1,238,688.61,False
+R7250,2026-09-01,Warehouse,active,8.8,73,405.22,False
+R7251,2026-09-01,Lab,active,29.3,18,852.6,False
+R7252,2026-09-02,Warehouse,active,19.5,199,475.33,False
+R7253,2026-09-03,Office A,active,23.2,87,622.25,False
+R7254,2026-09-03,Office B,active,19.3,142,581.81,False
+R7255,2026-09-05,Warehouse,active,25.7,37,485.18,False
+R7256,2026-09-06,Lab,active,15.9,191,731.51,True
+R7257,2026-09-06,Office A,active,30.0,248,719.85,False
+R7258,2026-09-06,Warehouse,active,27.7,134,473.4,False
+R7259,2026-09-07,Warehouse,active,22.5,219,468.78,False
+R7260,2026-09-09,Office B,active,10.5,207,511.52,False
+R7261,2026-09-10,Office B,active,30.7,175,669.74,False
+R7262,2026-09-12,Office B,active,22.2,106,640.65,True
+R7263,2026-09-13,Lab,active,10.1,98,791.55,False
+R7264,2026-09-13,Office A,maintenance,33.8,71,722.25,False
+R7265,2026-09-14,Office A,active,26.3,115,640.98,False
+R7266,2026-09-15,Lab,active,17.6,219,811.82,False
+R7267,2026-09-18,Warehouse,active,14.1,114,341.87,False
+R7268,2026-09-18,Office A,active,21.4,189,600.58,True
+R7269,2026-09-18,Warehouse,active,26.1,67,491.56,False
+R7270,2026-09-20,Office B,active,22.4,196,594.16,False
+R7271,2026-09-23,Office B,active,21.0,142,610.93,False
+R7272,2026-09-23,Office A,maintenance,30.0,84,693.5,False
+R7273,2026-09-23,Lab,active,32.7,72,924.41,False
+R7274,2026-09-23,Office A,active,23.8,194,677.35,False
+R7275,2026-09-23,Lab,active,21.7,8,771.81,False
+R7276,2026-09-24,Office B,active,12.0,72,499.22,False
+R7277,2026-09-27,Office B,active,26.4,211,695.46,False
+R7278,2026-10-02,Office A,active,22.3,249,614.76,False
+R7279,2026-10-03,Lab,maintenance,28.2,83,873.96,False
+R7280,2026-10-03,Warehouse,active,22.1,100,472.86,False
+R7281,2026-10-03,Office A,maintenance,14.7,102,562.51,False
+R7282,2026-10-06,Office B,active,35.0,119,604.69,False
+R7283,2026-10-06,Lab,active,25.7,97,813.75,False
+R7284,2026-10-07,Warehouse,active,18.8,111,446.11,False
+R7285,2026-10-12,Office A,active,32.0,222,731.97,False
+R7286,2026-10-13,Warehouse,active,17.2,195,360.29,False
+R7287,2026-10-13,Warehouse,active,18.8,93,436.55,False
+R7288,2026-10-13,Warehouse,active,15.4,32,302.8,False
+R7289,2026-10-14,Office B,active,17.0,84,510.12,False
+R7290,2026-10-15,Lab,active,22.7,217,841.66,False
+R7291,2026-10-16,Office B,active,18.7,108,558.93,False
+R7292,2026-10-17,Office B,active,23.6,183,562.91,False
+R7293,2026-10-17,Lab,active,28.0,134,875.82,False
+R7294,2026-10-17,Office A,active,37.7,210,761.42,False
+R7295,2026-10-20,Office B,active,29.3,249,679.81,False
+R7296,2026-10-22,Lab,active,26.9,64,839.23,False
+R7297,2026-10-22,Warehouse,active,33.1,50,545.88,False
+R7298,2026-10-22,Warehouse,active,29.8,153,475.39,True
+R7299,2026-10-23,Lab,active,15.1,203,729.55,False
+R7300,2026-10-23,Office B,active,18.9,35,603.04,False
+R7301,2026-10-26,Warehouse,active,23.6,197,453.06,True
+R7302,2026-10-26,Office B,active,21.3,224,641.24,False
+R7303,2026-10-28,Office B,maintenance,38.9,194,863.02,False
+R7304,2026-10-29,Lab,active,28.1,51,895.8,False
+R7305,2026-10-29,Office A,active,11.9,68,558.34,False
+R7306,2026-10-30,Warehouse,active,11.5,63,220.21,False
+R7307,2026-10-31,Lab,maintenance,27.3,147,823.5,False
+R7308,2026-10-31,Warehouse,active,19.1,198,386.96,False
+R7309,2026-11-02,Warehouse,active,27.5,95,547.19,False
+R7310,2026-11-04,Office B,active,7.8,86,453.12,False
+R7311,2026-11-04,Lab,maintenance,21.9,134,824.55,False
+R7312,2026-11-05,Warehouse,active,20.6,191,477.88,False
+R7313,2026-11-05,Office B,active,18.7,141,516.17,False
+R7314,2026-11-05,Lab,active,18.9,92,821.78,False
+R7315,2026-11-06,Office B,active,15.7,136,506.64,False
+R7316,2026-11-07,Lab,active,24.1,232,875.89,False
+R7317,2026-11-07,Warehouse,active,23.1,128,527.71,False
+R7318,2026-11-07,Warehouse,active,26.2,153,512.65,False
+R7319,2026-11-09,Lab,maintenance,22.6,51,781.55,False
+R7320,2026-11-09,Lab,active,24.1,221,821.68,True
+R7321,2026-11-11,Office A,active,32.3,110,697.14,False
+R7322,2026-11-16,Office B,active,26.6,162,640.72,False
+R7323,2026-11-17,Office B,active,18.9,190,609.17,False
+R7324,2026-11-21,Warehouse,active,25.4,226,459.79,False
+R7325,2026-11-23,Warehouse,active,24.2,28,490.88,True
+R7326,2026-11-25,Office B,active,17.7,183,550.77,False
+R7327,2026-11-26,Lab,active,11.4,8,760.08,False
+R7328,2026-11-27,Warehouse,maintenance,26.2,187,431.99,False
+R7329,2026-11-28,Office B,active,14.7,94,587.93,False
+R7330,2026-11-29,Warehouse,active,13.7,88,411.13,False
+R7331,2026-12-01,Warehouse,active,26.2,109,498.74,False
+R7332,2026-12-02,Office A,active,29.2,126,686.17,False
+R7333,2026-12-03,Office A,active,26.9,0,720.0,False
+R7334,2026-12-03,Warehouse,active,23.1,76,459.4,False
+R7335,2026-12-04,Lab,active,33.9,91,995.06,False
+R7336,2026-12-05,Lab,active,10.6,181,753.3,True
+R7337,2026-12-06,Lab,active,9.0,50,665.43,True
+R7338,2026-12-08,Office B,active,15.0,217,572.69,False
+R7339,2026-12-09,Office B,active,17.9,64,526.07,False
+R7340,2026-12-09,Office B,active,25.4,215,697.98,False
+R7341,2026-12-10,Lab,active,14.4,74,740.76,False
+R7342,2026-12-10,Warehouse,maintenance,21.7,79,423.46,False
+R7343,2026-12-10,Lab,active,9.6,173,676.92,False
+R7344,2026-12-13,Warehouse,active,16.5,86,426.97,False
+R7345,2026-12-13,Lab,active,18.0,74,810.33,False
+R7346,2026-12-16,Lab,active,24.0,90,807.36,False
+R7347,2026-12-19,Lab,active,18.9,215,733.61,False
+R7348,2026-12-20,Warehouse,active,27.5,141,523.14,False
+R7349,2026-12-20,Warehouse,active,27.5,70,549.09,False
+R7350,2026-12-21,Lab,active,27.5,82,770.59,False
+R7351,2026-12-21,Lab,active,21.8,247,787.18,False
+R7352,2026-12-21,Office B,active,27.5,104,626.86,False
+R7353,2026-12-24,Warehouse,active,22.8,95,479.75,False
+R7354,2026-12-25,Office A,active,11.7,77,516.8,False
+R7355,2026-12-25,Office B,active,17.8,236,483.39,False
+R7356,2026-12-26,Office A,active,31.2,181,646.83,False
+R7357,2026-12-27,Office B,active,21.3,139,521.78,False
+R7358,2026-12-27,Warehouse,active,27.4,231,430.83,False
+R7359,2026-12-29,Office B,active,15.1,133,592.38,False
+R7042,2026-02-23,Warehouse,active,14.7,186,401.79,False

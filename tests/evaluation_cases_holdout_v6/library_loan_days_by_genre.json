@@ -1,0 +1,56 @@
+{
+  "case_id": "holdout-v6-library-loan-days-by-genre-v1",
+  "dataset_path": "tests/fixtures/eval_holdout_v6/thu_vien.csv",
+  "dataset_sha256": "fa2b91dc3a30f8c8307828ac32a8a790c1090579b8fa92a8b00df9da97643845",
+  "user_request": "Số ngày mượn trung bình của mỗi thể loại là bao nhiêu?",
+  "goal_family": "comparison",
+  "required_calculations": [
+    {
+      "metric": "Số ngày mượn",
+      "group": {
+        "field": "Thể loại",
+        "value": "Khoa học"
+      },
+      "expected": 21.65753424657534,
+      "absolute_tolerance": 1e-06
+    },
+    {
+      "metric": "Số ngày mượn",
+      "group": {
+        "field": "Thể loại",
+        "value": "Lịch sử"
+      },
+      "expected": 18.013333333333332,
+      "absolute_tolerance": 1e-06
+    },
+    {
+      "metric": "Số ngày mượn",
+      "group": {
+        "field": "Thể loại",
+        "value": "Thiếu nhi"
+      },
+      "expected": 10.75,
+      "absolute_tolerance": 1e-06
+    },
+    {
+      "metric": "Số ngày mượn",
+      "group": {
+        "field": "Thể loại",
+        "value": "Tiểu thuyết"
+      },
+      "expected": 15.275,
+      "absolute_tolerance": 1e-06
+    }
+  ],
+  "allowed_fields": [
+    "Thể loại",
+    "Số ngày mượn"
+  ],
+  "supported_conclusions": [
+    "Khoa học có số ngày mượn trung bình cao nhất."
+  ],
+  "valid_chart_types": [
+    "bar",
+    "table"
+  ]
+}

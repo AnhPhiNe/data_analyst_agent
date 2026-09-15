@@ -1,0 +1,56 @@
+{
+  "case_id": "holdout-v6-energy-anomaly-rate-by-building-v1",
+  "dataset_path": "tests/fixtures/eval_holdout_v6/energy_meters.csv",
+  "dataset_sha256": "c5b55467576cfff9a8ddc9f5ce6ba9b2ddca1dafb57a52e8c34455a69bf40cb0",
+  "user_request": "What share of readings were flagged as anomalies in each building, as a value between 0 and 1?",
+  "goal_family": "comparison",
+  "required_calculations": [
+    {
+      "metric": "anomaly_flag",
+      "group": {
+        "field": "building",
+        "value": "Lab"
+      },
+      "expected": 0.18095238095238095,
+      "absolute_tolerance": 0.0001
+    },
+    {
+      "metric": "anomaly_flag",
+      "group": {
+        "field": "building",
+        "value": "Office A"
+      },
+      "expected": 0.014084507042253521,
+      "absolute_tolerance": 0.0001
+    },
+    {
+      "metric": "anomaly_flag",
+      "group": {
+        "field": "building",
+        "value": "Office B"
+      },
+      "expected": 0.08247422680412371,
+      "absolute_tolerance": 0.0001
+    },
+    {
+      "metric": "anomaly_flag",
+      "group": {
+        "field": "building",
+        "value": "Warehouse"
+      },
+      "expected": 0.14772727272727273,
+      "absolute_tolerance": 0.0001
+    }
+  ],
+  "allowed_fields": [
+    "building",
+    "anomaly_flag"
+  ],
+  "supported_conclusions": [
+    "Lab has the highest anomaly rate."
+  ],
+  "valid_chart_types": [
+    "bar",
+    "table"
+  ]
+}

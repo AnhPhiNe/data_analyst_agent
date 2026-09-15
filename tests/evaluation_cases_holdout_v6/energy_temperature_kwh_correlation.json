@@ -1,0 +1,24 @@
+{
+  "case_id": "holdout-v6-energy-temperature-kwh-correlation-v1",
+  "dataset_path": "tests/fixtures/eval_holdout_v6/energy_meters.csv",
+  "dataset_sha256": "c5b55467576cfff9a8ddc9f5ce6ba9b2ddca1dafb57a52e8c34455a69bf40cb0",
+  "user_request": "Is outdoor temperature correlated with energy use in kWh?",
+  "goal_family": "relationship",
+  "required_calculations": [
+    {
+      "metric": "pearson_r",
+      "expected": 0.362763058611799,
+      "absolute_tolerance": 0.001
+    }
+  ],
+  "allowed_fields": [
+    "outdoor_temp_c",
+    "kwh"
+  ],
+  "supported_conclusions": [
+    "Outdoor temperature and kWh are positively associated, which does not establish causation."
+  ],
+  "forbidden_claims": [
+    "cause"
+  ]
+}

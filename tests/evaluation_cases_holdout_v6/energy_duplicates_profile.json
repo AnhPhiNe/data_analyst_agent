@@ -1,0 +1,18 @@
+{
+  "case_id": "holdout-v6-energy-duplicates-profile-v1",
+  "dataset_path": "tests/fixtures/eval_holdout_v6/energy_meters.csv",
+  "dataset_sha256": "c5b55467576cfff9a8ddc9f5ce6ba9b2ddca1dafb57a52e8c34455a69bf40cb0",
+  "user_request": "How many rows are in this dataset and how many are exact duplicates?",
+  "goal_family": "data_quality",
+  "expected_outcome": "profile",
+  "required_profile_facts": [
+    {
+      "fact": "row_count",
+      "expected": 361
+    },
+    {
+      "fact": "duplicate_row_count",
+      "expected": 1
+    }
+  ]
+}

@@ -1,0 +1,29 @@
+{
+  "case_id": "holdout-v6-library-channel-loan-days-difference-v1",
+  "dataset_path": "tests/fixtures/eval_holdout_v6/thu_vien.csv",
+  "dataset_sha256": "fa2b91dc3a30f8c8307828ac32a8a790c1090579b8fa92a8b00df9da97643845",
+  "user_request": "Số ngày mượn trung bình của hình thức trực tuyến và tại quầy có khác nhau có ý nghĩa thống kê không?",
+  "goal_family": "comparison",
+  "required_calculations": [
+    {
+      "metric": "group[str:\"Trực tuyến\"].mean",
+      "expected": 19.38938053097345,
+      "absolute_tolerance": 1e-06
+    },
+    {
+      "metric": "group[str:\"Tại quầy\"].mean",
+      "expected": 14.636363636363637,
+      "absolute_tolerance": 1e-06
+    }
+  ],
+  "allowed_fields": [
+    "Hình thức mượn",
+    "Số ngày mượn"
+  ],
+  "supported_conclusions": [
+    "Số ngày mượn trung bình của hai hình thức được so sánh bằng kiểm định hai nhóm."
+  ],
+  "forbidden_claims": [
+    "cause"
+  ]
+}

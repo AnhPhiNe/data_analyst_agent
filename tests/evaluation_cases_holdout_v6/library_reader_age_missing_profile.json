@@ -1,0 +1,15 @@
+{
+  "case_id": "holdout-v6-library-reader-age-missing-profile-v1",
+  "dataset_path": "tests/fixtures/eval_holdout_v6/thu_vien.csv",
+  "dataset_sha256": "fa2b91dc3a30f8c8307828ac32a8a790c1090579b8fa92a8b00df9da97643845",
+  "user_request": "Cột Tuổi bạn đọc có bao nhiêu giá trị bị thiếu?",
+  "goal_family": "data_quality",
+  "expected_outcome": "profile",
+  "required_profile_facts": [
+    {
+      "fact": "missing_count",
+      "field": "Tuổi bạn đọc",
+      "expected": 18
+    }
+  ]
+}

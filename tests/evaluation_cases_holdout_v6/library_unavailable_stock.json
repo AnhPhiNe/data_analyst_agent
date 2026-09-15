@@ -1,0 +1,15 @@
+{
+  "case_id": "holdout-v6-library-unavailable-stock-v1",
+  "dataset_path": "tests/fixtures/eval_holdout_v6/thu_vien.csv",
+  "dataset_sha256": "fa2b91dc3a30f8c8307828ac32a8a790c1090579b8fa92a8b00df9da97643845",
+  "user_request": "Số sách tồn kho trung bình của mỗi cơ sở là bao nhiêu?",
+  "goal_family": "summary",
+  "expected_outcome": "clarification",
+  "acceptable_outcomes": [
+    "refused"
+  ],
+  "forbidden_claims": [
+    "Số ngày mượn",
+    "Phí phạt"
+  ]
+}

@@ -1,0 +1,56 @@
+{
+  "case_id": "holdout-v6-energy-total-kwh-by-building-v1",
+  "dataset_path": "tests/fixtures/eval_holdout_v6/energy_meters.csv",
+  "dataset_sha256": "c5b55467576cfff9a8ddc9f5ce6ba9b2ddca1dafb57a52e8c34455a69bf40cb0",
+  "user_request": "What is the total kWh for each building?",
+  "goal_family": "comparison",
+  "required_calculations": [
+    {
+      "metric": "kwh",
+      "group": {
+        "field": "building",
+        "value": "Lab"
+      },
+      "expected": 84868.64,
+      "absolute_tolerance": 0.01
+    },
+    {
+      "metric": "kwh",
+      "group": {
+        "field": "building",
+        "value": "Office A"
+      },
+      "expected": 46015.13,
+      "absolute_tolerance": 0.01
+    },
+    {
+      "metric": "kwh",
+      "group": {
+        "field": "building",
+        "value": "Office B"
+      },
+      "expected": 58300.79,
+      "absolute_tolerance": 0.01
+    },
+    {
+      "metric": "kwh",
+      "group": {
+        "field": "building",
+        "value": "Warehouse"
+      },
+      "expected": 39644.32,
+      "absolute_tolerance": 0.01
+    }
+  ],
+  "allowed_fields": [
+    "building",
+    "kwh"
+  ],
+  "supported_conclusions": [
+    "Lab uses the most energy in total."
+  ],
+  "valid_chart_types": [
+    "bar",
+    "table"
+  ]
+}

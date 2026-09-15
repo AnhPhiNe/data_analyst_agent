@@ -1,0 +1,25 @@
+{
+  "case_id": "holdout-v6-library-april-fines-v1",
+  "dataset_path": "tests/fixtures/eval_holdout_v6/thu_vien.csv",
+  "dataset_sha256": "fa2b91dc3a30f8c8307828ac32a8a790c1090579b8fa92a8b00df9da97643845",
+  "user_request": "Tổng phí phạt của các phiếu mượn trong tháng 4 năm 2026 là bao nhiêu?",
+  "goal_family": "summary",
+  "required_calculations": [
+    {
+      "metric": "total_fines",
+      "expected": 490.0,
+      "absolute_tolerance": 1e-06
+    }
+  ],
+  "allowed_fields": [
+    "Ngày mượn",
+    "Phí phạt (nghìn đồng)"
+  ],
+  "supported_conclusions": [
+    "Tổng phí phạt tháng 4 năm 2026 được báo cáo."
+  ],
+  "valid_chart_types": [
+    "kpi",
+    "table"
+  ]
+}
