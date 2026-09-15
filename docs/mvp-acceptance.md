@@ -146,3 +146,20 @@ the outstanding Must-tier flows and reliability gates.
 - Counting rule (plan-v7, tool-request-v12): counting rows lists no identifier field and uses
   COUNT(*). It addresses a failure class seen on two datasets (holdout v3 and v5), so holdout v5
   is development evidence for counting questions from now on; holdout v6 must measure it.
+- Holdout v6 first run (2026-09-15, grading version 4, commit 314ef37, 30 requests per minute):
+  30/36 runs passed (83.3%); outcome 91.7%, calculations 85.2%, chart 81.0%, insight coverage
+  81.5%, schema grounding 96.3%, forbidden claims and profile facts 100%. Two rate-limit retries,
+  no remaining provider error. An earlier launch of the same run stopped after one run because
+  of a log filter error in the launch command; that run was not viewed or graded, and the suite
+  was restarted from the beginning in a new directory. Failures:
+  (1) the grouped maintenance-reading count failed planning in all three runs: interpretation
+  mapped "readings" directly to the identifier `reading_id`, the plan-v7 counting rule correctly
+  left that identifier out, and metric grounding then rejected the plan without a repair. This
+  is a conflict introduced by the counting rule, not a model failure alone;
+  (2) one anomaly-rate run mapped the rate to `COUNT(reading_id)` and approved that identifier
+  (the SQL itself used COUNT(*)), the same mapping cause;
+  (3) one April-fines run listed 60 rows instead of summing them;
+  (4) one correlation run asserted only significance, not the coefficient (partial insight
+  coverage, also seen in holdout v3 and v5).
+  Gates met on this set: forbidden claims and profile facts; end-to-end success (85%),
+  calculation accuracy (95%), and chart validity (95%) are not met.
