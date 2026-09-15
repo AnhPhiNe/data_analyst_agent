@@ -5,10 +5,11 @@ from __future__ import annotations
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Literal
+from typing import Literal, cast
 
 import sqlglot
 from sqlglot import expressions as exp
+from sqlglot.optimizer.scope import Scope, traverse_scope
 
 from tabular_analytics_agent.data.errors import UnsafeQueryError
 from tabular_analytics_agent.domain import FilterScope
@@ -46,10 +47,12 @@ class SQLAnalysis:
 
 
 def replace_column_references(sql: str, replacements: Mapping[str, str]) -> str:
-    """Rewrite unqualified column references, matched case-insensitively, to exact names.
+    """Rewrite field ids that resolve to the session table, preserving SQL aliases.
 
     Output aliases keep their meaning, and SQL that cannot be parsed is returned unchanged so
-    the read-only policy reports the parse error itself.
+    the read-only policy reports the parse error itself. Qualified ids are rewritten only when
+    their qualifier binds to the base ``dataset`` table in that SELECT scope; CTE and derived
+    table columns are already named outputs and are left alone.
     """
     lookup = {key.casefold(): value for key, value in replacements.items()}
     if not lookup:
@@ -61,13 +64,70 @@ def replace_column_references(sql: str, replacements: Mapping[str, str]) -> str:
     if len(statements) != 1 or statements[0] is None:
         return sql
     statement = statements[0]
-    aliases = {alias.alias.casefold() for alias in statement.find_all(exp.Alias) if alias.alias}
+    try:
+        scopes = traverse_scope(statement)
+    except sqlglot.errors.SqlglotError:
+        return sql
+    scopes_by_select = {
+        id(scope.expression): scope for scope in scopes if isinstance(scope.expression, exp.Select)
+    }
+    try:
+        selected_sources_by_scope = {
+            id(scope): cast(
+                Mapping[str, tuple[exp.Expression, exp.Expression | Scope]],
+                scope.selected_sources,
+            )
+            for scope in scopes
+        }
+    except sqlglot.errors.SqlglotError:
+        return sql
+
+    def aliases_for_scope(scope: Scope) -> set[str]:
+        aliases = {
+            projection.alias.casefold()
+            for projection in scope.expression.expressions
+            if isinstance(projection, exp.Alias) and projection.alias
+        }
+        selected_sources = selected_sources_by_scope[id(scope)]
+        for _, source in selected_sources.values():
+            if isinstance(source, Scope):
+                aliases.update(name.casefold() for name in source.outer_columns)
+                aliases.update(
+                    name.casefold()
+                    for name in getattr(source.expression, "named_selects", ())
+                    if name
+                )
+        return aliases
+
+    def source_for_qualifier(scope: Scope, qualifier: str) -> exp.Expression | Scope | None:
+        normalized_qualifier = qualifier.casefold()
+        current: Scope | None = scope
+        while current is not None:
+            selected_sources = selected_sources_by_scope[id(current)]
+            for name, (_, source) in selected_sources.items():
+                if name.casefold() == normalized_qualifier:
+                    return source
+            current = current.parent
+        return None
+
     changed = False
     for column in statement.find_all(exp.Column):
         name = column.name
         target = lookup.get(name.casefold()) if name else None
-        if target is None or column.table or name.casefold() in aliases:
+        if target is None:
             continue
+
+        select = column.find_ancestor(exp.Select)
+        scope = scopes_by_select.get(id(select)) if select is not None else None
+        if column.table:
+            if column.db or column.catalog or scope is None:
+                continue
+            source = source_for_qualifier(scope, column.table)
+            if not isinstance(source, exp.Table) or source.name.casefold() != "dataset":
+                continue
+        elif scope is not None and name.casefold() in aliases_for_scope(scope):
+            continue
+
         column.set("this", exp.to_identifier(target, quoted=True))
         changed = True
     return statement.sql(dialect="duckdb") if changed else sql
