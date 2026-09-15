@@ -173,9 +173,9 @@ datasets from v8, so the two scores are not directly comparable.
 - **Dependent questions use one query, but "pooled" is still misread.** Every run wrote a CTE or
   subquery. Asked for one churn rate across three industries "counted together", all runs still
   reported a rate per industry.
-- **Table-qualified field ids fail.** Field ids such as `c5` are rewritten to real names only when
-  unqualified. One run wrote `d.c5` inside a CTE join, the query failed, and the repair budget ran
-  out.
+- **Table-qualified field ids failed.** Field ids such as `c5` were rewritten to real names only
+  when unqualified, so one run's `d.c5` inside a CTE join failed and the repair budget ran out.
+  This has since been fixed: ids qualified by the `dataset` table or its alias are rewritten.
 - **Charts remain the weakest step.** For one-row ranking answers, the agent drew a KPI where the
   cases (written by the project author) allowed only bar or table charts, and twice produced an
   invalid KPI intent. Two chart intents garbled the Vietnamese column name `Kênh đặt` instead of

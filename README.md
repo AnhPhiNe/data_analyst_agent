@@ -71,7 +71,7 @@ in pandas and SciPy and committed before the first run. Every case runs 3 times 
 
 v7 and v8 bracket the realistic range: reliable on clear questions over clean data, much weaker on
 inconsistent values and vague requests. v9 confirmed that inconsistent spellings are now handled
-and found new weak points: pooled multi-step answers, table-qualified field ids, and chart choice
+and found new weak points: pooled multi-step answers, table-qualified field ids (since fixed), and chart choice
 for one-row results (six v9 failures were chart-only, with correct numbers). The samples are small
 (36 runs per set), so treat each score as a range, not a precise rate. Details are in
 [docs/limitations.md](./docs/limitations.md).

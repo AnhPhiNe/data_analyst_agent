@@ -76,7 +76,9 @@ session's dataset.
   itself is never rewritten.
 - `sql_policy` parses SQL with sqlglot and allows one `SELECT` or `WITH ... SELECT` over the session
   table. It rejects DDL, DML, external-access functions, wildcard projections, and other tables,
-  rewrites field ids such as `c1` to exact quoted names, and gives unaliased calculated outputs
+  rewrites field ids such as `c1` (also when qualified by the `dataset` table or its alias) to exact
+  quoted names, records WHERE and HAVING predicates per SQL scope, recognizes an unfiltered
+  whole-dataset `COUNT(*)`, and gives unaliased calculated outputs
   deterministic ASCII aliases.
 - DuckDB runs read-only with memory, row, and timeout limits. A timed-out query is interrupted.
 - All limits come from `DataCoreLimits`, which `application/settings.py` reads from
@@ -135,7 +137,8 @@ routes; supporting modules keep each concern small:
 
 Synthesis publishes the model's drafts and then deterministically reports each statistical result's
 headline estimates that the model left out: every group mean, or the single coefficient. Repairs are
-bounded: a plan with unknown fields is replanned, a failed or empty filtered query is retried with
+bounded: a plan with unknown fields is replanned, a SQL step without fields whose query is not a
+whole-dataset `COUNT(*)` is replanned with the fields the query reads, a failed or empty filtered query is retried with
 the exact error, and insight drafts that name unknown metrics are regenerated once.
 
 ### Application

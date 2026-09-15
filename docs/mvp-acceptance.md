@@ -235,3 +235,16 @@ the outstanding Must-tier flows and reliability gates.
   never edited after a run. The remaining failures are the vague best-branch request (answered or
   failed instead of clarified, 3/3, deliberately not addressed) and two chart intents that garbled
   the Vietnamese column name `Kênh đặt`.
+- Phase 1 of the post-review plan (2026-09-15; implemented by another coding agent, then reviewed
+  here): chart validation receives the session's confirmed semantic annotations, so charts no
+  longer fail after semantic confirmation; query results and Evidence Trails add `filter_scopes`
+  (predicates per SQL scope) while `filters` keeps the outer query; an unfiltered whole-dataset
+  `COUNT(*)` may run from a plan step without fields and is re-verified against the profiled row
+  count; and field ids qualified by the `dataset` table or its alias are rewritten. The review
+  re-ran every check and re-opened the stored holdout v9 sessions with the new code, which
+  re-graded identically, so stored state stays readable. It found one regression: the plan-time
+  check for SQL steps without fields had been removed, so such a step reached plan approval and
+  failed after four SQL requests (reproduced offline). Binding now raises a plan-repair error that
+  names the fields the query reads, the graph replans, and the original regression test is restored
+  beside the new `COUNT(*)` test. 399 tests passed (2 skipped), branch-inclusive coverage 90.80%,
+  Ruff, formatting, and strict mypy passed. No prompt changed, so no live run was needed.
