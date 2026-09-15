@@ -364,3 +364,15 @@ the outstanding Must-tier flows and reliability gates.
   a separate clone (the unit tests at import). 446 tests passed (2 skipped), branch-inclusive
   coverage 91.08%, Ruff, formatting, and strict mypy passed. A new small holdout written outside
   the repository measures this round before the MVP is closed.
+- Review for case-specific code (2026-09-15): no evaluation dataset column or question word
+  appears in the source, but prompt examples echoed evaluation questions (`top performer` from
+  holdout v8, `readings` and `tickets` from holdouts v6 and v3, a first-holdout profile question,
+  and `hiệu quả nhất`, which a later release question also uses). The examples were replaced with
+  neutral wording without changing a rule (semantic-v15, plan-v9), and a test checks that they do
+  not return. Statistic labels now carry their own case, replacing a separate capitalized-word
+  list; the SQL policy owns the generated alias form (`generated_alias_function`) that claims
+  read; and the deterministic completion of left-out evidence moved from `graph.py` into
+  `evidence_catalog.py` unchanged. The changed prompt and label tests failed against the previous
+  commit in a separate clone. 447 tests passed (2 skipped), branch-inclusive coverage 91.14%,
+  Ruff, formatting, and strict mypy passed. The final holdout measures the prompt change together
+  with the final fix round.

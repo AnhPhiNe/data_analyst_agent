@@ -59,8 +59,8 @@ def insight_evidence_catalog(state: AgentState, profile: DataProfile) -> list[di
         if action.status is not ActionStatus.SUCCEEDED:
             continue
         result = evidence_result_for_action(state, action)
-        source_fields = evidence_source_fields(action, result)
-        if reads_possible_pii(source_fields, profile):
+        source_fields = _evidence_source_fields(action, result)
+        if _reads_possible_pii(source_fields, profile):
             continue
         candidates.append((action, result, source_fields))
 
@@ -162,7 +162,7 @@ def _row_index(metric: str) -> int | None:
     return int(match.group(1)) if match else None
 
 
-def evidence_source_fields(
+def _evidence_source_fields(
     action: ToolAction, result: QueryResult | StatisticalResult
 ) -> tuple[str, ...]:
     """Name the dataset fields a Tool Action's evidence was computed from."""
@@ -171,10 +171,64 @@ def evidence_source_fields(
     return tuple(str(value) for value in action.inputs.get("required_fields", ()))
 
 
-def reads_possible_pii(source_fields: tuple[str, ...], profile: DataProfile) -> bool:
+def _reads_possible_pii(source_fields: tuple[str, ...], profile: DataProfile) -> bool:
     """Evidence computed from a possible PII field is never used to draft claims."""
     pii_fields = {field.casefold() for field in profile.pii_candidates}
     return any(field.casefold() in pii_fields for field in source_fields)
+
+
+def unasserted_evidence_metrics(
+    state: AgentState,
+    actions: dict[str, ToolAction],
+    batch: InsightDraftBatch,
+    profile: DataProfile,
+) -> list[tuple[ToolAction, QueryResult | StatisticalResult, str]]:
+    """Return the evidence values synthesis reports itself because the model left them out.
+
+    ``actions`` maps plan step ids to successful Tool Actions. Every statistical result reports
+    its headline estimates, and a small query result the model answered from in part reports its
+    other values.
+    """
+    asserted_by_step: dict[str, set[str]] = {}
+    for draft in batch.insights:
+        asserted_by_step.setdefault(draft.plan_step_id, set()).update(
+            metric
+            for metric in (draft.assertion.left_metric, draft.assertion.right_metric)
+            if metric
+        )
+    asserted = {metric for metrics in asserted_by_step.values() for metric in metrics}
+    missing: list[tuple[ToolAction, QueryResult | StatisticalResult, str]] = []
+    for step_id, action in actions.items():
+        result = evidence_result_for_action(state, action)
+        if isinstance(result, StatisticalResult):
+            metrics = [
+                metric for metric in headline_statistical_metrics(result) if metric not in asserted
+            ]
+            asserted.update(metrics)
+        elif _reads_possible_pii(_evidence_source_fields(action, result), profile):
+            continue
+        else:
+            metrics = unasserted_small_result_metrics(result, asserted_by_step.get(step_id, set()))
+        missing.extend((action, result, metric) for metric in metrics)
+    return missing
+
+
+def headline_statistical_metrics(result: StatisticalResult) -> list[str]:
+    """The estimates a statistical result should always report, without relying on the model.
+
+    Group comparisons headline each group's mean; a single-coefficient result (correlation or
+    regression) headlines its coefficient. This guarantees coverage the model sometimes omits.
+    """
+    group_means = [
+        estimate.metric
+        for estimate in result.estimates
+        if estimate.metric.startswith("group[") and estimate.metric.endswith(".mean")
+    ]
+    if group_means:
+        return group_means
+    if result.statistic_name is not None and result.statistic is not None:
+        return [result.statistic_name]
+    return []
 
 
 def unasserted_small_result_metrics(result: QueryResult, asserted: set[str]) -> list[str]:

@@ -20,7 +20,11 @@ from tabular_analytics_agent.data.models import (
     QueryResult,
     UploadInspection,
 )
-from tabular_analytics_agent.data.sql_policy import quote_identifier, replace_column_references
+from tabular_analytics_agent.data.sql_policy import (
+    generated_alias_function,
+    quote_identifier,
+    replace_column_references,
+)
 
 __all__ = [
     "DATASET_TABLE",
@@ -39,6 +43,7 @@ __all__ = [
     "UnsafeQueryError",
     "UnsupportedFileError",
     "UploadInspection",
+    "generated_alias_function",
     "quote_identifier",
     "replace_column_references",
 ]

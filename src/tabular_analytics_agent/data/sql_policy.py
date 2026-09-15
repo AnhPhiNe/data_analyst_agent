@@ -251,6 +251,19 @@ def analyze_read_only_sql(sql: str, *, allowed_table: str) -> SQLAnalysis:
     )
 
 
+_GENERATED_ALIAS = re.compile(r"([a-z]+)_([1-9][0-9]*)")
+
+
+def _generated_alias(function: str, index: int) -> str:
+    return f"{function}_{index}"
+
+
+def generated_alias_function(name: str) -> str | None:
+    """Return the function an alias of the generated form names, such as sum for sum_1."""
+    match = _GENERATED_ALIAS.fullmatch(name)
+    return match.group(1) if match else None
+
+
 def _alias_calculated_outputs(statement: exp.Query) -> None:
     """Give each unaliased calculated outer output a deterministic ASCII alias such as sum_1.
 
@@ -265,9 +278,9 @@ def _alias_calculated_outputs(statement: exp.Query) -> None:
             continue
         base = projection.key.lower() if isinstance(projection, exp.AggFunc) else "value"
         index = 1
-        while f"{base}_{index}" in used:
+        while _generated_alias(base, index) in used:
             index += 1
-        alias = f"{base}_{index}"
+        alias = _generated_alias(base, index)
         used.add(alias)
         projection.replace(exp.alias_(projection.copy(), alias))
 

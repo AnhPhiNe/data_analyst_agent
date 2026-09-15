@@ -67,10 +67,8 @@ from tabular_analytics_agent.orchestration.evidence_catalog import (
     chart_result_metadata,
     chart_source_for_verified_insight,
     evidence_result_for_action,
-    evidence_source_fields,
     insight_evidence_catalog,
-    reads_possible_pii,
-    unasserted_small_result_metrics,
+    unasserted_evidence_metrics,
     unknown_insight_metrics,
 )
 from tabular_analytics_agent.orchestration.field_ids import (
@@ -234,24 +232,6 @@ def _draft_claim_text(draft: InsightDraft) -> str:
     return f"{assertion.left_metric} {assertion.operator.value} {right}".strip()
 
 
-def _headline_statistical_metrics(result: StatisticalResult) -> list[str]:
-    """The estimates a statistical result should always report, without relying on the model.
-
-    Group comparisons headline each group's mean; a single-coefficient result (correlation or
-    regression) headlines its coefficient. This guarantees coverage the model sometimes omits.
-    """
-    group_means = [
-        estimate.metric
-        for estimate in result.estimates
-        if estimate.metric.startswith("group[") and estimate.metric.endswith(".mean")
-    ]
-    if group_means:
-        return group_means
-    if result.statistic_name is not None and result.statistic is not None:
-        return [result.statistic_name]
-    return []
-
-
 def build_agent_graph(
     model_gateway: ModelGateway,
     data_core: TabularDataCore,
@@ -284,21 +264,20 @@ def build_agent_graph(
                 "required calculation and blocks a responsible answer; otherwise continue and let "
                 "the later plan record the uncertainty as a caveat. Ask only for information "
                 "needed by this request. A request to rank or judge entities without naming the "
-                "measure, such as the best product, the top performer, or the sản phẩm hiệu quả "
-                "nhất, needs clarification when the Data Profile has two or more numeric fields "
-                "that could each define the ranking: return a clarification_question naming those "
-                "candidate fields. When the request names the measure, such as highest revenue or "
-                "fewest defects, do not ask. If semantic_annotations is non-empty, "
+                "measure, with a superlative such as best or top in any language, needs "
+                "clarification when the Data Profile has two or more numeric fields that could "
+                "each define the ranking: return a clarification_question naming those candidate "
+                "fields. When the request names the measure it ranks by, do not ask. If "
+                "semantic_annotations is non-empty, "
                 "clarification_question must be a non-empty question asking the user to choose or "
                 "confirm the exact blocking interpretation. Set "
                 "answer_from_profile to true only when the request can be answered entirely from "
                 "the Data Profile: column names, field kinds, row count, duplicate row count, "
                 "missing values, unique "
                 "counts, warnings, or whole-column descriptive statistics (count, mean, standard "
-                "deviation, minimum, quartiles, median, maximum), for example 'which columns are "
-                "there', 'mean of each column', or 'which columns have missing values'. Use false "
-                "for filtered, grouped, or derived calculations such as 'average revenue by "
-                "region'. If the request names a column that does not exist, return a "
+                "deviation, minimum, quartiles, median, maximum). Use false for filtered, grouped, "
+                "or derived calculations. If the request names a column that does not exist, "
+                "return a "
                 "clarification_question listing the available columns. "
                 "For every metric the user explicitly requests, add one requested_metric_mappings "
                 "entry with the user's original requested_label and a status: direct when "
@@ -311,18 +290,18 @@ def build_agent_graph(
                 "it is the closest available field. When a metric is unavailable or ambiguous and "
                 "the user could resolve it, also return a clarification_question naming that "
                 "metric and the closest available fields. Use an unavailable mapping without a "
-                "clarification question only for an explicitly unsupported capability. Dimensions "
-                "such as region, month, or category, and dataset-level profile facts such as row "
-                "count, duplicate rows, or missing-value counts, are not metrics and need no "
-                "mapping. Counting rows or records is a row count, not a metric: a request to "
-                "count the dataset's records under any name, such as how many orders, readings, "
-                "tickets, or late returns there are, needs no mapping and no identifier field. "
+                "clarification question only for an explicitly unsupported capability. Grouping "
+                "dimensions and dataset-level profile facts (row count, duplicate row count, "
+                "missing-value counts) are not metrics and need no mapping. Counting rows or "
+                "records is a row count, not a metric: a request to count the dataset's records, "
+                "under whatever noun the dataset uses for them, needs no mapping and no identifier "
+                "field. "
                 "Return "
                 "null clarification_question in all other cases."
             ),
             response_schema=GoalInterpretation,
             system_instruction=SYSTEM_INSTRUCTION,
-            prompt_template_version="semantic-v14",
+            prompt_template_version="semantic-v15",
             timeout_seconds=model_call_timeout_seconds(state, budget, clock()),
         )
         trace: ModelCallTrace | None = None
@@ -513,8 +492,8 @@ def build_agent_graph(
                 "When the goal asks whether a difference or relationship is statistically "
                 "significant or could be due to chance, include a statistical_analysis step; "
                 "SQL aggregates alone cannot answer that. "
-                "To count rows, such as orders or tickets, list only the fields that filter or "
-                "group them in required_fields; counting rows needs no identifier field. "
+                "To count rows, list only the fields that filter or group them in "
+                "required_fields; counting rows needs no identifier field. "
                 "SQL steps run independently and cannot read an earlier step's result, so a "
                 "question that uses one result to choose rows for another, such as the "
                 "top-ranked groups, is a single SQL step with a CTE or subquery. "
@@ -524,12 +503,12 @@ def build_agent_graph(
                 "calculations use false. Never let a different field stand in for a requested "
                 "measure that the dataset does not contain. Every direct or derived requested "
                 "metric mapping must have all of its source_fields in the required_fields of its "
-                "calculation step. Additional required_fields are allowed for dimensions such as "
-                "region, month, or category; do not treat those dimensions as substitutions."
+                "calculation step. Additional required_fields are allowed for grouping or "
+                "filtering dimensions; do not treat those dimensions as substitutions."
             ),
             response_schema=PlanDraft,
             system_instruction=SYSTEM_INSTRUCTION,
-            prompt_template_version="plan-v8",
+            prompt_template_version="plan-v9",
             timeout_seconds=model_call_timeout_seconds(state, budget, clock()),
         )
         trace: ModelCallTrace | None = None
@@ -1032,48 +1011,25 @@ def build_agent_graph(
                         semantic_annotations=annotations,
                     )
                 )
-            # Deterministically report the headline statistical estimates, and the rest of a
-            # small query result, that the model left out, so a correct answer is not partial.
-            asserted_by_step: dict[str, set[str]] = {}
-            for draft in response.output.insights:
-                asserted_by_step.setdefault(draft.plan_step_id, set()).update(
-                    metric
-                    for metric in (draft.assertion.left_metric, draft.assertion.right_metric)
-                    if metric
+            # Deterministically report evidence the model left out, so a correct answer is not
+            # stated in part.
+            for action, result, metric in unasserted_evidence_metrics(
+                state, actions, response.output, profile
+            ):
+                publications.append(
+                    publish_insight(
+                        assertion=InsightAssertion(
+                            operator=InsightOperator.REPORTS, left_metric=metric
+                        ),
+                        evidence_metrics=(metric,),
+                        caveats=(),
+                        profile=profile,
+                        action=action,
+                        result=result,
+                        current_working_dataset_version=current_version,
+                        semantic_annotations=annotations,
+                    )
                 )
-            asserted_metrics = {
-                metric for metrics in asserted_by_step.values() for metric in metrics
-            }
-            for step_id, action in actions.items():
-                result = evidence_result_for_action(state, action)
-                if isinstance(result, StatisticalResult):
-                    missing = [
-                        metric
-                        for metric in _headline_statistical_metrics(result)
-                        if metric not in asserted_metrics
-                    ]
-                    asserted_metrics.update(missing)
-                elif reads_possible_pii(evidence_source_fields(action, result), profile):
-                    continue
-                else:
-                    missing = unasserted_small_result_metrics(
-                        result, asserted_by_step.get(step_id, set())
-                    )
-                for metric in missing:
-                    publications.append(
-                        publish_insight(
-                            assertion=InsightAssertion(
-                                operator=InsightOperator.REPORTS, left_metric=metric
-                            ),
-                            evidence_metrics=(metric,),
-                            caveats=(),
-                            profile=profile,
-                            action=action,
-                            result=result,
-                            current_working_dataset_version=current_version,
-                            semantic_annotations=annotations,
-                        )
-                    )
         except (ModelGatewayError, ValidationError, ValueError) as exc:
             return with_failure_trace(failed_state(state, exc, clock()), state, exc, trace)
         verified = [

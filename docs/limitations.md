@@ -308,6 +308,13 @@ model asserts a value from a complete grouped or single-row result of at most 20
 values are now reported too. Group labels, `row_number`, results the model did not answer from,
 and results computed from possible PII are left out. A new small holdout measures this round.
 
+A review for case-specific code found no dataset names or values in the source, but some prompt
+examples echoed evaluation questions: `top performer` from holdout v8, `readings` and `tickets`
+from holdouts v6 and v3, a profile question from the first holdout, and `hiệu quả nhất`, which also
+appears in a release question written later. The rules are unchanged, but the examples are now
+neutral (semantic-v15, plan-v9). The release suite's clarification result for that question may
+have been helped by the overlap.
+
 These failures were each seen on one dataset and are not fixed, because fixing them would tune the
 agent to the release suite:
 

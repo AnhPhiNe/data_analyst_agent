@@ -7,7 +7,7 @@ import re
 from typing import Literal
 from uuid import uuid4
 
-from tabular_analytics_agent.data import QueryResult
+from tabular_analytics_agent.data import QueryResult, generated_alias_function
 from tabular_analytics_agent.domain import (
     ActionStatus,
     DataProfile,
@@ -369,7 +369,8 @@ def _evaluate_assertion(
                 "A GROUP BY label identifies a result row; report a measured value instead.",
             )
         return (
-            f"{_display_metric(left.metric, result)} is {_format_evidence_value(left.value)}.",
+            f"{_sentence_start(_display_metric(left.metric, result))} is "
+            f"{_format_evidence_value(left.value)}.",
             True,
             "Reported value comes directly from deterministic evidence.",
         )
@@ -387,8 +388,8 @@ def _evaluate_assertion(
             InsightOperator.LESS_THAN: "is less than",
         }[operator]
         claim = (
-            f"{_display_metric(left.metric, result)} {symbol} "
-            f"{_lower_first(_display_metric(right.metric, result))} "
+            f"{_sentence_start(_display_metric(left.metric, result))} {symbol} "
+            f"{_display_metric(right.metric, result)} "
             f"({_format_evidence_value(left.value)} versus "
             f"{_format_evidence_value(right.value)})."
         )
@@ -408,7 +409,7 @@ def _evaluate_assertion(
         )
         direction = "positive" if operator is InsightOperator.POSITIVE else "negative"
         return (
-            f"{_display_metric(left.metric, result)} is {direction} "
+            f"{_sentence_start(_display_metric(left.metric, result))} is {direction} "
             f"({_format_evidence_value(left.value)}).",
             supported,
             "Direction is confirmed by deterministic evidence."
@@ -437,7 +438,7 @@ def _evaluate_assertion(
         supported = p_value is not None and alpha is not None and (p_value < alpha) is expected
         qualifier = "statistically significant" if expected else "not statistically significant"
         return (
-            f"The test for {_lower_first(_display_metric(result.statistic_name or '', result))} "
+            f"The test for {_display_metric(result.statistic_name or '', result)} "
             f"is {qualifier} (p-value {_format_evidence_value(left.value)}, "
             f"adjusted alpha {_format_evidence_value(adjusted_alpha.value)}).",
             supported,
@@ -479,40 +480,55 @@ def _format_evidence_value(value: str | int | float | bool | None) -> str:
     return str(value)
 
 
+# Labels are written as they appear inside a sentence, so names and acronyms keep their case.
+_METRIC_LABELS = {
+    "adjusted_alpha": "adjusted alpha",
+    "anova_f": "ANOVA F statistic",
+    "chi_square": "chi-square statistic",
+    "cohen_d": "Cohen's d",
+    "cramers_v": "Cramér's V",
+    "epsilon_squared": "epsilon squared",
+    "eta_squared": "eta squared",
+    "mann_whitney_u": "Mann-Whitney U statistic",
+    "odds_ratio": "odds ratio",
+    "odds_ratio_log": "log odds ratio",
+    "p_value": "p-value",
+    "pearson_r": "Pearson correlation",
+    "r_squared": "R-squared",
+    "rank_biserial": "rank-biserial correlation",
+    "slope_t_test": "slope t statistic",
+    "spearman_rho": "Spearman correlation",
+    "wald_z": "Wald z statistic",
+    "welch_t": "Welch t statistic",
+}
+# Labels for the functions named by aliases the SQL policy generates, such as count_1.
+_GENERATED_ALIAS_LABELS = {
+    "avg": "average",
+    "count": "count",
+    "max": "maximum",
+    "median": "median",
+    "min": "minimum",
+    "stddev": "standard deviation",
+    "sum": "sum",
+    "value": "value",
+}
+
+
 def _display_metric(metric: str, result: EvidenceResult) -> str:
+    """Describe a metric as it reads inside a sentence."""
     if metric == "result.row_count":
-        return "Result row count"
+        return "result row count"
     if (
         metric == "p_value"
         and isinstance(result, StatisticalResult)
         and result.statistic_name
         and result.statistic_name != metric
     ):
-        return f"P-value for {_lower_first(_display_metric(result.statistic_name, result))}"
-    metric_labels = {
-        "adjusted_alpha": "Adjusted alpha",
-        "anova_f": "ANOVA F statistic",
-        "chi_square": "Chi-square statistic",
-        "cohen_d": "Cohen's d",
-        "cramers_v": "Cramér's V",
-        "epsilon_squared": "Epsilon squared",
-        "eta_squared": "Eta squared",
-        "mann_whitney_u": "Mann-Whitney U statistic",
-        "odds_ratio": "Odds ratio",
-        "odds_ratio_log": "Log odds ratio",
-        "p_value": "P-value",
-        "pearson_r": "Pearson correlation",
-        "r_squared": "R-squared",
-        "rank_biserial": "Rank-biserial correlation",
-        "slope_t_test": "Slope t statistic",
-        "spearman_rho": "Spearman correlation",
-        "wald_z": "Wald z statistic",
-        "welch_t": "Welch t statistic",
-    }
-    if metric in metric_labels:
+        return f"p-value for {_display_metric(result.statistic_name, result)}"
+    if metric in _METRIC_LABELS:
         if metric in {"adjusted_alpha", "p_value"}:
-            return metric_labels[metric]
-        return metric_labels[metric] + _statistical_scope(result)
+            return _METRIC_LABELS[metric]
+        return _METRIC_LABELS[metric] + _statistical_scope(result)
     row_match = re.fullmatch(r"row\[(\d+)]\.(.+)", metric)
     if row_match:
         row_index = int(row_match.group(1))
@@ -526,8 +542,7 @@ def _display_metric(metric: str, result: EvidenceResult) -> str:
         return f"{_humanize_identifier(column)} in result row {row_index + 1}"
     group_match = re.fullmatch(r"group\[([^]]+)]\.(mean|median)", metric)
     if group_match:
-        statistic = group_match.group(2).capitalize()
-        return f"{statistic} for group {display_group_label(group_match.group(1))}"
+        return f"{group_match.group(2)} for group {display_group_label(group_match.group(1))}"
     field_metric_match = re.fullmatch(
         r"(.+)\.(count|mean|standard_deviation|minimum|first_quartile|median|"
         r"third_quartile|maximum|standard_error)",
@@ -535,7 +550,7 @@ def _display_metric(metric: str, result: EvidenceResult) -> str:
     )
     if field_metric_match:
         statistic = _humanize_identifier(field_metric_match.group(2))
-        field = _humanize_identifier(field_metric_match.group(1)).lower()
+        field = _humanize_identifier(field_metric_match.group(1))
         return f"{statistic} {field}"
     return _humanize_identifier(metric)
 
@@ -550,25 +565,9 @@ def _statistical_scope(result: EvidenceResult) -> str:
     return ""
 
 
-# Aliases the SQL policy gives unaliased calculated outputs, such as count_1.
-_GENERATED_ALIAS_LABELS = {
-    "avg": "Average",
-    "count": "Count",
-    "max": "Maximum",
-    "median": "Median",
-    "min": "Minimum",
-    "stddev": "Standard deviation",
-    "sum": "Sum",
-    "value": "Value",
-}
-_GENERATED_ALIAS = re.compile("(" + "|".join(_GENERATED_ALIAS_LABELS) + r")_\d+")
-
-
 def _humanize_identifier(value: str) -> str:
-    generated = _GENERATED_ALIAS.fullmatch(value)
-    if generated:
-        return _GENERATED_ALIAS_LABELS[generated.group(1)]
-    return value.replace("_", " ").strip().capitalize()
+    label = _GENERATED_ALIAS_LABELS.get(generated_alias_function(value) or "")
+    return label or value.replace("_", " ").strip().lower()
 
 
 def _row_context(result: EvidenceResult, row_index: int, metric_column: str) -> str:
@@ -587,13 +586,5 @@ def _row_context(result: EvidenceResult, row_index: int, metric_column: str) -> 
     )
 
 
-# Names and acronyms that keep their capital letter inside a sentence.
-_CAPITALIZED_WORDS = frozenset(
-    {"ANOVA", "Cohen's", "Cramér's", "Mann-Whitney", "Pearson", "Spearman", "Wald", "Welch"}
-)
-
-
-def _lower_first(value: str) -> str:
-    if value.split(" ", 1)[0] in _CAPITALIZED_WORDS:
-        return value
-    return value[:1].lower() + value[1:]
+def _sentence_start(value: str) -> str:
+    return value[:1].upper() + value[1:]

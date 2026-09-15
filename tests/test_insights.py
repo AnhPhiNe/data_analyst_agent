@@ -8,7 +8,7 @@ from uuid import uuid4
 import pandas as pd
 import pytest
 
-from tabular_analytics_agent.data import QueryColumn, QueryResult
+from tabular_analytics_agent.data import QueryColumn, QueryResult, generated_alias_function
 from tabular_analytics_agent.domain import (
     ActionStatus,
     DataProfile,
@@ -38,7 +38,7 @@ from tabular_analytics_agent.verification import (
     invalidate_stale_insight,
     publish_insight,
 )
-from tabular_analytics_agent.verification.insights import _lower_first
+from tabular_analytics_agent.verification.insights import _display_metric
 
 
 def context() -> tuple[DataProfile, ToolAction, QueryResult]:
@@ -163,20 +163,25 @@ def test_generated_aggregate_alias_reads_as_its_function() -> None:
 
     assert isinstance(publication, VerifiedInsight)
     assert publication.claim == "Count for region = North is 2."
+    # The SQL policy owns the generated alias form; other names are not aliases.
+    assert generated_alias_function("count_1") == "count"
+    assert generated_alias_function("total_revenue") is None
 
 
 @pytest.mark.parametrize(
-    ("label", "inside_sentence"),
+    ("metric", "inside_sentence"),
     [
-        ("ANOVA F statistic", "ANOVA F statistic"),
-        ("Welch t statistic", "Welch t statistic"),
-        ("Chi-square statistic", "chi-square statistic"),
+        ("anova_f", "ANOVA F statistic"),
+        ("welch_t", "Welch t statistic"),
+        ("chi_square", "chi-square statistic"),
+        ("p_value", "p-value"),
     ],
 )
-def test_statistic_names_keep_their_capitals_inside_a_sentence(
-    label: str, inside_sentence: str
+def test_statistic_labels_keep_their_case_inside_a_sentence(
+    metric: str, inside_sentence: str
 ) -> None:
-    assert _lower_first(label) == inside_sentence
+    _, _, result = context()
+    assert _display_metric(metric, result) == inside_sentence
 
 
 def test_query_claim_is_published_with_complete_reproducible_evidence() -> None:

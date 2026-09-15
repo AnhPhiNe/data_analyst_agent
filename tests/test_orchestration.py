@@ -21,7 +21,7 @@ from tabular_analytics_agent.orchestration import (
     ApprovalDecision,
     open_sqlite_checkpointer,
 )
-from tabular_analytics_agent.orchestration.graph import _headline_statistical_metrics
+from tabular_analytics_agent.orchestration.evidence_catalog import headline_statistical_metrics
 from tabular_analytics_agent.statistics import StatisticalResult
 
 
@@ -532,8 +532,8 @@ def test_headline_metrics_are_group_means_or_the_lone_coefficient() -> None:
         }
     )
 
-    assert _headline_statistical_metrics(grouped) == ['group[str:"A"].mean', 'group[str:"B"].mean']
-    assert _headline_statistical_metrics(correlation) == ["pearson_r"]
+    assert headline_statistical_metrics(grouped) == ['group[str:"A"].mean', 'group[str:"B"].mean']
+    assert headline_statistical_metrics(correlation) == ["pearson_r"]
 
 
 def test_interpretation_prompt_says_counting_records_needs_no_mapping(tmp_path: Path) -> None:
@@ -548,7 +548,10 @@ def test_interpretation_prompt_says_counting_records_needs_no_mapping(tmp_path: 
     # Ranking without a named measure asks which field defines it; a named measure does not.
     assert "rank or judge entities without naming the measure" in prompt
     assert "When the request names the measure" in prompt
-    assert gateway.requests[0].prompt_template_version == "semantic-v14"
+    # Examples must not echo evaluation questions.
+    for echoed in ("top performer", "hiệu quả", "readings", "which columns have missing values"):
+        assert echoed not in prompt
+    assert gateway.requests[0].prompt_template_version == "semantic-v15"
 
 
 def test_invalid_chart_without_a_displayable_table_publishes_no_chart(tmp_path: Path) -> None:
@@ -599,7 +602,7 @@ def test_prompts_explain_independent_steps_and_inconsistent_spellings(tmp_path: 
     plan_request, tool_request = gateway.requests[1], gateway.requests[2]
 
     assert "cannot read an earlier step's result" in plan_request.prompt
-    assert plan_request.prompt_template_version == "plan-v8"
+    assert plan_request.prompt_template_version == "plan-v9"
     assert "LOWER(TRIM(field))" in tool_request.prompt
     assert "cannot read an earlier step's result" in tool_request.prompt
     assert tool_request.prompt_template_version == "tool-request-v13"
