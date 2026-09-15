@@ -26,7 +26,8 @@ it is included. Evidence for every claim is in
 - **Data Overview.** Right after upload, deterministic charts describe the data, including a
   correlation heatmap. An explorer lets you chart any measure by group, time period, and filters.
   No model is called.
-- **Goal suggestions.** Three to five questions are proposed from the profile.
+- **Goal suggestions.** Up to five questions are proposed from the profile (three or more for most
+  datasets).
 - **Clarification.** When a requested metric does not exist, or a field meaning changes the
   answer, the agent asks instead of guessing.
 - **Inspectable plans.** Each question becomes a plan of typed steps. Steps flagged for review

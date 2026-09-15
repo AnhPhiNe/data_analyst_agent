@@ -39,8 +39,8 @@ written by the same author who fixed the earlier failures.
 ## 3. Data sent to the model provider
 
 Details are in Spec Section 14.5. In short, the model receives field names and kinds, row counts,
-up to 10 frequent values of each non-PII field, tool error messages, and verified result values of
-at most 50 rows.
+the most frequent values of each non-PII field (5 by default), tool error messages, and verified
+result values of at most 50 rows.
 
 - `TABULAR_AGENT_SEND_SAMPLE_VALUES=false` withholds the frequent values but not field metadata or
   result values, and filters on text values then fail more often.
