@@ -264,7 +264,12 @@ def build_agent_graph(
                 "Create a semantic annotation only when a genuine ambiguity directly changes the "
                 "required calculation and blocks a responsible answer; otherwise continue and let "
                 "the later plan record the uncertainty as a caveat. Ask only for information "
-                "needed by this request. If semantic_annotations is non-empty, "
+                "needed by this request. A request to rank or judge entities without naming the "
+                "measure, such as the best product, the top performer, or the sản phẩm hiệu quả "
+                "nhất, needs clarification when the Data Profile has two or more numeric fields "
+                "that could each define the ranking: return a clarification_question naming those "
+                "candidate fields. When the request names the measure, such as highest revenue or "
+                "fewest defects, do not ask. If semantic_annotations is non-empty, "
                 "clarification_question must be a non-empty question asking the user to choose or "
                 "confirm the exact blocking interpretation. Set "
                 "answer_from_profile to true only when the request can be answered entirely from "
@@ -298,7 +303,7 @@ def build_agent_graph(
             ),
             response_schema=GoalInterpretation,
             system_instruction=SYSTEM_INSTRUCTION,
-            prompt_template_version="semantic-v13",
+            prompt_template_version="semantic-v14",
             timeout_seconds=model_call_timeout_seconds(state, budget, clock()),
         )
         trace: ModelCallTrace | None = None
@@ -1152,7 +1157,37 @@ def build_agent_graph(
                 },
                 validation_constraints=draft.validation_constraints,
             )
-            rendered = render_chart(intent, result, source_action, semantic_annotations=annotations)
+            try:
+                rendered = render_chart(
+                    intent, result, source_action, semantic_annotations=annotations
+                )
+            except ChartValidationError as exc:
+                # A verified result can always be shown exactly as a table, so an invalid
+                # proposal falls back to one instead of leaving the answer without a chart.
+                result_names = {column.name for column in result.columns}
+                table_intent = ChartIntent.model_validate(
+                    {
+                        **intent.model_dump(),
+                        "artifact_type": ArtifactType.TABLE,
+                        "x_field": None,
+                        "y_fields": (),
+                        "color_field": None,
+                        "labels": {
+                            key: value
+                            for key, value in intent.labels.items()
+                            if key in result_names
+                        },
+                        "formatting_intent": {},
+                        "validation_constraints": (
+                            *intent.validation_constraints,
+                            "Shown as a table because the proposed "
+                            f"{intent.artifact_type.value} chart was invalid: {safe_error(exc)}",
+                        ),
+                    }
+                )
+                rendered = render_chart(
+                    table_intent, result, source_action, semantic_annotations=annotations
+                )
             update: AgentState = {
                 "chart_renders": [rendered.model_dump(mode="json")],
                 "artifact_error": "",

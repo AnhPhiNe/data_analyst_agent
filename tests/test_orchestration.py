@@ -467,7 +467,48 @@ def test_interpretation_prompt_says_counting_records_needs_no_mapping(tmp_path: 
     prompt = gateway.requests[0].prompt
 
     assert "Counting rows or records is a row count, not a metric" in prompt
-    assert gateway.requests[0].prompt_template_version == "semantic-v13"
+    # Ranking without a named measure asks which field defines it; a named measure does not.
+    assert "rank or judge entities without naming the measure" in prompt
+    assert "When the request names the measure" in prompt
+    assert gateway.requests[0].prompt_template_version == "semantic-v14"
+
+
+def test_invalid_chart_without_a_displayable_table_publishes_no_chart(tmp_path: Path) -> None:
+    core = TabularDataCore(tmp_path / "session-data")
+    source = tmp_path / "many_regions.csv"
+    rows = "".join(f"Region {index},{index % 7}\n" for index in range(501))
+    source.write_text("region,revenue\n" + rows, encoding="utf-8", newline="")
+    handle = core.ingest(source)
+    request = AgentRunRequest(
+        session_id="analysis-session-1",
+        user_request="List revenue for every region",
+        dataset_handle=handle,
+        data_profile=core.profile(handle),
+    )
+    gateway = FakeModelGateway(
+        [
+            goal_output(),
+            plan_output(),
+            tool_output("SELECT region, revenue FROM dataset"),
+            insight_output(
+                operator="reports",
+                left_metric="row[0].revenue",
+                right_metric=None,
+                evidence_metrics=["row[0].revenue"],
+            ),
+            {**chart_output(), "artifact_type": "heatmap"},
+        ]
+    )
+    agent = AgentOrchestrator(gateway, core, checkpointer=InMemorySaver())
+
+    agent.start(request)
+    completed = agent.resume(request.session_id, True)
+
+    # The table fallback has limits too; a result it cannot display leaves the answer chartless.
+    assert completed["status"] == AgentRunStatus.COMPLETED
+    assert completed["verified_insights"]
+    assert completed["chart_renders"] == []
+    assert "500-row display limit" in completed["artifact_error"]
 
 
 def test_prompts_explain_independent_steps_and_inconsistent_spellings(tmp_path: Path) -> None:

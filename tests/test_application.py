@@ -217,7 +217,7 @@ def test_application_reports_restore_and_publication_preconditions(tmp_path: Pat
     assert failed_workspace.session.status is SessionStatus.FAILED
 
 
-def test_invalid_chart_proposal_does_not_discard_verified_analysis(tmp_path: Path) -> None:
+def test_invalid_chart_proposal_falls_back_to_the_verified_table(tmp_path: Path) -> None:
     outputs = model_outputs()
     invalid_chart = outputs[-1]
     invalid_chart["artifact_type"] = "heatmap"
@@ -228,8 +228,12 @@ def test_invalid_chart_proposal_does_not_discard_verified_analysis(tmp_path: Pat
     application.start(workspace, "Compare total revenue by region")
     completed = application.resume(workspace, True)
 
+    # The verified analysis stands, and the invalid proposal is replaced by the exact result table.
     assert completed["status"] == AgentRunStatus.COMPLETED
     assert completed["verified_insights"]
-    assert completed["chart_renders"] == []
-    assert "not implemented" in completed["artifact_error"]
-    assert application.publish_candidates(workspace, completed) == ()
+    assert completed["artifact_error"] == ""
+    intent = completed["chart_renders"][0]["intent"]
+    assert intent["artifact_type"] == "table"
+    assert "proposed heatmap chart was invalid" in intent["validation_constraints"][-1]
+    assert "not implemented" in intent["validation_constraints"][-1]
+    assert len(application.publish_candidates(workspace, completed)) == 1
