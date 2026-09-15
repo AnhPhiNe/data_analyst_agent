@@ -14,6 +14,7 @@ from pydantic import Field
 from tabular_analytics_agent.evaluation.models import (
     EvaluationModel,
     ExpectedCalculation,
+    ExpectedGroup,
     ExpectedOutcome,
     ExpectedProfileFact,
     GoldenCase,
@@ -21,7 +22,7 @@ from tabular_analytics_agent.evaluation.models import (
 from tabular_analytics_agent.orchestration import AgentRunStatus, AgentState, RefusalCode
 
 Scalar = str | int | float | bool | None
-GRADING_VERSION = "5"
+GRADING_VERSION = "6"
 # Statistical group labels are JSON-encoded ("group[str:<json>]"), with or without escapes.
 _GROUP_LABEL = re.compile(r'group\[(\w+):("(?:[^"\\]|\\.)*")\]')
 _MISSING = object()
@@ -356,13 +357,16 @@ def _answer_checks(
     case: GoldenCase, state: AgentState
 ) -> tuple[list[CheckResult], dict[str, int | bool]]:
     computed = _computed_values(state)
-    missing_computed = [
-        item for item in case.required_calculations if not _calculation_matches(item, computed)
-    ]
+    # A case may accept several valid methods; the set this run matched best is graded.
+    required = min(
+        (case.required_calculations, *case.alternative_calculations),
+        key=lambda calculations: sum(
+            not _calculation_matches(item, computed) for item in calculations
+        ),
+    )
+    missing_computed = [item for item in required if not _calculation_matches(item, computed)]
     missing_coverage = [
-        item
-        for item in case.required_calculations
-        if not _insight_covers_calculation(item, computed, state)
+        item for item in required if not _insight_covers_calculation(item, computed, state)
     ]
     allowed = {field.casefold() for field in case.allowed_fields}
     used = sorted(
@@ -384,8 +388,8 @@ def _answer_checks(
         ),
     ]
     counts: dict[str, int | bool] = {
-        "expected_values": len(case.required_calculations),
-        "found_values": len(case.required_calculations) - len(missing_computed),
+        "expected_values": len(required),
+        "found_values": len(required) - len(missing_computed),
         "fields_used": len(used),
         "allowed_fields_used": len(used) - len(outside),
     }
@@ -562,7 +566,7 @@ def _metric_matches(calculation: ExpectedCalculation, value: _OutputValue) -> bo
     if any(_text_equal(value.metric, field) for field, _ in value.group_values):
         # A GROUP BY label identifies the row; it is never the measured value.
         return False
-    if calculation.group is not None or value.result_row_count == 1:
+    if _group_identities(calculation) or value.result_row_count == 1:
         # Query output names are model-chosen aliases, so a grouped row or a single-row result
         # is matched by its group and value rather than by guessing the alias.
         return True
@@ -571,13 +575,18 @@ def _metric_matches(calculation: ExpectedCalculation, value: _OutputValue) -> bo
     )
 
 
+def _group_identities(calculation: ExpectedCalculation) -> tuple[ExpectedGroup, ...]:
+    return tuple(group for group in (calculation.group, *calculation.groups) if group is not None)
+
+
 def _group_matches(calculation: ExpectedCalculation, value: _OutputValue) -> bool:
-    if calculation.group is None:
-        return True
-    return any(
-        _text_equal(calculation.group.field, field)
-        and _scalar_equal(calculation.group.value, group_value)
-        for field, group_value in value.group_values
+    return all(
+        any(
+            (identity.field is None or _text_equal(identity.field, field))
+            and _scalar_equal(identity.value, group_value)
+            for field, group_value in value.group_values
+        )
+        for identity in _group_identities(calculation)
     )
 
 
@@ -730,9 +739,11 @@ def _check(name: str, passed: bool, detail: str) -> CheckResult:
 
 
 def _calculation_label(calculation: ExpectedCalculation) -> str:
-    if calculation.group is None:
+    identities = _group_identities(calculation)
+    if not identities:
         return calculation.metric
-    return f"{calculation.metric} where {calculation.group.field}={calculation.group.value}"
+    where = ", ".join(f"{item.field or 'group'}={item.value}" for item in identities)
+    return f"{calculation.metric} where {where}"
 
 
 def _missing_detail(missing: Sequence[ExpectedCalculation]) -> str:

@@ -1,0 +1,51 @@
+{
+  "case_id": "release-penguins-count-by-island-v1",
+  "dataset_path": "tests/fixtures/eval_release/penguins.csv",
+  "dataset_sha256": "e07636bd8af74260099ea2f8678e2eabbf35def579940cc76f67061ee16c06c1",
+  "user_request": "dem so penguin theo dao giup minh",
+  "goal_family": "summary",
+  "expected_outcome": "answered",
+  "acceptable_outcomes": [],
+  "required_calculations": [
+    {
+      "metric": "count",
+      "expected": 168,
+      "absolute_tolerance": 1e-06,
+      "group": {
+        "field": "island",
+        "value": "Biscoe"
+      }
+    },
+    {
+      "metric": "count",
+      "expected": 124,
+      "absolute_tolerance": 1e-06,
+      "group": {
+        "field": "island",
+        "value": "Dream"
+      }
+    },
+    {
+      "metric": "count",
+      "expected": 52,
+      "absolute_tolerance": 1e-06,
+      "group": {
+        "field": "island",
+        "value": "Torgersen"
+      }
+    }
+  ],
+  "required_profile_facts": [],
+  "allowed_fields": [
+    "island"
+  ],
+  "allowed_filters": [],
+  "supported_conclusions": [
+    "Biscoe has the most penguins."
+  ],
+  "forbidden_claims": [],
+  "valid_chart_types": [
+    "bar",
+    "table"
+  ]
+}

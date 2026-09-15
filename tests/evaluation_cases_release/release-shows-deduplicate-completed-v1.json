@@ -1,0 +1,37 @@
+{
+  "case_id": "release-shows-deduplicate-completed-v1",
+  "dataset_path": "tests/fixtures/eval_release/live_show_logs_dirty.xlsx",
+  "dataset_sha256": "5dcafe62f8e5efcaa1e391312cd241bed3db6f25b90079023d1971f1e68e900a",
+  "user_request": "How many completed shows are there after removing exact duplicate rows?",
+  "goal_family": "data_quality",
+  "expected_outcome": "answered",
+  "acceptable_outcomes": [],
+  "required_calculations": [
+    {
+      "metric": "count",
+      "expected": 666,
+      "absolute_tolerance": 1e-06
+    }
+  ],
+  "required_profile_facts": [],
+  "allowed_fields": [
+    "show_code",
+    "ngay",
+    "the_loai",
+    "venue",
+    "audience_count",
+    "ticket_revenue_vnd",
+    "audience_rating",
+    "duration_min",
+    "status"
+  ],
+  "allowed_filters": [],
+  "supported_conclusions": [
+    "Completed shows are counted once each after removing exact duplicates."
+  ],
+  "forbidden_claims": [],
+  "valid_chart_types": [
+    "kpi",
+    "table"
+  ]
+}

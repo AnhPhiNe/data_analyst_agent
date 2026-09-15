@@ -1,0 +1,20 @@
+{
+  "case_id": "release-recycling-best-zone-ambiguous-v1",
+  "dataset_path": "tests/fixtures/eval_release/recycling_intake_dirty.csv",
+  "dataset_sha256": "68dc27422a234fa113172627614f31a376b967a214eb952dca70d76722c8ff84",
+  "user_request": "Khu nào tốt nhất?",
+  "goal_family": "comparison",
+  "expected_outcome": "clarification",
+  "acceptable_outcomes": [],
+  "required_calculations": [],
+  "required_profile_facts": [],
+  "allowed_fields": [
+    "khu",
+    "gia_tri_uoc_tinh_vnd",
+    "do_am_pct"
+  ],
+  "allowed_filters": [],
+  "supported_conclusions": [],
+  "forbidden_claims": [],
+  "valid_chart_types": []
+}

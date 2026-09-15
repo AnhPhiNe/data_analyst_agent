@@ -1,0 +1,52 @@
+{
+  "case_id": "release-recycling-value-by-zone-v1",
+  "dataset_path": "tests/fixtures/eval_release/recycling_intake_dirty.csv",
+  "dataset_sha256": "68dc27422a234fa113172627614f31a376b967a214eb952dca70d76722c8ff84",
+  "user_request": "Tính tổng giá trị ước tính theo từng khu tiếp nhận.",
+  "goal_family": "summary",
+  "expected_outcome": "answered",
+  "acceptable_outcomes": [],
+  "required_calculations": [
+    {
+      "metric": "gia_tri_uoc_tinh_vnd",
+      "expected": 68653487.0,
+      "absolute_tolerance": 0.5,
+      "group": {
+        "field": "khu",
+        "value": "K1"
+      }
+    },
+    {
+      "metric": "gia_tri_uoc_tinh_vnd",
+      "expected": 43904657.0,
+      "absolute_tolerance": 0.5,
+      "group": {
+        "field": "khu",
+        "value": "K2"
+      }
+    },
+    {
+      "metric": "gia_tri_uoc_tinh_vnd",
+      "expected": 43276341.0,
+      "absolute_tolerance": 0.5,
+      "group": {
+        "field": "khu",
+        "value": "K3"
+      }
+    }
+  ],
+  "required_profile_facts": [],
+  "allowed_fields": [
+    "khu",
+    "gia_tri_uoc_tinh_vnd"
+  ],
+  "allowed_filters": [],
+  "supported_conclusions": [
+    "Zone K1 has the highest total estimated value."
+  ],
+  "forbidden_claims": [],
+  "valid_chart_types": [
+    "bar",
+    "table"
+  ]
+}

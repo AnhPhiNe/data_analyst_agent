@@ -1,0 +1,43 @@
+{
+  "case_id": "release-cacao-average-moisture-v1",
+  "dataset_path": "tests/fixtures/eval_release/cacao_roast_trials.csv",
+  "dataset_sha256": "7ff3af6cfafc3021e3bf9300322b9282855874daed794479de6893e3c04a2e3f",
+  "user_request": "Compare the average post-roast moisture across roasting methods.",
+  "goal_family": "comparison",
+  "expected_outcome": "answered",
+  "acceptable_outcomes": [],
+  "required_calculations": [
+    {
+      "metric": "do_am_sau_rang_pct",
+      "expected": 3.1,
+      "absolute_tolerance": 1e-06,
+      "group": {
+        "field": "phuong_phap",
+        "value": "A"
+      }
+    },
+    {
+      "metric": "do_am_sau_rang_pct",
+      "expected": 2.5,
+      "absolute_tolerance": 1e-06,
+      "group": {
+        "field": "phuong_phap",
+        "value": "B"
+      }
+    }
+  ],
+  "required_profile_facts": [],
+  "allowed_fields": [
+    "phuong_phap",
+    "do_am_sau_rang_pct"
+  ],
+  "allowed_filters": [],
+  "supported_conclusions": [
+    "Method A has higher average post-roast moisture."
+  ],
+  "forbidden_claims": [],
+  "valid_chart_types": [
+    "bar",
+    "table"
+  ]
+}

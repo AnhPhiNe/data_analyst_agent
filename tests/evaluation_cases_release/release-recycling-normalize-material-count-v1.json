@@ -1,0 +1,56 @@
+{
+  "case_id": "release-recycling-normalize-material-count-v1",
+  "dataset_path": "tests/fixtures/eval_release/recycling_intake_dirty.csv",
+  "dataset_sha256": "68dc27422a234fa113172627614f31a376b967a214eb952dca70d76722c8ff84",
+  "user_request": "gom NHUA, nhua va nhua co khoang trang roi dem sl theo vat lieu nhe",
+  "goal_family": "data_quality",
+  "expected_outcome": "answered",
+  "acceptable_outcomes": [],
+  "required_calculations": [
+    {
+      "metric": "count",
+      "expected": 205,
+      "absolute_tolerance": 1e-06,
+      "group": {
+        "value": "nhựa"
+      }
+    },
+    {
+      "metric": "count",
+      "expected": 187,
+      "absolute_tolerance": 1e-06,
+      "group": {
+        "value": "giấy"
+      }
+    },
+    {
+      "metric": "count",
+      "expected": 84,
+      "absolute_tolerance": 1e-06,
+      "group": {
+        "value": "nhôm"
+      }
+    },
+    {
+      "metric": "count",
+      "expected": 130,
+      "absolute_tolerance": 1e-06,
+      "group": {
+        "value": "thủy tinh"
+      }
+    }
+  ],
+  "required_profile_facts": [],
+  "allowed_fields": [
+    "vat_lieu"
+  ],
+  "allowed_filters": [],
+  "supported_conclusions": [
+    "Material counts are reported after merging case and spacing variants."
+  ],
+  "forbidden_claims": [],
+  "valid_chart_types": [
+    "bar",
+    "table"
+  ]
+}

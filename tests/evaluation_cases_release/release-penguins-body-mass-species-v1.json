@@ -1,0 +1,52 @@
+{
+  "case_id": "release-penguins-body-mass-species-v1",
+  "dataset_path": "tests/fixtures/eval_release/penguins.csv",
+  "dataset_sha256": "e07636bd8af74260099ea2f8678e2eabbf35def579940cc76f67061ee16c06c1",
+  "user_request": "What is the average body mass for each species?",
+  "goal_family": "comparison",
+  "expected_outcome": "answered",
+  "acceptable_outcomes": [],
+  "required_calculations": [
+    {
+      "metric": "body_mass_g",
+      "expected": 3700.662251655629,
+      "absolute_tolerance": 1e-06,
+      "group": {
+        "field": "species",
+        "value": "Adelie"
+      }
+    },
+    {
+      "metric": "body_mass_g",
+      "expected": 3733.0882352941176,
+      "absolute_tolerance": 1e-06,
+      "group": {
+        "field": "species",
+        "value": "Chinstrap"
+      }
+    },
+    {
+      "metric": "body_mass_g",
+      "expected": 5076.016260162602,
+      "absolute_tolerance": 1e-06,
+      "group": {
+        "field": "species",
+        "value": "Gentoo"
+      }
+    }
+  ],
+  "required_profile_facts": [],
+  "allowed_fields": [
+    "species",
+    "body_mass_g"
+  ],
+  "allowed_filters": [],
+  "supported_conclusions": [
+    "Gentoo penguins have the highest average body mass."
+  ],
+  "forbidden_claims": [],
+  "valid_chart_types": [
+    "bar",
+    "table"
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "case_id": "release-tips-income-missing-v1",
+  "dataset_path": "tests/fixtures/eval_release/tips.csv",
+  "dataset_sha256": "e54cc4d2ce1bff65d32ca60b3e4b802e06bde1d7e7caf6f796f6bf7370e863b0",
+  "user_request": "Khách tip nhiều có thu nhập cao hơn không?",
+  "goal_family": "relationship",
+  "expected_outcome": "clarification",
+  "acceptable_outcomes": [
+    "refused"
+  ],
+  "required_calculations": [],
+  "required_profile_facts": [],
+  "allowed_fields": [
+    "tip"
+  ],
+  "allowed_filters": [],
+  "supported_conclusions": [],
+  "forbidden_claims": [],
+  "valid_chart_types": []
+}

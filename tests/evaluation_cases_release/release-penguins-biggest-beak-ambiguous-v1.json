@@ -1,0 +1,20 @@
+{
+  "case_id": "release-penguins-biggest-beak-ambiguous-v1",
+  "dataset_path": "tests/fixtures/eval_release/penguins.csv",
+  "dataset_sha256": "e07636bd8af74260099ea2f8678e2eabbf35def579940cc76f67061ee16c06c1",
+  "user_request": "Đảo nào có mỏ to nhất?",
+  "goal_family": "comparison",
+  "expected_outcome": "clarification",
+  "acceptable_outcomes": [],
+  "required_calculations": [],
+  "required_profile_facts": [],
+  "allowed_fields": [
+    "island",
+    "bill_length_mm",
+    "bill_depth_mm"
+  ],
+  "allowed_filters": [],
+  "supported_conclusions": [],
+  "forbidden_claims": [],
+  "valid_chart_types": []
+}

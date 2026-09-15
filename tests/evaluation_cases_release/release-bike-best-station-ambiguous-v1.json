@@ -1,0 +1,20 @@
+{
+  "case_id": "release-bike-best-station-ambiguous-v1",
+  "dataset_path": "tests/fixtures/eval_release/bike_share_station_days.csv",
+  "dataset_sha256": "b96a70e2a6ad44ac98137843f29cc80dd01629a6fb9f11b62bfcd34b74b3a8e4",
+  "user_request": "Trạm nào tốt nhất vậy?",
+  "goal_family": "comparison",
+  "expected_outcome": "clarification",
+  "acceptable_outcomes": [],
+  "required_calculations": [],
+  "required_profile_facts": [],
+  "allowed_fields": [
+    "tram",
+    "doanh_thu_vnd",
+    "diem_hai_long"
+  ],
+  "allowed_filters": [],
+  "supported_conclusions": [],
+  "forbidden_claims": [],
+  "valid_chart_types": []
+}

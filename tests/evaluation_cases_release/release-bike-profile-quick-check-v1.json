@@ -1,0 +1,58 @@
+{
+  "case_id": "release-bike-profile-quick-check-v1",
+  "dataset_path": "tests/fixtures/eval_release/bike_share_station_days.csv",
+  "dataset_sha256": "b96a70e2a6ad44ac98137843f29cc80dd01629a6fb9f11b62bfcd34b74b3a8e4",
+  "user_request": "bảng này có bao nhiêu dòng, cột nào thiếu dữ liệu ko?",
+  "goal_family": "data_quality",
+  "expected_outcome": "profile",
+  "acceptable_outcomes": [],
+  "required_calculations": [],
+  "required_profile_facts": [
+    {
+      "fact": "row_count",
+      "expected": 12
+    },
+    {
+      "fact": "missing_count",
+      "field": "ngay",
+      "expected": 0
+    },
+    {
+      "fact": "missing_count",
+      "field": "tram",
+      "expected": 0
+    },
+    {
+      "fact": "missing_count",
+      "field": "luot_thue",
+      "expected": 0
+    },
+    {
+      "fact": "missing_count",
+      "field": "phut_thue_tb",
+      "expected": 0
+    },
+    {
+      "fact": "missing_count",
+      "field": "doanh_thu_vnd",
+      "expected": 0
+    },
+    {
+      "fact": "missing_count",
+      "field": "diem_hai_long",
+      "expected": 0
+    }
+  ],
+  "allowed_fields": [
+    "ngay",
+    "tram",
+    "luot_thue",
+    "phut_thue_tb",
+    "doanh_thu_vnd",
+    "diem_hai_long"
+  ],
+  "allowed_filters": [],
+  "supported_conclusions": [],
+  "forbidden_claims": [],
+  "valid_chart_types": []
+}

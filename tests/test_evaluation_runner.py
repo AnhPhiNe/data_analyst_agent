@@ -32,6 +32,7 @@ HOLDOUT_V6_CASES = ROOT / "tests" / "evaluation_cases_holdout_v6"
 HOLDOUT_V7_CASES = ROOT / "tests" / "evaluation_cases_holdout_v7"
 HOLDOUT_V8_CASES = ROOT / "tests" / "evaluation_cases_holdout_v8"
 HOLDOUT_V9_CASES = ROOT / "tests" / "evaluation_cases_holdout_v9"
+RELEASE_CASES = ROOT / "tests" / "evaluation_cases_release"
 
 
 def load_case(filename: str) -> GoldenCase:
@@ -103,6 +104,7 @@ def test_every_committed_case_is_bound_to_its_dataset() -> None:
     holdout_v7 = load_cases(HOLDOUT_V7_CASES)
     holdout_v8 = load_cases(HOLDOUT_V8_CASES)
     holdout_v9 = load_cases(HOLDOUT_V9_CASES)
+    release = load_cases(RELEASE_CASES)
     cases = (
         *development,
         *holdout,
@@ -113,6 +115,7 @@ def test_every_committed_case_is_bound_to_its_dataset() -> None:
         *holdout_v7,
         *holdout_v8,
         *holdout_v9,
+        *release,
     )
 
     assert holdout_v3
@@ -122,6 +125,7 @@ def test_every_committed_case_is_bound_to_its_dataset() -> None:
     assert holdout_v7
     assert holdout_v8
     assert holdout_v9
+    assert len(release) == 40
     # Each holdout set's datasets were unseen by every earlier case set when it was committed.
     earlier_datasets = {case.dataset_path for case in (*development, *holdout)}
     assert not earlier_datasets & {case.dataset_path for case in holdout_v3}
@@ -137,6 +141,9 @@ def test_every_committed_case_is_bound_to_its_dataset() -> None:
     assert not earlier_datasets & {case.dataset_path for case in holdout_v8}
     earlier_datasets |= {case.dataset_path for case in holdout_v8}
     assert not earlier_datasets & {case.dataset_path for case in holdout_v9}
+    earlier_datasets |= {case.dataset_path for case in holdout_v9}
+    # The release suite uses datasets that no development or holdout case has used.
+    assert not earlier_datasets & {case.dataset_path for case in release}
 
     assert development
     assert load_cases(HOLDOUT_CASES)
@@ -714,3 +721,105 @@ def test_summary_totals_tokens_and_estimates_cost_from_given_prices() -> None:
     assert estimate_cost_usd(
         3_000, 600, input_price_per_million=0.1, output_price_per_million=0.4
     ) == pytest.approx(0.00054)
+
+
+def test_grouped_value_can_require_several_group_columns_or_any_derived_group() -> None:
+    case = load_case("tiny_sales_summary.json").model_copy(
+        update={
+            "required_calculations": (
+                ExpectedCalculation.model_validate(
+                    {
+                        "metric": "rate",
+                        "expected": 0.2,
+                        "group": {"field": "oven", "value": "L1"},
+                        "groups": [{"field": "shift", "value": "Night"}],
+                    }
+                ),
+            ),
+            "valid_chart_types": (),
+        }
+    )
+    columns = ["oven", "shift", "rate"]
+    both_keys = query_only_state(columns, [["L1", "Day", 0.1], ["L1", "Night", 0.2]], columns[:2])
+    wrong_pair = query_only_state(columns, [["L1", "Day", 0.2], ["L2", "Night", 0.2]], columns[:2])
+    derived = case.model_copy(
+        update={
+            "required_calculations": (
+                ExpectedCalculation.model_validate(
+                    {"metric": "count", "expected": 7, "group": {"value": "nhựa"}}
+                ),
+            )
+        }
+    )
+    # A normalized label's output name is chosen by the model, so only its value is matched.
+    normalized = query_only_state(
+        ["vat_lieu_chuan", "so_dong"], [["nhựa", 7], ["giấy", 5]], ["vat_lieu_chuan"]
+    )
+
+    def calculations_passed(graded_case: GoldenCase, state: AgentState) -> bool:
+        return next(
+            c for c in grade_run(graded_case, state).checks if c.name == "calculations"
+        ).passed
+
+    assert calculations_passed(case, both_keys)
+    assert not calculations_passed(case, wrong_pair)
+    assert calculations_passed(derived, normalized)
+
+
+def test_case_passes_with_any_complete_alternative_calculation_set() -> None:
+    means = (
+        ExpectedCalculation(metric='group[str:"A"].mean', expected=7.4, absolute_tolerance=1e-6),
+    )
+    medians = (
+        ExpectedCalculation(metric='group[str:"A"].median', expected=7.3, absolute_tolerance=1e-6),
+    )
+    case = load_case("tiny_sales_summary.json").model_copy(
+        update={
+            "required_calculations": means,
+            "alternative_calculations": (medians,),
+            "valid_chart_types": (),
+        }
+    )
+
+    def statistical_state(metric: str, value: float) -> AgentState:
+        return {
+            "status": "completed",
+            "statistical_results": [
+                {
+                    "result_id": "stats-1",
+                    "estimates": [{"metric": metric, "value": value}],
+                    "statistic_name": "mann_whitney_u",
+                    "statistic": 3.0,
+                    "p_value": 0.01,
+                    "adjusted_alpha": 0.05,
+                    "statistically_significant": True,
+                }
+            ],
+            "tool_actions": [
+                {
+                    "action_id": "stats-action",
+                    "status": "succeeded",
+                    "output_ref": "statistical-result:stats-1",
+                }
+            ],
+            "verified_insights": [
+                {
+                    "claim": "group median",
+                    "assertion": {"operator": "reports", "left_metric": metric},
+                    "evidence": {
+                        "tool_action_ids": ["stats-action"],
+                        "values": [{"metric": metric, "value": value}],
+                    },
+                }
+            ],
+        }
+
+    # A Mann-Whitney run reports medians instead of means and is graded on that valid set.
+    median_run = grade_run(case, statistical_state('group[str:"A"].median', 7.3))
+    wrong_run = grade_run(case, statistical_state('group[str:"A"].median', 9.9))
+
+    assert median_run.passed
+    assert median_run.gate_counts.expected_values == 1
+    assert not wrong_run.passed
+    with pytest.raises(ValueError, match="alternative calculation set cannot be empty"):
+        GoldenCase.model_validate({**case.model_dump(), "alternative_calculations": [[]]})

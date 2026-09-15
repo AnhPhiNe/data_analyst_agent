@@ -1,0 +1,60 @@
+{
+  "case_id": "release-coating-adhesion-anova-v1",
+  "dataset_path": "tests/fixtures/eval_release/powder_coating_quality.csv",
+  "dataset_sha256": "0325daa173bbf832877d0f1b0b254b467f4dbe433a6d4ae7e79e64edc8837eb7",
+  "user_request": "Does adhesion strength differ across coating types?",
+  "goal_family": "comparison",
+  "expected_outcome": "answered",
+  "acceptable_outcomes": [],
+  "required_calculations": [
+    {
+      "metric": "group[str:\"Epoxy\"].mean",
+      "expected": 5.194353535353535,
+      "absolute_tolerance": 1e-06
+    },
+    {
+      "metric": "group[str:\"Hybrid\"].mean",
+      "expected": 5.883453020134228,
+      "absolute_tolerance": 1e-06
+    },
+    {
+      "metric": "group[str:\"Polyester\"].mean",
+      "expected": 5.574070945945945,
+      "absolute_tolerance": 1e-06
+    }
+  ],
+  "required_profile_facts": [],
+  "allowed_fields": [
+    "loai_son",
+    "do_bam_dinh_mpa"
+  ],
+  "allowed_filters": [],
+  "supported_conclusions": [
+    "Adhesion strength differs across coating types."
+  ],
+  "forbidden_claims": [
+    "gây ra",
+    "causes",
+    "proves causation"
+  ],
+  "valid_chart_types": [],
+  "alternative_calculations": [
+    [
+      {
+        "metric": "group[str:\"Epoxy\"].median",
+        "expected": 5.233,
+        "absolute_tolerance": 1e-06
+      },
+      {
+        "metric": "group[str:\"Hybrid\"].median",
+        "expected": 5.9085,
+        "absolute_tolerance": 1e-06
+      },
+      {
+        "metric": "group[str:\"Polyester\"].median",
+        "expected": 5.5865,
+        "absolute_tolerance": 1e-06
+      }
+    ]
+  ]
+}

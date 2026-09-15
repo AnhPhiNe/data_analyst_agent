@@ -1,0 +1,35 @@
+{
+  "case_id": "release-shows-monthly-revenue-mixed-dates-v1",
+  "dataset_path": "tests/fixtures/eval_release/live_show_logs_dirty.xlsx",
+  "dataset_sha256": "5dcafe62f8e5efcaa1e391312cd241bed3db6f25b90079023d1971f1e68e900a",
+  "user_request": "doanh thu thang 3/2025 la bao nhieu, ngay dang bi lon xon format do",
+  "goal_family": "data_quality",
+  "expected_outcome": "answered",
+  "acceptable_outcomes": [],
+  "required_calculations": [
+    {
+      "metric": "ticket_revenue_vnd",
+      "expected": 4471870724.0,
+      "absolute_tolerance": 0.5,
+      "aliases": [
+        "doanh_thu",
+        "tong_doanh_thu",
+        "total_revenue"
+      ]
+    }
+  ],
+  "required_profile_facts": [],
+  "allowed_fields": [
+    "ngay",
+    "ticket_revenue_vnd"
+  ],
+  "allowed_filters": [],
+  "supported_conclusions": [
+    "Ticket revenue for March 2025 is summed after parsing both date formats."
+  ],
+  "forbidden_claims": [],
+  "valid_chart_types": [
+    "kpi",
+    "table"
+  ]
+}

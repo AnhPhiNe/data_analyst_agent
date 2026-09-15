@@ -1,0 +1,31 @@
+{
+  "case_id": "release-shows-audience-rating-correlation-v1",
+  "dataset_path": "tests/fixtures/eval_release/live_show_logs_dirty.xlsx",
+  "dataset_sha256": "5dcafe62f8e5efcaa1e391312cd241bed3db6f25b90079023d1971f1e68e900a",
+  "user_request": "Is audience count correlated with audience rating?",
+  "goal_family": "relationship",
+  "expected_outcome": "answered",
+  "acceptable_outcomes": [],
+  "required_calculations": [
+    {
+      "metric": "pearson_r",
+      "expected": 0.6645441235540793,
+      "absolute_tolerance": 1e-06
+    }
+  ],
+  "required_profile_facts": [],
+  "allowed_fields": [
+    "audience_count",
+    "audience_rating"
+  ],
+  "allowed_filters": [],
+  "supported_conclusions": [
+    "Audience count and audience rating are positively correlated."
+  ],
+  "forbidden_claims": [
+    "gây ra",
+    "causes",
+    "proves causation"
+  ],
+  "valid_chart_types": []
+}

@@ -1,0 +1,44 @@
+{
+  "case_id": "release-tips-lunch-dinner-average-bill-v1",
+  "dataset_path": "tests/fixtures/eval_release/tips.csv",
+  "dataset_sha256": "e54cc4d2ce1bff65d32ca60b3e4b802e06bde1d7e7caf6f796f6bf7370e863b0",
+  "user_request": "buoi nao bill tb cao hon, lunch hay dinner?",
+  "goal_family": "comparison",
+  "expected_outcome": "answered",
+  "acceptable_outcomes": [],
+  "required_calculations": [
+    {
+      "metric": "total_bill",
+      "expected": 20.79715909090909,
+      "absolute_tolerance": 1e-06,
+      "group": {
+        "field": "time",
+        "value": "Dinner"
+      }
+    },
+    {
+      "metric": "total_bill",
+      "expected": 17.168676470588235,
+      "absolute_tolerance": 1e-06,
+      "group": {
+        "field": "time",
+        "value": "Lunch"
+      }
+    }
+  ],
+  "required_profile_facts": [],
+  "allowed_fields": [
+    "time",
+    "total_bill"
+  ],
+  "allowed_filters": [],
+  "supported_conclusions": [
+    "Dinner has the higher average bill."
+  ],
+  "forbidden_claims": [],
+  "valid_chart_types": [
+    "bar",
+    "kpi",
+    "table"
+  ]
+}

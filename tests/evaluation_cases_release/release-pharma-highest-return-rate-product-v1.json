@@ -1,0 +1,49 @@
+{
+  "case_id": "release-pharma-highest-return-rate-product-v1",
+  "dataset_path": "tests/fixtures/eval_release/pharma_b2b_orders.csv",
+  "dataset_sha256": "9a0383eff61ab6675de99b80d6b92120ee59a46aae1012195d250294fff4ce3b",
+  "user_request": "Which product group has the highest return rate, using returned quantity over sold quantity?",
+  "goal_family": "comparison",
+  "expected_outcome": "answered",
+  "acceptable_outcomes": [],
+  "required_calculations": [
+    {
+      "metric": "return_rate",
+      "expected": 0.059504464204203106,
+      "absolute_tolerance": 0.0005,
+      "group": {
+        "field": "nhom_san_pham",
+        "value": "Vitamin"
+      }
+    }
+  ],
+  "required_profile_facts": [],
+  "allowed_fields": [
+    "nhom_san_pham",
+    "so_luong_tra_lai",
+    "so_luong"
+  ],
+  "allowed_filters": [],
+  "supported_conclusions": [
+    "Vitamin has the highest return rate."
+  ],
+  "forbidden_claims": [],
+  "valid_chart_types": [
+    "kpi",
+    "bar",
+    "table"
+  ],
+  "alternative_calculations": [
+    [
+      {
+        "metric": "return_rate",
+        "expected": 0.05915664108433847,
+        "absolute_tolerance": 0.0005,
+        "group": {
+          "field": "nhom_san_pham",
+          "value": "Vitamin"
+        }
+      }
+    ]
+  ]
+}

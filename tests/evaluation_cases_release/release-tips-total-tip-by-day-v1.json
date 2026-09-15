@@ -1,0 +1,77 @@
+{
+  "case_id": "release-tips-total-tip-by-day-v1",
+  "dataset_path": "tests/fixtures/eval_release/tips.csv",
+  "dataset_sha256": "e54cc4d2ce1bff65d32ca60b3e4b802e06bde1d7e7caf6f796f6bf7370e863b0",
+  "user_request": "Tính tổng tiền tip theo từng ngày trong tuần.",
+  "goal_family": "summary",
+  "expected_outcome": "answered",
+  "acceptable_outcomes": [],
+  "required_calculations": [
+    {
+      "metric": "tip",
+      "expected": 51.96,
+      "absolute_tolerance": 1e-06,
+      "aliases": [
+        "total_tip",
+        "tong_tip"
+      ],
+      "group": {
+        "field": "day",
+        "value": "Fri"
+      }
+    },
+    {
+      "metric": "tip",
+      "expected": 260.4,
+      "absolute_tolerance": 1e-06,
+      "aliases": [
+        "total_tip",
+        "tong_tip"
+      ],
+      "group": {
+        "field": "day",
+        "value": "Sat"
+      }
+    },
+    {
+      "metric": "tip",
+      "expected": 247.39,
+      "absolute_tolerance": 1e-06,
+      "aliases": [
+        "total_tip",
+        "tong_tip"
+      ],
+      "group": {
+        "field": "day",
+        "value": "Sun"
+      }
+    },
+    {
+      "metric": "tip",
+      "expected": 171.82999999999998,
+      "absolute_tolerance": 1e-06,
+      "aliases": [
+        "total_tip",
+        "tong_tip"
+      ],
+      "group": {
+        "field": "day",
+        "value": "Thur"
+      }
+    }
+  ],
+  "required_profile_facts": [],
+  "allowed_fields": [
+    "day",
+    "tip"
+  ],
+  "allowed_filters": [],
+  "supported_conclusions": [
+    "Sat has the highest total tips."
+  ],
+  "forbidden_claims": [],
+  "valid_chart_types": [
+    "bar",
+    "table"
+  ]
+}

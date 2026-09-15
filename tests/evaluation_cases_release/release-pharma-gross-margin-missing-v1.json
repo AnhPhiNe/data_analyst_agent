@@ -1,0 +1,22 @@
+{
+  "case_id": "release-pharma-gross-margin-missing-v1",
+  "dataset_path": "tests/fixtures/eval_release/pharma_b2b_orders.csv",
+  "dataset_sha256": "9a0383eff61ab6675de99b80d6b92120ee59a46aae1012195d250294fff4ce3b",
+  "user_request": "What is gross margin by customer type?",
+  "goal_family": "summary",
+  "expected_outcome": "clarification",
+  "acceptable_outcomes": [
+    "refused"
+  ],
+  "required_calculations": [],
+  "required_profile_facts": [],
+  "allowed_fields": [
+    "loai_khach_hang",
+    "doanh_thu_vnd",
+    "chiet_khau_pct"
+  ],
+  "allowed_filters": [],
+  "supported_conclusions": [],
+  "forbidden_claims": [],
+  "valid_chart_types": []
+}

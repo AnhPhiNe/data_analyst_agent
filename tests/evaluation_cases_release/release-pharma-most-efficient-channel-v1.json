@@ -1,0 +1,20 @@
+{
+  "case_id": "release-pharma-most-efficient-channel-v1",
+  "dataset_path": "tests/fixtures/eval_release/pharma_b2b_orders.csv",
+  "dataset_sha256": "9a0383eff61ab6675de99b80d6b92120ee59a46aae1012195d250294fff4ce3b",
+  "user_request": "Kênh đặt hàng nào hiệu quả nhất?",
+  "goal_family": "comparison",
+  "expected_outcome": "clarification",
+  "acceptable_outcomes": [],
+  "required_calculations": [],
+  "required_profile_facts": [],
+  "allowed_fields": [
+    "kenh_dat_hang",
+    "doanh_thu_vnd",
+    "so_ngay_cong_no"
+  ],
+  "allowed_filters": [],
+  "supported_conclusions": [],
+  "forbidden_claims": [],
+  "valid_chart_types": []
+}

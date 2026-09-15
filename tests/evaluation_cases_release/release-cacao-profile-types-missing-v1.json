@@ -1,0 +1,106 @@
+{
+  "case_id": "release-cacao-profile-types-missing-v1",
+  "dataset_path": "tests/fixtures/eval_release/cacao_roast_trials.csv",
+  "dataset_sha256": "7ff3af6cfafc3021e3bf9300322b9282855874daed794479de6893e3c04a2e3f",
+  "user_request": "What are the column types and missing-value counts in this table?",
+  "goal_family": "data_quality",
+  "expected_outcome": "profile",
+  "acceptable_outcomes": [],
+  "required_calculations": [],
+  "required_profile_facts": [
+    {
+      "fact": "field_kind",
+      "field": "me",
+      "expected": "numeric"
+    },
+    {
+      "fact": "field_kind",
+      "field": "phuong_phap",
+      "expected": "categorical"
+    },
+    {
+      "fact": "field_kind",
+      "field": "nhiet_do_c",
+      "expected": "numeric"
+    },
+    {
+      "fact": "field_kind",
+      "field": "thoi_gian_phut",
+      "expected": "numeric"
+    },
+    {
+      "fact": "field_kind",
+      "field": "do_am_sau_rang_pct",
+      "expected": "numeric"
+    },
+    {
+      "fact": "field_kind",
+      "field": "ty_le_hat_loi_pct",
+      "expected": "numeric"
+    },
+    {
+      "fact": "field_kind",
+      "field": "diem_mui_vi",
+      "expected": "numeric"
+    },
+    {
+      "fact": "field_kind",
+      "field": "khoi_luong_kg",
+      "expected": "numeric"
+    },
+    {
+      "fact": "missing_count",
+      "field": "me",
+      "expected": 0
+    },
+    {
+      "fact": "missing_count",
+      "field": "phuong_phap",
+      "expected": 0
+    },
+    {
+      "fact": "missing_count",
+      "field": "nhiet_do_c",
+      "expected": 0
+    },
+    {
+      "fact": "missing_count",
+      "field": "thoi_gian_phut",
+      "expected": 0
+    },
+    {
+      "fact": "missing_count",
+      "field": "do_am_sau_rang_pct",
+      "expected": 0
+    },
+    {
+      "fact": "missing_count",
+      "field": "ty_le_hat_loi_pct",
+      "expected": 0
+    },
+    {
+      "fact": "missing_count",
+      "field": "diem_mui_vi",
+      "expected": 0
+    },
+    {
+      "fact": "missing_count",
+      "field": "khoi_luong_kg",
+      "expected": 0
+    }
+  ],
+  "allowed_fields": [
+    "me",
+    "phuong_phap",
+    "nhiet_do_c",
+    "thoi_gian_phut",
+    "do_am_sau_rang_pct",
+    "ty_le_hat_loi_pct",
+    "diem_mui_vi",
+    "khoi_luong_kg"
+  ],
+  "allowed_filters": [],
+  "supported_conclusions": [],
+  "forbidden_claims": [],
+  "valid_chart_types": []
+}

@@ -1,0 +1,91 @@
+{
+  "case_id": "release-coating-defect-rate-oven-shift-v1",
+  "dataset_path": "tests/fixtures/eval_release/powder_coating_quality.csv",
+  "dataset_sha256": "0325daa173bbf832877d0f1b0b254b467f4dbe433a6d4ae7e79e64edc8837eb7",
+  "user_request": "ty le loi be mat theo lo say va ca la bao nhieu?",
+  "goal_family": "comparison",
+  "expected_outcome": "answered",
+  "acceptable_outcomes": [],
+  "required_calculations": [
+    {
+      "metric": "defect_rate",
+      "expected": 0.07339029600244126,
+      "absolute_tolerance": 0.0005,
+      "group": {
+        "field": "lo_say",
+        "value": "L3"
+      },
+      "groups": [
+        {
+          "field": "ca",
+          "value": "Dem"
+        }
+      ]
+    },
+    {
+      "metric": "defect_rate",
+      "expected": 0.02556663644605621,
+      "absolute_tolerance": 0.0005,
+      "group": {
+        "field": "lo_say",
+        "value": "L4"
+      },
+      "groups": [
+        {
+          "field": "ca",
+          "value": "Chieu"
+        }
+      ]
+    }
+  ],
+  "required_profile_facts": [],
+  "allowed_fields": [
+    "lo_say",
+    "ca",
+    "so_loi_be_mat",
+    "so_luong_kiem"
+  ],
+  "allowed_filters": [],
+  "supported_conclusions": [
+    "Oven L3 on the Dem shift has the highest surface defect rate."
+  ],
+  "forbidden_claims": [],
+  "valid_chart_types": [
+    "bar",
+    "table"
+  ],
+  "alternative_calculations": [
+    [
+      {
+        "metric": "defect_rate",
+        "expected": 0.07342276723071565,
+        "absolute_tolerance": 0.0005,
+        "group": {
+          "field": "lo_say",
+          "value": "L3"
+        },
+        "groups": [
+          {
+            "field": "ca",
+            "value": "Dem"
+          }
+        ]
+      },
+      {
+        "metric": "defect_rate",
+        "expected": 0.025142149150238744,
+        "absolute_tolerance": 0.0005,
+        "group": {
+          "field": "lo_say",
+          "value": "L4"
+        },
+        "groups": [
+          {
+            "field": "ca",
+            "value": "Chieu"
+          }
+        ]
+      }
+    ]
+  ]
+}

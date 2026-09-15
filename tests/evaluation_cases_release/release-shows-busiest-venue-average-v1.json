@@ -1,0 +1,35 @@
+{
+  "case_id": "release-shows-busiest-venue-average-v1",
+  "dataset_path": "tests/fixtures/eval_release/live_show_logs_dirty.xlsx",
+  "dataset_sha256": "5dcafe62f8e5efcaa1e391312cd241bed3db6f25b90079023d1971f1e68e900a",
+  "user_request": "venue nào đông khách nhất tính theo khán giả tb?",
+  "goal_family": "comparison",
+  "expected_outcome": "answered",
+  "acceptable_outcomes": [],
+  "required_calculations": [
+    {
+      "metric": "audience_count",
+      "expected": 319.97087378640776,
+      "absolute_tolerance": 1e-06,
+      "group": {
+        "field": "venue",
+        "value": "Nha Hat Lon"
+      }
+    }
+  ],
+  "required_profile_facts": [],
+  "allowed_fields": [
+    "venue",
+    "audience_count"
+  ],
+  "allowed_filters": [],
+  "supported_conclusions": [
+    "Nha Hat Lon has the highest average audience."
+  ],
+  "forbidden_claims": [],
+  "valid_chart_types": [
+    "kpi",
+    "bar",
+    "table"
+  ]
+}

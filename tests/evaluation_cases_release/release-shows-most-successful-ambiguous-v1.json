@@ -1,0 +1,20 @@
+{
+  "case_id": "release-shows-most-successful-ambiguous-v1",
+  "dataset_path": "tests/fixtures/eval_release/live_show_logs_dirty.xlsx",
+  "dataset_sha256": "5dcafe62f8e5efcaa1e391312cd241bed3db6f25b90079023d1971f1e68e900a",
+  "user_request": "Show thành công nhất là show nào?",
+  "goal_family": "comparison",
+  "expected_outcome": "clarification",
+  "acceptable_outcomes": [],
+  "required_calculations": [],
+  "required_profile_facts": [],
+  "allowed_fields": [
+    "show_code",
+    "ticket_revenue_vnd",
+    "audience_rating"
+  ],
+  "allowed_filters": [],
+  "supported_conclusions": [],
+  "forbidden_claims": [],
+  "valid_chart_types": []
+}

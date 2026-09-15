@@ -1,0 +1,36 @@
+{
+  "case_id": "release-tips-smoker-time-chi-square-v1",
+  "dataset_path": "tests/fixtures/eval_release/tips.csv",
+  "dataset_sha256": "e54cc4d2ce1bff65d32ca60b3e4b802e06bde1d7e7caf6f796f6bf7370e863b0",
+  "user_request": "Is smoking status associated with lunch versus dinner?",
+  "goal_family": "relationship",
+  "expected_outcome": "answered",
+  "acceptable_outcomes": [],
+  "required_calculations": [
+    {
+      "metric": "chi_square",
+      "expected": 0.5053733928754354,
+      "absolute_tolerance": 1e-06
+    },
+    {
+      "metric": "p_value",
+      "expected": 0.4771485672079724,
+      "absolute_tolerance": 1e-06
+    }
+  ],
+  "required_profile_facts": [],
+  "allowed_fields": [
+    "smoker",
+    "time"
+  ],
+  "allowed_filters": [],
+  "supported_conclusions": [
+    "A chi-square test measures the association between smoking status and meal time."
+  ],
+  "forbidden_claims": [
+    "gây ra",
+    "causes",
+    "proves causation"
+  ],
+  "valid_chart_types": []
+}

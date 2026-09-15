@@ -28,9 +28,13 @@ Scalar = str | int | float | bool | None
 
 
 class ExpectedGroup(EvaluationModel):
-    """The group identity that selects one row from a grouped output."""
+    """The group identity that selects one row from a grouped output.
 
-    field: NonEmptyText
+    A field of None matches any GROUP BY output column. Use it for a group on a derived
+    expression, such as a normalized label, whose output name the model chooses.
+    """
+
+    field: NonEmptyText | None = None
     value: Scalar
 
 
@@ -40,6 +44,8 @@ class ExpectedCalculation(EvaluationModel):
     absolute_tolerance: Annotated[float, Field(ge=0.0)] = 0.0
     aliases: tuple[NonEmptyText, ...] = ()
     group: ExpectedGroup | None = None
+    # Further identities of a row grouped by several columns; every identity must match.
+    groups: tuple[ExpectedGroup, ...] = ()
 
 
 class ExpectedProfileFact(EvaluationModel):
@@ -88,6 +94,9 @@ class GoldenCase(EvaluationModel):
     supported_conclusions: tuple[str, ...] = ()
     forbidden_claims: tuple[str, ...] = ()
     valid_chart_types: tuple[ArtifactType, ...] = ()
+    # Other complete calculation sets that are equally valid, such as a t-test's group means
+    # or a Mann-Whitney test's group medians; grading uses the set the run matched best.
+    alternative_calculations: tuple[tuple[ExpectedCalculation, ...], ...] = ()
 
     @property
     def accepted_outcomes(self) -> frozenset[ExpectedOutcome]:
@@ -95,6 +104,8 @@ class GoldenCase(EvaluationModel):
 
     @model_validator(mode="after")
     def require_gradable_expectations(self) -> Self:
+        if any(not calculations for calculations in self.alternative_calculations):
+            raise ValueError("an alternative calculation set cannot be empty")
         if self.expected_outcome is not ExpectedOutcome.ANSWERED:
             if self.expected_outcome is ExpectedOutcome.PROFILE and not self.required_profile_facts:
                 raise ValueError("a profile golden case requires expected profile facts")

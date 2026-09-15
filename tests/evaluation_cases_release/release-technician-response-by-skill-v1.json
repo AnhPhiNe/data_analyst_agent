@@ -1,0 +1,52 @@
+{
+  "case_id": "release-technician-response-by-skill-v1",
+  "dataset_path": "tests/fixtures/eval_release/field_technician_shifts.csv",
+  "dataset_sha256": "18a9d0816af5179d1d6d8d82ea8cab69ff2c10d6caa8ddbf77ae527157b888be",
+  "user_request": "Tính thời gian phản hồi trung bình theo cấp kỹ năng.",
+  "goal_family": "comparison",
+  "expected_outcome": "answered",
+  "acceptable_outcomes": [],
+  "required_calculations": [
+    {
+      "metric": "thoi_gian_phan_hoi_phut",
+      "expected": 23.999342857142857,
+      "absolute_tolerance": 1e-06,
+      "group": {
+        "field": "cap_ky_nang",
+        "value": "Cao_cap"
+      }
+    },
+    {
+      "metric": "thoi_gian_phan_hoi_phut",
+      "expected": 38.71523035230352,
+      "absolute_tolerance": 1e-06,
+      "group": {
+        "field": "cap_ky_nang",
+        "value": "Co_ban"
+      }
+    },
+    {
+      "metric": "thoi_gian_phan_hoi_phut",
+      "expected": 29.748189415041782,
+      "absolute_tolerance": 1e-06,
+      "group": {
+        "field": "cap_ky_nang",
+        "value": "Trung_cap"
+      }
+    }
+  ],
+  "required_profile_facts": [],
+  "allowed_fields": [
+    "cap_ky_nang",
+    "thoi_gian_phan_hoi_phut"
+  ],
+  "allowed_filters": [],
+  "supported_conclusions": [
+    "Cao_cap teams have the shortest average response time."
+  ],
+  "forbidden_claims": [],
+  "valid_chart_types": [
+    "bar",
+    "table"
+  ]
+}

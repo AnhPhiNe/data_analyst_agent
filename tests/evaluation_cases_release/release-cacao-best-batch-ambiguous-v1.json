@@ -1,0 +1,20 @@
+{
+  "case_id": "release-cacao-best-batch-ambiguous-v1",
+  "dataset_path": "tests/fixtures/eval_release/cacao_roast_trials.csv",
+  "dataset_sha256": "7ff3af6cfafc3021e3bf9300322b9282855874daed794479de6893e3c04a2e3f",
+  "user_request": "Mẻ nào đạt nhất?",
+  "goal_family": "comparison",
+  "expected_outcome": "clarification",
+  "acceptable_outcomes": [],
+  "required_calculations": [],
+  "required_profile_facts": [],
+  "allowed_fields": [
+    "me",
+    "ty_le_hat_loi_pct",
+    "diem_mui_vi"
+  ],
+  "allowed_filters": [],
+  "supported_conclusions": [],
+  "forbidden_claims": [],
+  "valid_chart_types": []
+}

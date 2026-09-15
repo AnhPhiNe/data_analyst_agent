@@ -1,0 +1,57 @@
+{
+  "case_id": "release-recycling-parse-weight-sum-v1",
+  "dataset_path": "tests/fixtures/eval_release/recycling_intake_dirty.csv",
+  "dataset_sha256": "68dc27422a234fa113172627614f31a376b967a214eb952dca70d76722c8ff84",
+  "user_request": "Sum received weight by material, parsing numeric-looking weight cells and ignoring non-numeric tokens.",
+  "goal_family": "data_quality",
+  "expected_outcome": "answered",
+  "acceptable_outcomes": [],
+  "required_calculations": [
+    {
+      "metric": "weight_kg",
+      "expected": 6330.0,
+      "absolute_tolerance": 0.01,
+      "group": {
+        "value": "nhựa"
+      }
+    },
+    {
+      "metric": "weight_kg",
+      "expected": 5688.4,
+      "absolute_tolerance": 0.01,
+      "group": {
+        "value": "giấy"
+      }
+    },
+    {
+      "metric": "weight_kg",
+      "expected": 2555.5,
+      "absolute_tolerance": 0.01,
+      "group": {
+        "value": "nhôm"
+      }
+    },
+    {
+      "metric": "weight_kg",
+      "expected": 13663.699999999999,
+      "absolute_tolerance": 0.01,
+      "group": {
+        "value": "thủy tinh"
+      }
+    }
+  ],
+  "required_profile_facts": [],
+  "allowed_fields": [
+    "vat_lieu",
+    "trong_luong_kg"
+  ],
+  "allowed_filters": [],
+  "supported_conclusions": [
+    "Parsed weights are summed by normalized material."
+  ],
+  "forbidden_claims": [],
+  "valid_chart_types": [
+    "bar",
+    "table"
+  ]
+}

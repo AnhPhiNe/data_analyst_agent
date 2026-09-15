@@ -1,0 +1,36 @@
+{
+  "case_id": "release-cacao-lowest-defect-batch-v1",
+  "dataset_path": "tests/fixtures/eval_release/cacao_roast_trials.csv",
+  "dataset_sha256": "7ff3af6cfafc3021e3bf9300322b9282855874daed794479de6893e3c04a2e3f",
+  "user_request": "me nao loi it nhat?",
+  "goal_family": "comparison",
+  "expected_outcome": "answered",
+  "acceptable_outcomes": [],
+  "required_calculations": [
+    {
+      "metric": "ty_le_hat_loi_pct",
+      "expected": 0.7,
+      "absolute_tolerance": 1e-06
+    },
+    {
+      "metric": "me",
+      "expected": 8,
+      "absolute_tolerance": 1e-06
+    }
+  ],
+  "required_profile_facts": [],
+  "allowed_fields": [
+    "me",
+    "ty_le_hat_loi_pct"
+  ],
+  "allowed_filters": [],
+  "supported_conclusions": [
+    "Batch 8 has the lowest defect rate."
+  ],
+  "forbidden_claims": [],
+  "valid_chart_types": [
+    "kpi",
+    "bar",
+    "table"
+  ]
+}

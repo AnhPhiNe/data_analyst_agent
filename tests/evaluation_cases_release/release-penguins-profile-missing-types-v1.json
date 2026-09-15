@@ -1,0 +1,95 @@
+{
+  "case_id": "release-penguins-profile-missing-types-v1",
+  "dataset_path": "tests/fixtures/eval_release/penguins.csv",
+  "dataset_sha256": "e07636bd8af74260099ea2f8678e2eabbf35def579940cc76f67061ee16c06c1",
+  "user_request": "Which columns contain missing values, and what data type does each column have?",
+  "goal_family": "data_quality",
+  "expected_outcome": "profile",
+  "acceptable_outcomes": [],
+  "required_calculations": [],
+  "required_profile_facts": [
+    {
+      "fact": "missing_count",
+      "field": "species",
+      "expected": 0
+    },
+    {
+      "fact": "missing_count",
+      "field": "island",
+      "expected": 0
+    },
+    {
+      "fact": "missing_count",
+      "field": "bill_length_mm",
+      "expected": 2
+    },
+    {
+      "fact": "missing_count",
+      "field": "bill_depth_mm",
+      "expected": 2
+    },
+    {
+      "fact": "missing_count",
+      "field": "flipper_length_mm",
+      "expected": 2
+    },
+    {
+      "fact": "missing_count",
+      "field": "body_mass_g",
+      "expected": 2
+    },
+    {
+      "fact": "missing_count",
+      "field": "sex",
+      "expected": 11
+    },
+    {
+      "fact": "field_kind",
+      "field": "species",
+      "expected": "categorical"
+    },
+    {
+      "fact": "field_kind",
+      "field": "island",
+      "expected": "categorical"
+    },
+    {
+      "fact": "field_kind",
+      "field": "bill_length_mm",
+      "expected": "numeric"
+    },
+    {
+      "fact": "field_kind",
+      "field": "bill_depth_mm",
+      "expected": "numeric"
+    },
+    {
+      "fact": "field_kind",
+      "field": "flipper_length_mm",
+      "expected": "numeric"
+    },
+    {
+      "fact": "field_kind",
+      "field": "body_mass_g",
+      "expected": "numeric"
+    },
+    {
+      "fact": "field_kind",
+      "field": "sex",
+      "expected": "categorical"
+    }
+  ],
+  "allowed_fields": [
+    "species",
+    "island",
+    "bill_length_mm",
+    "bill_depth_mm",
+    "flipper_length_mm",
+    "body_mass_g",
+    "sex"
+  ],
+  "allowed_filters": [],
+  "supported_conclusions": [],
+  "forbidden_claims": [],
+  "valid_chart_types": []
+}

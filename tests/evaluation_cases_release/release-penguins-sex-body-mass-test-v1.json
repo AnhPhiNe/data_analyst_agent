@@ -1,0 +1,50 @@
+{
+  "case_id": "release-penguins-sex-body-mass-test-v1",
+  "dataset_path": "tests/fixtures/eval_release/penguins.csv",
+  "dataset_sha256": "e07636bd8af74260099ea2f8678e2eabbf35def579940cc76f67061ee16c06c1",
+  "user_request": "Is body mass associated with sex?",
+  "goal_family": "relationship",
+  "expected_outcome": "answered",
+  "acceptable_outcomes": [],
+  "required_calculations": [
+    {
+      "metric": "group[str:\"FEMALE\"].mean",
+      "expected": 3862.2727272727275,
+      "absolute_tolerance": 1e-06
+    },
+    {
+      "metric": "group[str:\"MALE\"].mean",
+      "expected": 4545.684523809524,
+      "absolute_tolerance": 1e-06
+    }
+  ],
+  "required_profile_facts": [],
+  "allowed_fields": [
+    "sex",
+    "body_mass_g"
+  ],
+  "allowed_filters": [],
+  "supported_conclusions": [
+    "Body mass differs between female and male penguins."
+  ],
+  "forbidden_claims": [
+    "gây ra",
+    "causes",
+    "proves causation"
+  ],
+  "valid_chart_types": [],
+  "alternative_calculations": [
+    [
+      {
+        "metric": "group[str:\"FEMALE\"].median",
+        "expected": 3650.0,
+        "absolute_tolerance": 1e-06
+      },
+      {
+        "metric": "group[str:\"MALE\"].median",
+        "expected": 4300.0,
+        "absolute_tolerance": 1e-06
+      }
+    ]
+  ]
+}

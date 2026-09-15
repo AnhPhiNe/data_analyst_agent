@@ -1,0 +1,56 @@
+{
+  "case_id": "release-technician-incidents-region-shift-v1",
+  "dataset_path": "tests/fixtures/eval_release/field_technician_shifts.csv",
+  "dataset_sha256": "18a9d0816af5179d1d6d8d82ea8cab69ff2c10d6caa8ddbf77ae527157b888be",
+  "user_request": "Count handled incidents by region and shift.",
+  "goal_family": "summary",
+  "expected_outcome": "answered",
+  "acceptable_outcomes": [],
+  "required_calculations": [
+    {
+      "metric": "so_su_co_xu_ly",
+      "expected": 704,
+      "absolute_tolerance": 1e-06,
+      "group": {
+        "field": "khu_vuc",
+        "value": "KV_Tay"
+      },
+      "groups": [
+        {
+          "field": "ca_truc",
+          "value": "Dem"
+        }
+      ]
+    },
+    {
+      "metric": "so_su_co_xu_ly",
+      "expected": 389,
+      "absolute_tolerance": 1e-06,
+      "group": {
+        "field": "khu_vuc",
+        "value": "KV_Dong"
+      },
+      "groups": [
+        {
+          "field": "ca_truc",
+          "value": "Ngay"
+        }
+      ]
+    }
+  ],
+  "required_profile_facts": [],
+  "allowed_fields": [
+    "khu_vuc",
+    "ca_truc",
+    "so_su_co_xu_ly"
+  ],
+  "allowed_filters": [],
+  "supported_conclusions": [
+    "KV_Tay on the Dem shift handled the most incidents."
+  ],
+  "forbidden_claims": [],
+  "valid_chart_types": [
+    "bar",
+    "table"
+  ]
+}

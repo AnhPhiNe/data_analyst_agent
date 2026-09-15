@@ -1,0 +1,35 @@
+{
+  "case_id": "release-bike-average-rentals-v1",
+  "dataset_path": "tests/fixtures/eval_release/bike_share_station_days.csv",
+  "dataset_sha256": "b96a70e2a6ad44ac98137843f29cc80dd01629a6fb9f11b62bfcd34b74b3a8e4",
+  "user_request": "tram nao co luot thue tb cao nhat?",
+  "goal_family": "comparison",
+  "expected_outcome": "answered",
+  "acceptable_outcomes": [],
+  "required_calculations": [
+    {
+      "metric": "luot_thue",
+      "expected": 41.0,
+      "absolute_tolerance": 1e-06,
+      "group": {
+        "field": "tram",
+        "value": "Trung tam"
+      }
+    }
+  ],
+  "required_profile_facts": [],
+  "allowed_fields": [
+    "tram",
+    "luot_thue"
+  ],
+  "allowed_filters": [],
+  "supported_conclusions": [
+    "Trung tam has the highest average number of rentals."
+  ],
+  "forbidden_claims": [],
+  "valid_chart_types": [
+    "kpi",
+    "bar",
+    "table"
+  ]
+}

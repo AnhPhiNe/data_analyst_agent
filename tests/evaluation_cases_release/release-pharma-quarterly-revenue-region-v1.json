@@ -1,0 +1,53 @@
+{
+  "case_id": "release-pharma-quarterly-revenue-region-v1",
+  "dataset_path": "tests/fixtures/eval_release/pharma_b2b_orders.csv",
+  "dataset_sha256": "9a0383eff61ab6675de99b80d6b92120ee59a46aae1012195d250294fff4ce3b",
+  "user_request": "Doanh thu quý 2 năm 2025 theo từng miền là bao nhiêu?",
+  "goal_family": "summary",
+  "expected_outcome": "answered",
+  "acceptable_outcomes": [],
+  "required_calculations": [
+    {
+      "metric": "doanh_thu_vnd",
+      "expected": 1142959887,
+      "absolute_tolerance": 0.5,
+      "group": {
+        "field": "mien",
+        "value": "Bac"
+      }
+    },
+    {
+      "metric": "doanh_thu_vnd",
+      "expected": 1033507229,
+      "absolute_tolerance": 0.5,
+      "group": {
+        "field": "mien",
+        "value": "Nam"
+      }
+    },
+    {
+      "metric": "doanh_thu_vnd",
+      "expected": 617533241,
+      "absolute_tolerance": 0.5,
+      "group": {
+        "field": "mien",
+        "value": "Trung"
+      }
+    }
+  ],
+  "required_profile_facts": [],
+  "allowed_fields": [
+    "ngay_don",
+    "mien",
+    "doanh_thu_vnd"
+  ],
+  "allowed_filters": [],
+  "supported_conclusions": [
+    "Bac has the highest second-quarter revenue."
+  ],
+  "forbidden_claims": [],
+  "valid_chart_types": [
+    "bar",
+    "table"
+  ]
+}

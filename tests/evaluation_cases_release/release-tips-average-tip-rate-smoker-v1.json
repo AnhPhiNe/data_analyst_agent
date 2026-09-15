@@ -1,0 +1,67 @@
+{
+  "case_id": "release-tips-average-tip-rate-smoker-v1",
+  "dataset_path": "tests/fixtures/eval_release/tips.csv",
+  "dataset_sha256": "e54cc4d2ce1bff65d32ca60b3e4b802e06bde1d7e7caf6f796f6bf7370e863b0",
+  "user_request": "What is the average tip rate for smokers versus non-smokers?",
+  "goal_family": "comparison",
+  "expected_outcome": "answered",
+  "acceptable_outcomes": [],
+  "required_calculations": [
+    {
+      "metric": "tip_rate",
+      "expected": 0.15932846217921526,
+      "absolute_tolerance": 0.0005,
+      "group": {
+        "field": "smoker",
+        "value": "No"
+      }
+    },
+    {
+      "metric": "tip_rate",
+      "expected": 0.16319604463687792,
+      "absolute_tolerance": 0.0005,
+      "group": {
+        "field": "smoker",
+        "value": "Yes"
+      }
+    }
+  ],
+  "required_profile_facts": [],
+  "allowed_fields": [
+    "tip",
+    "total_bill",
+    "smoker"
+  ],
+  "allowed_filters": [],
+  "supported_conclusions": [
+    "Average tip rates are compared between smokers and non-smokers."
+  ],
+  "forbidden_claims": [],
+  "valid_chart_types": [
+    "bar",
+    "kpi",
+    "table"
+  ],
+  "alternative_calculations": [
+    [
+      {
+        "metric": "tip_rate",
+        "expected": 0.1559209368302254,
+        "absolute_tolerance": 0.0005,
+        "group": {
+          "field": "smoker",
+          "value": "No"
+        }
+      },
+      {
+        "metric": "tip_rate",
+        "expected": 0.14495373871960382,
+        "absolute_tolerance": 0.0005,
+        "group": {
+          "field": "smoker",
+          "value": "Yes"
+        }
+      }
+    ]
+  ]
+}

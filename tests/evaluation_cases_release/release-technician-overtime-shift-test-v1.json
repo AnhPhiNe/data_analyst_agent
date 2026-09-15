@@ -1,0 +1,50 @@
+{
+  "case_id": "release-technician-overtime-shift-test-v1",
+  "dataset_path": "tests/fixtures/eval_release/field_technician_shifts.csv",
+  "dataset_sha256": "18a9d0816af5179d1d6d8d82ea8cab69ff2c10d6caa8ddbf77ae527157b888be",
+  "user_request": "Ca đêm có tăng ca khác ca ngày ko?",
+  "goal_family": "comparison",
+  "expected_outcome": "answered",
+  "acceptable_outcomes": [],
+  "required_calculations": [
+    {
+      "metric": "group[str:\"Dem\"].mean",
+      "expected": 36.107142857142854,
+      "absolute_tolerance": 1e-06
+    },
+    {
+      "metric": "group[str:\"Ngay\"].mean",
+      "expected": 19.996644295302012,
+      "absolute_tolerance": 1e-06
+    }
+  ],
+  "required_profile_facts": [],
+  "allowed_fields": [
+    "ca_truc",
+    "phut_tang_ca"
+  ],
+  "allowed_filters": [],
+  "supported_conclusions": [
+    "Overtime minutes differ between night and day shifts."
+  ],
+  "forbidden_claims": [
+    "gây ra",
+    "causes",
+    "chứng minh nhân quả"
+  ],
+  "valid_chart_types": [],
+  "alternative_calculations": [
+    [
+      {
+        "metric": "group[str:\"Dem\"].median",
+        "expected": 30.5,
+        "absolute_tolerance": 1e-06
+      },
+      {
+        "metric": "group[str:\"Ngay\"].median",
+        "expected": 16.0,
+        "absolute_tolerance": 1e-06
+      }
+    ]
+  ]
+}

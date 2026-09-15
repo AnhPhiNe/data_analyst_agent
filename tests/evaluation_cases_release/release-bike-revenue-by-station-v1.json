@@ -1,0 +1,64 @@
+{
+  "case_id": "release-bike-revenue-by-station-v1",
+  "dataset_path": "tests/fixtures/eval_release/bike_share_station_days.csv",
+  "dataset_sha256": "b96a70e2a6ad44ac98137843f29cc80dd01629a6fb9f11b62bfcd34b74b3a8e4",
+  "user_request": "Tính tổng doanh thu của từng trạm và xếp từ cao xuống thấp.",
+  "goal_family": "comparison",
+  "expected_outcome": "answered",
+  "acceptable_outcomes": [],
+  "required_calculations": [
+    {
+      "metric": "doanh_thu_vnd",
+      "expected": 525000,
+      "absolute_tolerance": 1e-06,
+      "aliases": [
+        "total_revenue",
+        "tong_doanh_thu"
+      ],
+      "group": {
+        "field": "tram",
+        "value": "Cong vien"
+      }
+    },
+    {
+      "metric": "doanh_thu_vnd",
+      "expected": 1220000,
+      "absolute_tolerance": 1e-06,
+      "aliases": [
+        "total_revenue",
+        "tong_doanh_thu"
+      ],
+      "group": {
+        "field": "tram",
+        "value": "Trung tam"
+      }
+    },
+    {
+      "metric": "doanh_thu_vnd",
+      "expected": 1045000,
+      "absolute_tolerance": 1e-06,
+      "aliases": [
+        "total_revenue",
+        "tong_doanh_thu"
+      ],
+      "group": {
+        "field": "tram",
+        "value": "Ven song"
+      }
+    }
+  ],
+  "required_profile_facts": [],
+  "allowed_fields": [
+    "tram",
+    "doanh_thu_vnd"
+  ],
+  "allowed_filters": [],
+  "supported_conclusions": [
+    "Trung tam has the highest total revenue."
+  ],
+  "forbidden_claims": [],
+  "valid_chart_types": [
+    "bar",
+    "table"
+  ]
+}

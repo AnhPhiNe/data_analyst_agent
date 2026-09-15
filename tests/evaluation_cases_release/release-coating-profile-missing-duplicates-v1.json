@@ -1,0 +1,42 @@
+{
+  "case_id": "release-coating-profile-missing-duplicates-v1",
+  "dataset_path": "tests/fixtures/eval_release/powder_coating_quality.csv",
+  "dataset_sha256": "0325daa173bbf832877d0f1b0b254b467f4dbe433a6d4ae7e79e64edc8837eb7",
+  "user_request": "check nhanh cột nào thiếu với có dòng trùng ko",
+  "goal_family": "data_quality",
+  "expected_outcome": "profile",
+  "acceptable_outcomes": [],
+  "required_calculations": [],
+  "required_profile_facts": [
+    {
+      "fact": "missing_count",
+      "field": "do_day_um",
+      "expected": 18
+    },
+    {
+      "fact": "missing_count",
+      "field": "do_bam_dinh_mpa",
+      "expected": 9
+    },
+    {
+      "fact": "duplicate_row_count",
+      "expected": 0
+    }
+  ],
+  "allowed_fields": [
+    "ngay_san_xuat",
+    "lo_say",
+    "ca",
+    "loai_son",
+    "do_day_um",
+    "do_bam_dinh_mpa",
+    "so_luong_kiem",
+    "so_loi_be_mat",
+    "nhiet_do_lo_c",
+    "thoi_gian_say_phut"
+  ],
+  "allowed_filters": [],
+  "supported_conclusions": [],
+  "forbidden_claims": [],
+  "valid_chart_types": []
+}
