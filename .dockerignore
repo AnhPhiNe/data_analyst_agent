@@ -1,0 +1,32 @@
+# Secrets never enter the build context; pass them at run time with --env-file.
+.env
+.env.*
+!.env.example
+.streamlit/secrets.toml
+
+# Local environments, caches, and generated state
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.data/
+.eval/
+.sessions/
+artifacts/
+*.duckdb
+*.duckdb.wal
+
+# Version control and editor files
+.git/
+.gitignore
+.idea/
+.vscode/
+Thumbs.db
+.DS_Store
+
+# Local handoff notes are not part of the release
+docs/RESUME-HANDOFF.md
