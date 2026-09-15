@@ -216,6 +216,26 @@ def test_analysis_approval_and_dashboard_pinning(
     assert any("belongs to another session" in error.value for error in app.error)
 
 
+def test_claim_shows_its_sql_filter_beneath_it_instead_of_inside_it(
+    ui_workspace: tuple[AppTest, AnalysisWorkspace, LocalAnalysisApplication, FakeModelGateway],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app, _, _, _ = ui_workspace
+    outputs = query_outputs()
+    outputs[2] = {"sql": "SELECT SUM(revenue) AS total FROM dataset WHERE revenue >= 150"}
+    gateway = FakeModelGateway(outputs)
+    monkeypatch.setattr(gateway_module, "GeminiModelGateway", lambda settings: gateway)
+    st.cache_resource.clear()
+    app.run()
+    app.chat_input[0].set_value("What is total revenue from large orders?").run()
+    next(button for button in app.button if button.label == "Approve and run").click().run()
+    assert not app.exception
+    state = app.session_state["agent_state"]
+    assert state["status"] == "completed"
+    assert state["verified_insights"][0]["claim"] == "Total is 200."
+    assert any(caption.value == "Filters: revenue >= 150" for caption in app.caption)
+
+
 def test_session_selection_requires_fresh_delete_confirmation(
     ui_workspace: tuple[AppTest, AnalysisWorkspace, LocalAnalysisApplication, FakeModelGateway],
 ) -> None:

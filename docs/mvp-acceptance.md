@@ -342,3 +342,14 @@ the outstanding Must-tier flows and reliability gates.
   review of all 129 stored runs are in `docs/limitations.md` Section 12. The expectations were
   not edited. Under the agreed stop rule, at most one more fix round follows, limited to
   failure classes seen on two or more datasets and measured on a new small holdout.
+- Presentation fixes after the release suite (2026-09-15), from the manual review, with no prompt
+  template or grading rule changed: an unavailable-metric clarification names the dataset's
+  numeric fields other than possible PII and identifier-like fields; claim text no longer repeats
+  SQL conditions, which the dashboard shows beneath each claim; generated aliases such as
+  `count_1` read as their function; claims and KPIs show at most 15 significant digits of a
+  decimal; test names such as ANOVA and Pearson keep their capitals; and an answer backed only by
+  a statistical test is not recorded as a chart error. Goal suggestions and clarifications now
+  share one rule for measure fields. Grading reads claim text only for forbidden phrases, so the
+  release result stands. The changed and new tests failed against the previous commit in a
+  separate clone (19 failures). 440 tests passed (2 skipped), branch-inclusive coverage 91.04%,
+  Ruff, formatting, and strict mypy passed.

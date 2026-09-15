@@ -1,6 +1,7 @@
 """Public domain interface for validated analysis records."""
 
 from tabular_analytics_agent.domain.models import (
+    FLOAT_DISPLAY_DIGITS,
     IDENTIFIER_LIKE_WARNING,
     INCONSISTENT_SPELLING_WARNING,
     POSSIBLE_PII_WARNING,
@@ -39,11 +40,14 @@ from tabular_analytics_agent.domain.models import (
     VerificationResult,
     VerificationStatus,
     VerifiedInsight,
+    display_float,
     fingerprint_semantic_annotations,
+    measure_field_names,
     semantic_fingerprint_matches,
 )
 
 __all__ = [
+    "FLOAT_DISPLAY_DIGITS",
     "IDENTIFIER_LIKE_WARNING",
     "INCONSISTENT_SPELLING_WARNING",
     "POSSIBLE_PII_WARNING",
@@ -82,6 +86,8 @@ __all__ = [
     "VerificationResult",
     "VerificationStatus",
     "VerifiedInsight",
+    "display_float",
     "fingerprint_semantic_annotations",
+    "measure_field_names",
     "semantic_fingerprint_matches",
 ]

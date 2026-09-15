@@ -38,6 +38,7 @@ from tabular_analytics_agent.verification import (
     invalidate_stale_insight,
     publish_insight,
 )
+from tabular_analytics_agent.verification.insights import _lower_first
 
 
 def context() -> tuple[DataProfile, ToolAction, QueryResult]:
@@ -109,9 +110,18 @@ def context() -> tuple[DataProfile, ToolAction, QueryResult]:
     )
 
 
-def test_claim_shows_every_significant_digit_of_a_float() -> None:
+@pytest.mark.parametrize(
+    ("value", "shown"),
+    [
+        (1234567.8, "1234567.8"),
+        (3.1000000000000005, "3.1"),
+        (247.39000000000007, "247.39"),
+        (0.056584184114898774, "0.0565841841148988"),
+    ],
+)
+def test_claim_shows_a_float_with_at_most_15_significant_digits(value: float, shown: str) -> None:
     profile, action, result = context()
-    precise = result.model_copy(update={"rows": (("North", 1234567.8), ("South", 150.0))})
+    precise = result.model_copy(update={"rows": (("North", value), ("South", 150.0))})
 
     publication = publish_insight(
         assertion=InsightAssertion(operator=InsightOperator.REPORTS, left_metric="row[0].revenue"),
@@ -124,8 +134,49 @@ def test_claim_shows_every_significant_digit_of_a_float() -> None:
     )
 
     assert isinstance(publication, VerifiedInsight)
-    # A six-significant-digit format rendered 1.23457e+06, disagreeing with the KPI chart.
-    assert publication.claim.endswith(" is 1234567.8.")
+    # A six-digit format rendered 1.23457e+06, and repr showed binary noise from the float.
+    assert publication.claim.endswith(f" is {shown}.")
+
+
+def test_generated_aggregate_alias_reads_as_its_function() -> None:
+    profile, action, result = context()
+    counted = result.model_copy(
+        update={
+            "columns": (
+                QueryColumn(name="region", data_type="VARCHAR"),
+                QueryColumn(name="count_1", data_type="BIGINT"),
+            ),
+            "rows": (("North", 2), ("South", 1)),
+            "group_by_columns": ("region",),
+        }
+    )
+
+    publication = publish_insight(
+        assertion=InsightAssertion(operator=InsightOperator.REPORTS, left_metric="row[0].count_1"),
+        evidence_metrics=("row[0].count_1",),
+        caveats=(),
+        profile=profile,
+        action=action,
+        result=counted,
+        current_working_dataset_version=1,
+    )
+
+    assert isinstance(publication, VerifiedInsight)
+    assert publication.claim == "Count for region = North is 2."
+
+
+@pytest.mark.parametrize(
+    ("label", "inside_sentence"),
+    [
+        ("ANOVA F statistic", "ANOVA F statistic"),
+        ("Welch t statistic", "Welch t statistic"),
+        ("Chi-square statistic", "chi-square statistic"),
+    ],
+)
+def test_statistic_names_keep_their_capitals_inside_a_sentence(
+    label: str, inside_sentence: str
+) -> None:
+    assert _lower_first(label) == inside_sentence
 
 
 def test_query_claim_is_published_with_complete_reproducible_evidence() -> None:
@@ -257,7 +308,7 @@ def test_reporting_a_group_by_label_is_unsupported() -> None:
     assert "GROUP BY label" in publication.reason
 
 
-def test_query_claim_and_evidence_name_sql_filters() -> None:
+def test_sql_filters_stay_in_evidence_instead_of_claim_text() -> None:
     profile, action, _ = context()
     result = QueryResult(
         query_id=uuid4(),
@@ -291,7 +342,7 @@ def test_query_claim_and_evidence_name_sql_filters() -> None:
     )
 
     assert isinstance(publication, VerifiedInsight)
-    assert publication.claim == "Row count where revenue >= 100 is 2."
+    assert publication.claim == "Row count is 2."
     assert publication.evidence.filters == ("revenue >= 100",)
 
 
@@ -477,6 +528,7 @@ def test_correlation_p_value_names_its_test_and_preserves_assertion(
     assert isinstance(publication, VerifiedInsight)
     assert "pearson correlation between revenue and score" in publication.claim.lower()
     assert "spearman" not in publication.claim.lower()
+    assert "for Pearson correlation between revenue and score" in publication.claim
     assert publication.assertion == assertion
     restored = VerifiedInsight.model_validate_json(publication.model_dump_json())
     assert restored.assertion == assertion

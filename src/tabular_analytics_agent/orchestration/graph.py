@@ -344,7 +344,7 @@ def build_agent_graph(
             mapping.status is RequestedMetricStatus.DERIVED for mapping in metric_mappings
         )
         clarification_question = (
-            unavailable_metric_clarification_question(metric_mappings)
+            unavailable_metric_clarification_question(metric_mappings, profile)
             if unavailable_metric
             else interpretation.clarification_question or ""
         )
@@ -1099,11 +1099,12 @@ def build_agent_graph(
 
         try:
             result, source_action = chart_source_for_verified_insight(state)
-        except ValueError as exc:
-            # Insights backed only by statistical results have no verified query table to chart.
+        except ValueError:
+            # Insights backed only by statistical results have no verified query table to chart;
+            # that is expected, so it is not recorded as a chart error.
             return {
                 "chart_renders": [],
-                "artifact_error": safe_error(exc),
+                "artifact_error": "",
                 "status": AgentRunStatus.COMPLETED.value,
                 "error": "",
                 **pause_execution_budget(state, clock()),

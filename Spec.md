@@ -136,7 +136,7 @@ The Data Profile is factual evidence and must not be labeled as an insight.
 - Save confirmed meanings as Semantic Annotations for the current session.
 - Re-enter clarification if a later request exposes unresolved ambiguity.
 - Map every explicitly requested metric to the dataset as direct, derived, or unavailable (Section 25.4). The agent never lets a different field stand in for a requested metric.
-- An unavailable metric pauses for clarification. The user either corrects the request, which is interpreted again from the start, or accepts that the metric is unavailable, which ends the run as a typed refusal rather than a failure.
+- An unavailable metric pauses for clarification, and the question names the dataset's numeric fields that are neither possible PII nor identifier-like. The user either corrects the request, which is interpreted again from the start, or accepts that the metric is unavailable, which ends the run as a typed refusal rather than a failure.
 - A request to rank or judge entities without naming the measure (for example "the best product") asks which field defines the ranking when the Data Profile has two or more numeric fields that could each define it. A request that names the measure, such as "highest revenue", does not ask.
 - A clarification that asks for a corrected question may be dismissed. The dismissal is saved in the checkpoint and ends the run with status `rejected`, so reopening the session does not bring the question back.
 
@@ -224,14 +224,14 @@ If required evidence is missing or validation fails, the conclusion is an Unsupp
 
 Besides the model's drafts, synthesis deterministically reports each statistical result's headline estimates — every group mean for a group comparison, or the single coefficient for a correlation or regression — that the model did not already assert. These extra Verified Insights use the same verification and deterministic rendering, so headline statistical values are covered regardless of model variance.
 
-Row-level values are described by their SQL `GROUP BY` keys (for example `year = 2024`); ungrouped results fall back to their text columns, and single-row results omit row positions. Claims about filtered query results name the SQL `WHERE`/`HAVING` conditions, which are also recorded as Evidence Trail filters, and statistics that relate two fields name both fields. When the model drafts no claim about a verified row listing, the verified result table itself is presented as the answer. Row listings may select `rowid + 1 AS row_number` to identify rows of the uploaded file.
+Row-level values are described by their SQL `GROUP BY` keys (for example `year = 2024`); ungrouped results fall back to their text columns, and single-row results omit row positions. Claim text does not repeat SQL `WHERE`/`HAVING` conditions; they are recorded as Evidence Trail filters and shown beneath the claim and in the Audit view. Statistics that relate two fields name both fields, test names such as ANOVA and Pearson keep their capital letters, and aliases the SQL policy generates, such as `count_1`, read as their function. Claims show every digit of a whole number and at most 15 significant digits of a decimal, the precision a floating-point value holds. When the model drafts no claim about a verified row listing, the verified result table itself is presented as the answer. Row listings may select `rowid + 1 AS row_number` to identify rows of the uploaded file.
 
 ### FR-11 — Charts and dashboard
 
 - The agent proposes a structured Chart Intent rather than frontend code.
 - A deterministic chart tool validates the intent and produces a Plotly-compatible specification.
 - Must-tier artifacts are KPI card, table, histogram, bar chart, line chart, and scatter plot. Box plot, heatmap, stacked bar chart, and missing-value chart are Should-tier.
-- A KPI shows exactly one value from a one-row result, with every significant digit rather than a rounded display. The number format is derived from the value, so a requested `number_format` cannot round it; an empty value, or a whole number above 2^53 that a chart cannot show exactly, gets no KPI. When a proposed chart fails validation, the verified result is shown as a table instead, and the reason is recorded in the chart's validation constraints; a result a table cannot display (over 500 rows) gets no chart. Bar charts use a categorical axis, so numeric keys such as months are not drawn as a continuous scale. Line charts accept text x values such as `2026-01` or `Q1` as ordered categories in result order. A table renders every result column, so encodings supplied for a table are ignored.
+- A KPI shows exactly one value from a one-row result, with every digit of a whole number and at most 15 significant digits of a decimal rather than a rounded display. The number format is derived from the value, so a requested `number_format` cannot round it; an empty value, or a whole number above 2^53 that a chart cannot show exactly, gets no KPI. When a proposed chart fails validation, the verified result is shown as a table instead, and the reason is recorded in the chart's validation constraints; a result a table cannot display (over 500 rows) gets no chart. Bar charts use a categorical axis, so numeric keys such as months are not drawn as a continuous scale. Line charts accept text x values such as `2026-01` or `Q1` as ordered categories in result order. A table renders every result column, so encodings supplied for a table are ignored.
 - Chart selection considers analytical goal, field types, cardinality, sample size, and readability.
 - Pie charts are not selected by default.
 - Candidate Artifacts appear separately from Pinned Artifacts.
@@ -779,6 +779,13 @@ Records the post-review fixes and a specification accuracy check against the cod
 - Release suite, committed before any live run: 40 cases on nine datasets across the four tiers (Section 17.1), with questions written from a brief in a new ChatGPT chat without repository access and corrected before any run where they conflicted with the tool contract or could not be graded. Expected values are computed with pandas and SciPy, and grading version 6 grades multi-column groups, derived groups, and alternative valid methods (Section 17.3). It is measured once with three runs per case and not tuned afterwards.
 
 Known gaps at v1.5: person names and addresses inside the values of columns whose names do not mark personal data are not detected as possible PII (Section 14.4).
+
+### v1.6 — 2026-09-15
+
+Records the release suite result and presentation fixes from a manual review of every stored run. One v1.3 amendment is reversed: claim text no longer names SQL filters.
+
+- Release suite, measured once at commit `096ff45`: 103 of 118 graded runs passed, with 2 provider errors reported separately. Calculation accuracy (88.1%), tool execution success (94.7%), and chart validity (91.5%) missed their Section 17.4 thresholds; the other gates were met. Expectations were not edited (Section 17.3).
+- Presentation fixes, with no prompt template or grading rule changed: a clarification for an unavailable metric names the dataset's numeric fields that are neither possible PII nor identifier-like (FR-04); claim text leaves SQL conditions to the Evidence Trail, which the dashboard shows beneath each claim; generated aliases such as `count_1` read as their function; claims and KPIs show at most 15 significant digits of a decimal; test names keep their capitals inside a sentence (FR-10 and FR-11); and an answer backed only by a statistical test is no longer recorded as a chart error.
 
 ## 25. Implementation Contracts
 

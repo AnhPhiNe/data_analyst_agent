@@ -530,3 +530,28 @@ class AnalysisSession(DomainModel):
         if self.working_dataset_version and not self.source_dataset_id:
             raise ValueError("a Working Dataset requires a Source Dataset")
         return self
+
+
+# A double holds 15 significant decimal digits reliably; further digits are binary noise.
+FLOAT_DISPLAY_DIGITS = 15
+
+
+def display_float(value: float) -> str:
+    """Show a float with at most 15 significant digits, so 3.1000000000000005 reads 3.1."""
+    return format(value, f".{FLOAT_DISPLAY_DIGITS}g")
+
+
+def measure_field_names(profile: DataProfile) -> tuple[str, ...]:
+    """Name the numeric fields that can serve as a measure.
+
+    A measure has more than one value and is neither possible PII nor identifier-like.
+    """
+    excluded = set(profile.pii_candidates)
+    return tuple(
+        field.name
+        for field in profile.fields
+        if field.kind is FieldKind.NUMERIC
+        and field.unique_count > 1
+        and field.name not in excluded
+        and IDENTIFIER_LIKE_WARNING not in field.warnings
+    )

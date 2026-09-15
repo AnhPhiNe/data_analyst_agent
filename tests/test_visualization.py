@@ -199,11 +199,13 @@ def test_kpi_requires_one_row_and_renders_exact_value() -> None:
         (0.000012345, ",.5~g"),
         (123456789.123456, ",.15~g"),
         (2**53, ",.16~g"),
-        (1e22, ",.21~g"),
-        (1.2345678901234567e25, ",.21~g"),
+        (1e22, ",.15~g"),
+        (1.2345678901234567e25, ",.15~g"),
+        (3.1000000000000005, ",.2~g"),
+        (247.39000000000007, ",.5~g"),
     ],
 )
-def test_exact_number_format_keeps_every_significant_digit(
+def test_exact_number_format_keeps_whole_digits_and_15_significant_digits(
     value: int | float, expected: str
 ) -> None:
     assert exact_number_format(value) == expected

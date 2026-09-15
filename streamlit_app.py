@@ -607,6 +607,18 @@ def render_completed_analysis(
         for item, caveats in zip(insights, caveat_lists, strict=True):
             with st.container(border=True):
                 st.write(item.get("claim", "Verified insight"))
+                evidence = item.get("evidence", {})
+                conditions = [
+                    *evidence.get("filters", []),
+                    *(
+                        f"{scope['scope']} {scope['clause']} {scope['expression']}"
+                        for scope in evidence.get("filter_scopes", [])
+                        if scope.get("scope") != "outer"
+                    ),
+                ]
+                if conditions:
+                    # Claim text leaves SQL conditions out, so show them beneath the claim.
+                    st.caption("Filters: " + "; ".join(map(str, conditions)))
                 own = [caveat for caveat in caveats if caveat not in shared]
                 if own:
                     st.caption("Caveats: " + "; ".join(own))
@@ -627,6 +639,8 @@ def render_completed_analysis(
         st.info(f"No chart candidate was published: {artifact_error}")
     else:
         application.publish_candidates(workspace, state)
+        if insights and not state.get("chart_renders"):
+            st.caption("Statistical test results have no result table to chart.")
     render_exports(workspace, state)
 
 

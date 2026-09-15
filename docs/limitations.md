@@ -98,8 +98,9 @@ result values of at most 50 rows.
   vary. Answers backed only by a statistical test have no chart. When a proposed chart fails
   validation, the verified result is shown as a table instead, with the reason recorded in the
   chart's constraints; a result too large for a table (over 500 rows) gets no chart.
-- A KPI shows every significant digit of the stored value. Whole numbers above 2^53 (about 9
-  quadrillion) cannot be drawn exactly, so they get no KPI chart. DuckDB `DECIMAL` results are
+- A KPI and a claim show every digit of a whole number and at most 15 significant digits of a
+  decimal, so floating-point noise such as `3.1000000000000005` shows as `3.1`. Whole numbers
+  above 2^53 (about 9 quadrillion) cannot be drawn exactly, so they get no KPI chart. DuckDB `DECIMAL` results are
   converted to floating point, so a value with more than about 15 significant digits loses
   precision; numbers read from CSV are floating point from the start.
 - The Data Overview and explorer are descriptive. They run no significance test, show at most 20
@@ -282,3 +283,19 @@ review found these presentation problems:
 - 8 runs listed every row in a SQL step before a statistical test; this spends a Tool Action
   without changing the result.
 - A KPI answered "which batch" questions with the value alone, without the batch.
+
+### Changes made after the release suite
+
+The presentation problems above were fixed without changing a prompt template or grading rule, so
+the stored release runs keep their grades:
+
+- A clarification for an unavailable metric names the dataset's numeric fields, leaving out
+  possible PII and identifier-like fields.
+- Claim text no longer contains SQL conditions. The dashboard shows them beneath each claim, and
+  the Audit view and JSON export keep them in the Evidence Trail.
+- Generated aliases read as their function (`count_1` as Count), claims and KPIs show at most 15
+  significant digits, and test names such as ANOVA, Welch, and Pearson keep their capitals.
+- An answer backed only by a statistical test shows a neutral note instead of a chart error.
+
+Still open: the unavailable-metric question is in English, groups are named by raw field names,
+and the model can still assert an uninformative direction or list rows before a test.

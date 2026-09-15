@@ -24,6 +24,7 @@ from tabular_analytics_agent.domain import (
     VerificationResult,
     VerificationStatus,
     VerifiedInsight,
+    display_float,
     fingerprint_semantic_annotations,
 )
 from tabular_analytics_agent.statistics import (
@@ -473,14 +474,14 @@ def _numeric_evidence(value: str | int | float | bool | None) -> float | None:
 
 def _format_evidence_value(value: str | int | float | bool | None) -> str:
     if isinstance(value, float):
-        # Every significant digit, as a KPI shows it; repr is the shortest exact form.
-        return repr(value).removesuffix(".0")
+        # The digits a KPI shows, without binary noise such as 3.1000000000000005.
+        return display_float(value)
     return str(value)
 
 
 def _display_metric(metric: str, result: EvidenceResult) -> str:
     if metric == "result.row_count":
-        return f"Result row count{_query_scope(result)}"
+        return "Result row count"
     if (
         metric == "p_value"
         and isinstance(result, StatisticalResult)
@@ -517,12 +518,12 @@ def _display_metric(metric: str, result: EvidenceResult) -> str:
         row_index = int(row_match.group(1))
         column = row_match.group(2)
         context = _row_context(result, row_index, column)
-        scope = _query_scope(result)
+        # SQL conditions stay in the Evidence Trail, which the dashboard shows beneath the claim.
         if context:
-            return f"{_humanize_identifier(column)} for {context}{scope}"
+            return f"{_humanize_identifier(column)} for {context}"
         if isinstance(result, QueryResult) and result.row_count == 1:
-            return f"{_humanize_identifier(column)}{scope}"
-        return f"{_humanize_identifier(column)} in result row {row_index + 1}{scope}"
+            return _humanize_identifier(column)
+        return f"{_humanize_identifier(column)} in result row {row_index + 1}"
     group_match = re.fullmatch(r"group\[([^]]+)]\.(mean|median)", metric)
     if group_match:
         statistic = group_match.group(2).capitalize()
@@ -549,21 +550,24 @@ def _statistical_scope(result: EvidenceResult) -> str:
     return ""
 
 
-def _query_scope(result: EvidenceResult) -> str:
-    """Name the SQL filters that restrict a query result, for example ``where score >= 60``."""
-    if not isinstance(result, QueryResult):
-        return ""
-    scope = f" where {' and '.join(result.filters)}" if result.filters else ""
-    inner_scopes = tuple(item for item in result.filter_scopes if item.scope != "outer")
-    if inner_scopes:
-        context = "; ".join(
-            f"{item.scope} {item.clause} {item.expression}" for item in inner_scopes
-        )
-        scope += f" (query context: {context})"
-    return scope
+# Aliases the SQL policy gives unaliased calculated outputs, such as count_1.
+_GENERATED_ALIAS_LABELS = {
+    "avg": "Average",
+    "count": "Count",
+    "max": "Maximum",
+    "median": "Median",
+    "min": "Minimum",
+    "stddev": "Standard deviation",
+    "sum": "Sum",
+    "value": "Value",
+}
+_GENERATED_ALIAS = re.compile("(" + "|".join(_GENERATED_ALIAS_LABELS) + r")_\d+")
 
 
 def _humanize_identifier(value: str) -> str:
+    generated = _GENERATED_ALIAS.fullmatch(value)
+    if generated:
+        return _GENERATED_ALIAS_LABELS[generated.group(1)]
     return value.replace("_", " ").strip().capitalize()
 
 
@@ -583,5 +587,13 @@ def _row_context(result: EvidenceResult, row_index: int, metric_column: str) -> 
     )
 
 
+# Names and acronyms that keep their capital letter inside a sentence.
+_CAPITALIZED_WORDS = frozenset(
+    {"ANOVA", "Cohen's", "Cramér's", "Mann-Whitney", "Pearson", "Spearman", "Wald", "Welch"}
+)
+
+
 def _lower_first(value: str) -> str:
+    if value.split(" ", 1)[0] in _CAPITALIZED_WORDS:
+        return value
     return value[:1].lower() + value[1:]

@@ -10,7 +10,7 @@ from langgraph.checkpoint.memory import InMemorySaver
 from pydantic import ValidationError
 
 from tabular_analytics_agent.data import TabularDataCore
-from tabular_analytics_agent.domain import GoalFamily
+from tabular_analytics_agent.domain import IDENTIFIER_LIKE_WARNING, GoalFamily
 from tabular_analytics_agent.evaluation.grading import _actual_outcome, grade_run
 from tabular_analytics_agent.evaluation.models import ExpectedOutcome, GoldenCase
 from tabular_analytics_agent.model_gateway import (
@@ -24,6 +24,9 @@ from tabular_analytics_agent.orchestration import (
     AgentRunRequest,
     AgentRunStatus,
     AgentState,
+)
+from tabular_analytics_agent.orchestration.binding import (
+    unavailable_metric_clarification_question,
 )
 
 
@@ -302,6 +305,7 @@ def test_unavailable_metric_is_clarified_before_explicit_refusal(
     assert clarification["status"] == AgentRunStatus.AWAITING_SEMANTIC_REVIEW
     assert clarification["clarification_question"] == (
         f"The requested metric {metric} is unavailable from the dataset. "
+        "Numeric fields in the dataset: revenue, units. "
         "Would you like to correct the request or confirm that it cannot be answered?"
     )
     assert clarification["refusal_reason"] == ""
@@ -314,6 +318,39 @@ def test_unavailable_metric_is_clarified_before_explicit_refusal(
     assert refused["refusal_reason"] == f"No {metric} field or safe derivation is available."
     assert refused["tool_actions"] == []
     assert len(gateway.requests) == 1
+
+
+def test_unavailable_metric_question_names_only_usable_measures(tmp_path: Path) -> None:
+    profile = _request(tmp_path).data_profile
+    region, revenue, units = profile.fields
+    unavailable = (
+        RequestedMetricMapping(
+            requested_label="profit",
+            status=RequestedMetricStatus.UNAVAILABLE,
+            reason="No profit field is available.",
+        ),
+    )
+    private_revenue = profile.model_copy(update={"pii_candidates": ("revenue",)})
+    identifier_units = profile.model_copy(
+        update={
+            "fields": (
+                region,
+                revenue,
+                units.model_copy(update={"warnings": (IDENTIFIER_LIKE_WARNING,)}),
+            )
+        }
+    )
+    no_measures = profile.model_copy(update={"fields": (region,)})
+
+    assert "Numeric fields in the dataset: units." in (
+        unavailable_metric_clarification_question(unavailable, private_revenue)
+    )
+    assert "Numeric fields in the dataset: revenue." in (
+        unavailable_metric_clarification_question(unavailable, identifier_units)
+    )
+    assert "Numeric fields" not in unavailable_metric_clarification_question(
+        unavailable, no_measures
+    )
 
 
 def test_corrected_request_reinterprets_old_unavailable_mapping(tmp_path: Path) -> None:

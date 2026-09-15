@@ -14,6 +14,7 @@ from tabular_analytics_agent.domain import (
     AnalysisPlan,
     DataProfile,
     PlanStep,
+    measure_field_names,
 )
 from tabular_analytics_agent.model_gateway import (
     RequestedMetricMapping,
@@ -50,6 +51,8 @@ INFERENTIAL_OPERATIONS = {
 
 
 INFERENCE_ALPHA = 0.05
+# A clarification names at most this many measures, so a wide table stays readable.
+_MAX_NAMED_MEASURES = 10
 
 
 def canonicalize_requested_metric_mappings(
@@ -74,7 +77,9 @@ def canonicalize_requested_metric_mappings(
 
 def unavailable_metric_clarification_question(
     mappings: tuple[RequestedMetricMapping, ...],
+    profile: DataProfile,
 ) -> str:
+    """Ask the user to correct an unavailable metric, naming the measures the dataset has."""
     labels = [
         mapping.requested_label
         for mapping in mappings
@@ -83,8 +88,13 @@ def unavailable_metric_clarification_question(
     if not labels:
         return ""
     joined = ", ".join(labels)
+    measures = measure_field_names(profile)
+    named = ", ".join(measures[:_MAX_NAMED_MEASURES])
+    if len(measures) > _MAX_NAMED_MEASURES:
+        named += f", and {len(measures) - _MAX_NAMED_MEASURES} more"
+    available = f" Numeric fields in the dataset: {named}." if measures else ""
     return (
-        f"The requested metric {joined} is unavailable from the dataset. "
+        f"The requested metric {joined} is unavailable from the dataset.{available} "
         "Would you like to correct the request or confirm that it cannot be answered?"
     )
 

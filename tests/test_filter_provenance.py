@@ -189,10 +189,10 @@ def test_filter_scopes_reach_verified_claim_evidence_and_json_export(tmp_path: P
     )
 
     assert result.filter_scopes == insight.evidence.filter_scopes
-    assert "query context: cte:filtered where region = 'North'" in insight.claim
-    assert "cte:filtered having SUM(revenue) > 0" in insight.claim
-    assert "subquery:1 where revenue >= 100" in insight.claim
-    # The nested predicates are query context; the legacy outer condition remains distinct.
+    # Scoped predicates stay in the Evidence Trail; the claim text does not repeat SQL.
+    assert "query context" not in insight.claim
+    assert "region = 'North'" not in insight.claim
+    # The legacy outer condition remains distinct from the nested predicates.
     assert insight.evidence.filters == result.filters
 
     payload = json.loads(export_verified_insights_json(request))

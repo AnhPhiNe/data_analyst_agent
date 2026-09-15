@@ -11,6 +11,7 @@ import plotly.graph_objects as go
 
 from tabular_analytics_agent.data import QueryResult
 from tabular_analytics_agent.domain import (
+    FLOAT_DISPLAY_DIGITS,
     ActionStatus,
     ArtifactType,
     ChartIntent,
@@ -20,6 +21,7 @@ from tabular_analytics_agent.domain import (
     VerificationCheck,
     VerificationResult,
     VerificationStatus,
+    display_float,
     fingerprint_semantic_annotations,
 )
 from tabular_analytics_agent.visualization.errors import ChartValidationError
@@ -56,19 +58,24 @@ _MAX_POINT_ROWS = 5_000
 _MAX_EXACT_INTEGER = 2**53
 # d3-format clamps "g" precision to at most 21 significant digits.
 _MAX_FORMAT_PRECISION = 21
-# number_format stays accepted for stored intents, but a KPI always shows every significant digit.
+# number_format stays accepted for stored intents, but a KPI never rounds its value.
 SUPPORTED_FORMATTING_KEYS = {"height", "number_format", "show_legend"}
 
 
 def exact_number_format(value: int | float) -> str:
-    """Return a d3 number format that shows every significant digit of a finite number.
+    """Return a d3 number format that shows a finite number without rounding it.
 
-    Floats use their shortest round-trip form, so 5372.0 shows as 5,372 and 0.1 as 0.1.
+    Whole numbers show every digit. Floats show at most 15 significant digits, as claims do, so
+    5372.0 shows as 5,372, 0.1 as 0.1, and 3.1000000000000005 as 3.1.
     """
-    digits = Decimal(value if isinstance(value, int) else repr(value)).normalize()
+    if isinstance(value, int):
+        digits, limit = Decimal(value), _MAX_FORMAT_PRECISION
+    else:
+        digits, limit = Decimal(display_float(value)), FLOAT_DISPLAY_DIGITS
+    digits = digits.normalize()
     significant = len(digits.as_tuple().digits)
     integer_digits = max(digits.adjusted() + 1, 1)
-    precision = min(max(significant, integer_digits), _MAX_FORMAT_PRECISION)
+    precision = min(max(significant, integer_digits), limit)
     return f",.{precision}~g"
 
 

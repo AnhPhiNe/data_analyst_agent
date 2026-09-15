@@ -353,9 +353,8 @@ def test_statistics_only_insight_completes_without_chart_instead_of_crashing(
     assert completed["status"] == AgentRunStatus.COMPLETED
     assert len(completed["verified_insights"]) == 1
     assert completed["chart_renders"] == []
-    assert (
-        "No Verified Insight is backed by a chartable Query Result" in (completed["artifact_error"])
-    )
+    # A statistics-only answer has nothing to chart, which is not a chart error.
+    assert completed["artifact_error"] == ""
     assert len(gateway.requests) == 5
 
 

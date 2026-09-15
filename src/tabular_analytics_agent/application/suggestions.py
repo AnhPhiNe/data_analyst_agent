@@ -7,6 +7,7 @@ from tabular_analytics_agent.domain import (
     DataProfile,
     FieldKind,
     FieldProfile,
+    measure_field_names,
 )
 
 _MAX_SUGGESTIONS = 5
@@ -34,9 +35,7 @@ def suggest_goals(profile: DataProfile) -> tuple[str, ...]:
         for field in profile.fields
         if field.name not in excluded and IDENTIFIER_LIKE_WARNING not in field.warnings
     ]
-    measures = [
-        field.name for field in usable if field.kind is FieldKind.NUMERIC and field.unique_count > 1
-    ]
+    measures = measure_field_names(profile)
     groups = [field for field in usable if is_group_field(field)]
     dates = [field.name for field in usable if field.kind is FieldKind.DATETIME]
     binary_groups = [field.name for field in groups if field.unique_count == 2]
