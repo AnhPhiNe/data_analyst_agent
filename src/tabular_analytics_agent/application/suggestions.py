@@ -10,6 +10,7 @@ from tabular_analytics_agent.domain import (
 )
 
 _MAX_SUGGESTIONS = 5
+_MIN_SUGGESTIONS = 3
 _MAX_GROUP_CATEGORIES = 20
 
 
@@ -62,6 +63,9 @@ def suggest_goals(profile: DataProfile) -> tuple[str, ...]:
         suggestions.append(f"How many rows are there for each {groups[0].name}?")
     suggestions.append("Which columns does this dataset have, and what kind of data is in each?")
     suggestions.append("How many rows and columns does this dataset have?")
+    if len(dict.fromkeys(suggestions)) < _MIN_SUGGESTIONS:
+        # A table with no measure, grouping field, or quality issue still gets three questions.
+        suggestions.append("Which columns have the most distinct values?")
     return tuple(dict.fromkeys(suggestions))[:_MAX_SUGGESTIONS]
 
 

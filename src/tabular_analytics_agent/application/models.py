@@ -53,3 +53,11 @@ class SessionSummary(ApplicationModel):
     def updated_at(self) -> datetime:
         """Expose the durable update timestamp for stable ordering and display."""
         return self.session.updated_at
+
+
+class ToolActionRerun(ApplicationModel):
+    """Outcome of re-executing a saved Tool Action without a model call."""
+
+    action_id: str = Field(min_length=1)
+    reproduced: bool
+    detail: str

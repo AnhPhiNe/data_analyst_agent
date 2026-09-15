@@ -10,6 +10,7 @@ import re
 import shutil
 import stat
 import time
+import unicodedata
 import zipfile
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FutureTimeoutError
@@ -57,9 +58,15 @@ from tabular_analytics_agent.domain import (
 
 _SUPPORTED_EXTENSIONS = {".csv", ".xlsx"}
 _DATE_NAME = re.compile(r"(^|_)(date|datetime|timestamp|time)($|_)", re.IGNORECASE)
+# Column names are matched after lowercasing and removing diacritics, so "Họ tên" and "ho_ten"
+# match alike. Only generic personal-data words are listed: a bare "name" or "tên" is not PII,
+# because product and branch names are common.
 _PII_NAME = re.compile(
     r"(^|_)(email|e_mail|phone|mobile|address|first_name|last_name|full_name|"
-    r"customer_id|user_id|employee_id|national_id|ssn)($|_)",
+    r"customer_id|user_id|employee_id|national_id|ssn|date_of_birth|birth_date|"
+    r"(customer|employee|patient|student|contact|person)_name|"
+    r"ho_ten|ho_va_ten|dia_chi|so_dien_thoai|dien_thoai|sdt|cccd|cmnd|can_cuoc|ngay_sinh|"
+    r"ten_(khach_hang|nhan_vien|nguoi|benh_nhan|hoc_sinh|sinh_vien))($|_)",
     re.IGNORECASE,
 )
 _EMAIL_VALUE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
@@ -595,7 +602,7 @@ class TabularDataCore:
         name: str,
         quoted: str,
     ) -> bool:
-        normalized_name = re.sub(r"[^a-z0-9]+", "_", name.casefold()).strip("_")
+        normalized_name = re.sub(r"[^a-z0-9]+", "_", _ascii_fold(name)).strip("_")
         if _PII_NAME.search(normalized_name):
             return True
         samples = connection.execute(
@@ -608,6 +615,12 @@ class TabularDataCore:
             or (_PHONE_VALUE.match(text) and not _ISO_DATE_VALUE.match(text))
             for text in texts
         )
+
+
+def _ascii_fold(value: str) -> str:
+    """Lowercase and strip diacritics, including the Vietnamese đ, for keyword matching."""
+    decomposed = unicodedata.normalize("NFKD", value.casefold().replace("đ", "d"))
+    return "".join(character for character in decomposed if not unicodedata.combining(character))
 
 
 def _hash_file(path: Path) -> str:

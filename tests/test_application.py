@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 from pathlib import Path
 from uuid import uuid4
 
@@ -237,3 +238,81 @@ def test_invalid_chart_proposal_falls_back_to_the_verified_table(tmp_path: Path)
     assert "proposed heatmap chart was invalid" in intent["validation_constraints"][-1]
     assert "not implemented" in intent["validation_constraints"][-1]
     assert len(application.publish_candidates(workspace, completed)) == 1
+
+
+def test_saved_sql_tool_action_reruns_without_a_model_call(tmp_path: Path) -> None:
+    gateway = FakeModelGateway(model_outputs())
+    application = LocalAnalysisApplication(tmp_path / "app-data", gateway)
+    workspace = application.ingest(application.stage_upload("sales.csv", sales_csv()))
+    application.start(workspace, "Compare total revenue by region")
+    completed = application.resume(workspace, True)
+    action_id = str(completed["tool_actions"][0]["action_id"])
+    model_calls = len(gateway.requests)
+    tampered = copy.deepcopy(completed)
+    tampered["query_results"][0]["rows"] = [["North", 1], ["South", 2]]
+
+    rerun = application.rerun_tool_action(workspace, completed, action_id)
+    changed = application.rerun_tool_action(workspace, tampered, action_id)
+
+    assert rerun.reproduced
+    assert rerun.detail == "2 rows"
+    assert not changed.reproduced
+    assert len(gateway.requests) == model_calls
+    with pytest.raises(ApplicationError, match="only a succeeded Tool Action"):
+        application.rerun_tool_action(workspace, completed, "missing-action")
+    # Each run has its own id, and its graph steps are read back from the checkpoint history.
+    assert completed["run_id"]
+    assert application.run_history(workspace) == (
+        "interpret_request",
+        "create_plan",
+        "approve_plan",
+        "request_tool",
+        "execute_tool",
+        "synthesize_insights",
+        "propose_artifact",
+    )
+
+
+def test_saved_statistical_tool_action_reruns_to_the_same_estimates(tmp_path: Path) -> None:
+    outputs: list[dict[str, object]] = [
+        {
+            **model_outputs()[0],
+            "goal_text": "Is x correlated with y?",
+            "goal_family": "relationship",
+        },
+        {
+            "steps": [
+                {
+                    "step_id": "correlation",
+                    "description": "Correlate x and y",
+                    "expected_tool": "statistical_analysis",
+                    "statistical_operation": "correlation",
+                    "required_fields": ["x", "y"],
+                    "intended_output": "Correlation statistics",
+                    "caveats": [],
+                    "requires_approval": False,
+                }
+            ]
+        },
+        {"x_field": "x", "y_field": "y"},
+        {
+            "insights": [
+                {
+                    "plan_step_id": "correlation",
+                    "assertion": {"operator": "reports", "left_metric": "pearson_r"},
+                    "evidence_metrics": ["pearson_r"],
+                    "caveats": [],
+                }
+            ]
+        },
+    ]
+    application = LocalAnalysisApplication(tmp_path / "app-data", FakeModelGateway(outputs))
+    workspace = application.ingest(
+        application.stage_upload("xy.csv", b"x,y\n1,2\n2,4\n3,7\n4,8\n5,11\n6,12\n")
+    )
+
+    completed = application.start(workspace, "Is x correlated with y?")
+    action_id = str(completed["tool_actions"][0]["action_id"])
+
+    assert completed["status"] == AgentRunStatus.COMPLETED
+    assert application.rerun_tool_action(workspace, completed, action_id).reproduced

@@ -16,7 +16,7 @@ from tabular_analytics_agent.evaluation import (
     ExpectedProfileFact,
     GoldenCase,
 )
-from tabular_analytics_agent.evaluation.grading import grade_run, summarize
+from tabular_analytics_agent.evaluation.grading import estimate_cost_usd, grade_run, summarize
 from tabular_analytics_agent.evaluation.runner import load_cases, main, run_suite
 from tabular_analytics_agent.model_gateway import FakeModelGateway, ModelProviderError
 from tabular_analytics_agent.orchestration import AgentState
@@ -678,7 +678,14 @@ def test_summary_reports_each_quality_gate_with_its_own_denominator() -> None:
 
 @pytest.mark.parametrize(
     "argv",
-    [["--runs", "0"], ["--runs", "-1"], ["--rpm", "0"], ["--rpm", "nan"]],
+    [
+        ["--runs", "0"],
+        ["--runs", "-1"],
+        ["--rpm", "0"],
+        ["--rpm", "nan"],
+        ["--input-price", "-1"],
+        ["--output-price", "nan"],
+    ],
 )
 def test_cli_rejects_invalid_pacing_arguments(argv: list[str]) -> None:
     with pytest.raises(SystemExit):
@@ -688,3 +695,22 @@ def test_cli_rejects_invalid_pacing_arguments(argv: list[str]) -> None:
 def test_cli_rejects_empty_case_selection() -> None:
     with pytest.raises(SystemExit):
         main(["--case", "does-not-exist"])
+
+
+def test_summary_totals_tokens_and_estimates_cost_from_given_prices() -> None:
+    state = grouped_query_state([["North", 350.0], ["South", 200.0]])
+    state["model_traces"] = [
+        {"usage": {"prompt_tokens": 1_000, "output_tokens": 200, "total_tokens": 1_200}},
+        {"usage": {"prompt_tokens": 500, "output_tokens": 100, "total_tokens": 600}},
+    ]
+    result = grade_run(load_case("tiny_sales_summary.json"), state)
+
+    summary = summarize([result, result])
+
+    assert (result.prompt_tokens, result.output_tokens) == (1_500, 300)
+    assert (summary.total_prompt_tokens, summary.total_output_tokens) == (3_000, 600)
+    # Cost is estimated only when the runner is given prices.
+    assert summary.estimated_cost_usd is None
+    assert estimate_cost_usd(
+        3_000, 600, input_price_per_million=0.1, output_price_per_million=0.4
+    ) == pytest.approx(0.00054)

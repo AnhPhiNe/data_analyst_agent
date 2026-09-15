@@ -24,6 +24,7 @@ from tabular_analytics_agent.evaluation.grading import (
     CaseRunResult,
     CheckResult,
     SuiteSummary,
+    estimate_cost_usd,
     grade_run,
     summarize,
 )
@@ -75,6 +76,8 @@ def run_suite(
     requests_per_minute: float,
     output_dir: Path,
     provider_retry_delay_seconds: float = 66.0,
+    input_price_per_million: float | None = None,
+    output_price_per_million: float | None = None,
     sleep: Callable[[float], None] = time.sleep,
     clock: Callable[[], float] = time.monotonic,
 ) -> SuiteSummary:
@@ -115,6 +118,17 @@ def run_suite(
                 log.flush()
                 _print_progress(result)
     summary = summarize(results).model_copy(update={"provider_retries": provider_retries})
+    if input_price_per_million is not None and output_price_per_million is not None:
+        summary = summary.model_copy(
+            update={
+                "estimated_cost_usd": estimate_cost_usd(
+                    summary.total_prompt_tokens,
+                    summary.total_output_tokens,
+                    input_price_per_million=input_price_per_million,
+                    output_price_per_million=output_price_per_million,
+                )
+            }
+        )
     (output_dir / "summary.json").write_text(summary.model_dump_json(indent=2), encoding="utf-8")
     return summary
 
@@ -131,12 +145,22 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="Requests per minute to pace to (default: 12 per configured API key)",
     )
     parser.add_argument("--output", type=Path, default=None)
+    for option in ("--input-price", "--output-price"):
+        parser.add_argument(
+            option,
+            type=float,
+            default=None,
+            help="USD per million tokens; with both prices the summary estimates the API cost",
+        )
     args = parser.parse_args(argv)
 
     if args.runs < 1:
         parser.error("--runs must be at least 1")
     if args.rpm is not None and (not math.isfinite(args.rpm) or args.rpm <= 0):
         parser.error("--rpm must be finite and greater than 0")
+    for price in (args.input_price, args.output_price):
+        if price is not None and (not math.isfinite(price) or price < 0):
+            parser.error("token prices must be finite and not negative")
 
     cases = tuple(
         case for case in load_cases(args.cases) if not args.case or case.case_id in args.case
@@ -167,6 +191,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         runs=args.runs,
         requests_per_minute=requests_per_minute,
         output_dir=output_dir,
+        input_price_per_million=args.input_price,
+        output_price_per_million=args.output_price,
     )
     print(summary.model_dump_json(indent=2))
     print(f"Results written to {output_dir}")

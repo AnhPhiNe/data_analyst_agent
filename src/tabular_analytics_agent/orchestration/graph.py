@@ -158,6 +158,7 @@ class AgentOrchestrator:
         started_at = self._clock().isoformat()
         initial: AgentState = {
             "session_id": request.session_id,
+            "run_id": str(uuid4()),
             "run_started_at": started_at,
             "active_run_seconds": 0.0,
             "active_segment_started_at": started_at,
@@ -207,6 +208,21 @@ class AgentOrchestrator:
     def get_state(self, thread_id: str) -> AgentState:
         snapshot = self._graph.get_state(_thread_config(thread_id))
         return cast(AgentState, snapshot.values)
+
+    def run_history(self, thread_id: str) -> tuple[str, ...]:
+        """Graph nodes of the latest run, oldest first, read back from the checkpoint history."""
+        snapshots = list(self._graph.get_state_history(_thread_config(thread_id)))
+        if not snapshots:
+            return ()
+        run_id = snapshots[0].values.get("run_id")
+        nodes = [
+            str(snapshot.next[0])
+            for snapshot in snapshots
+            if snapshot.next
+            and snapshot.next[0] != START
+            and snapshot.values.get("run_id") == run_id
+        ]
+        return tuple(reversed(nodes))
 
 
 def _draft_claim_text(draft: InsightDraft) -> str:

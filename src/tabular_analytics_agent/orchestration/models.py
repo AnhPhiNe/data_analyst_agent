@@ -95,6 +95,7 @@ class ApprovalDecision(OrchestrationModel):
 
 class AgentState(TypedDict, total=False):
     session_id: str
+    run_id: str
     run_started_at: str
     active_run_seconds: float
     active_segment_started_at: str

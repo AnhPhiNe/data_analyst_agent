@@ -79,6 +79,8 @@ class CaseRunResult(EvaluationModel):
     claims: tuple[str, ...]
     error: str
     gate_counts: GateCounts = Field(default_factory=GateCounts)
+    prompt_tokens: int = 0
+    output_tokens: int = 0
 
 
 class GateResult(EvaluationModel):
@@ -104,6 +106,10 @@ class SuiteSummary(EvaluationModel):
     check_pass_rates: dict[str, float]
     gates: tuple[GateResult, ...] = ()
     unnecessary_clarifications: int = 0
+    total_prompt_tokens: int = 0
+    total_output_tokens: int = 0
+    # Set only when the runner is given token prices.
+    estimated_cost_usd: float | None = None
     average_model_calls: float
     average_total_tokens: float
     average_latency_ms: float
@@ -176,6 +182,8 @@ def grade_run(case: GoldenCase, state: AgentState, *, run_index: int = 0) -> Cas
         claims=claims,
         error=str(state.get("error", "")),
         gate_counts=gate_counts,
+        prompt_tokens=sum(int(trace.get("usage", {}).get("prompt_tokens", 0)) for trace in traces),
+        output_tokens=sum(int(trace.get("usage", {}).get("output_tokens", 0)) for trace in traces),
     )
 
 
@@ -196,6 +204,9 @@ def summarize(results: Sequence[CaseRunResult]) -> SuiteSummary:
         unnecessary_clarifications=sum(
             result.gate_counts.unnecessary_clarification for result in graded
         ),
+        # Provider errors also consume quota, so token totals include every run.
+        total_prompt_tokens=sum(result.prompt_tokens for result in results),
+        total_output_tokens=sum(result.output_tokens for result in results),
         average_model_calls=_mean([result.model_calls for result in graded]),
         average_total_tokens=_mean([result.total_tokens for result in graded]),
         average_latency_ms=_mean([result.latency_ms for result in graded]),
@@ -208,6 +219,19 @@ def summarize(results: Sequence[CaseRunResult]) -> SuiteSummary:
             if not result.passed
         ),
     )
+
+
+def estimate_cost_usd(
+    prompt_tokens: int,
+    output_tokens: int,
+    *,
+    input_price_per_million: float,
+    output_price_per_million: float,
+) -> float:
+    """Estimate API cost from recorded tokens and prices in USD per million tokens."""
+    return (
+        prompt_tokens * input_price_per_million + output_tokens * output_price_per_million
+    ) / 1_000_000
 
 
 def quality_gates(graded: Sequence[CaseRunResult]) -> tuple[GateResult, ...]:

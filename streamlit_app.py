@@ -801,10 +801,19 @@ def render_dashboard_tab(
         )
 
 
-def render_audit_tab(state: AgentState | None) -> None:
+def render_audit_tab(
+    application: LocalAnalysisApplication,
+    workspace: AnalysisWorkspace,
+    state: AgentState | None,
+) -> None:
     if not state:
         st.info("Run an analysis to inspect its verification trail.")
         return
+    history = application.run_history(workspace)
+    st.caption(
+        f"Run {state.get('run_id') or 'not recorded'} · graph steps: "
+        f"{' → '.join(history) or 'not recorded'}"
+    )
     st.subheader("Tool actions")
     actions = state.get("tool_actions", [])
     if not actions:
@@ -826,6 +835,18 @@ def render_audit_tab(state: AgentState | None) -> None:
                 st.json(inputs["request"], expanded=False)
             if action.get("error"):
                 st.error(action["error"])
+            if status == "succeeded" and action.get("action_id"):
+                action_id = str(action["action_id"])
+                if st.button("Rerun without the model", key=f"rerun-{action_id}"):
+                    try:
+                        rerun = application.rerun_tool_action(workspace, state, action_id)
+                    except ApplicationError as exc:
+                        st.error(str(exc))
+                    else:
+                        if rerun.reproduced:
+                            st.success(f"Reproduced: the rerun returned the same {rerun.detail}.")
+                        else:
+                            st.warning(f"The rerun returned different values ({rerun.detail}).")
             checks = [
                 check
                 for verification in action.get("verification_results", [])
@@ -987,7 +1008,7 @@ def main() -> None:
     with dashboard:
         render_dashboard_tab(application, workspace)
     with audit:
-        render_audit_tab(current_state())
+        render_audit_tab(application, workspace, current_state())
 
 
 if __name__ == "__main__":

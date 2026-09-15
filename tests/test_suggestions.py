@@ -51,3 +51,15 @@ def test_suggestions_skip_pii_and_still_offer_at_least_three_goals(tmp_path: Pat
     assert "email" in profile.pii_candidates
     assert not any("email" in suggestion for suggestion in suggestions)
     assert "How many rows are there for each city?" in suggestions
+
+
+def test_a_table_without_measures_groups_or_quality_issues_still_gets_three_goals(
+    tmp_path: Path,
+) -> None:
+    rows = "".join(f"order-{index},ok\n" for index in range(25))
+    profile = profile_for(tmp_path, "status.csv", "order_ref,status\n" + rows)
+
+    suggestions = suggest_goals(profile)
+
+    assert len(suggestions) == 3
+    assert suggestions[-1] == "Which columns have the most distinct values?"

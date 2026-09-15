@@ -177,6 +177,11 @@ def test_analysis_approval_and_dashboard_pinning(
     assert len(gateway.requests) == 5
     # The Audit tab shows the exact SQL that produced the verified result.
     assert any("SELECT" in element.value for element in app.code)
+    # A saved Tool Action reruns from its recorded SQL without another model call.
+    next(button for button in app.button if button.label == "Rerun without the model").click().run()
+    assert not app.exception
+    assert any("Reproduced" in item.value for item in app.success)
+    assert len(gateway.requests) == 5
     export_verified_insights_json(
         ExportRequest.from_state(
             session=app.session_state["workspace"].session,

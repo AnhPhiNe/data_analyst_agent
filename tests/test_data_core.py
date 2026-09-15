@@ -242,6 +242,31 @@ def test_iso_dates_are_detected_in_any_language_and_are_not_phone_numbers(tmp_pa
     assert profile.pii_candidates == ("Liên hệ",)
 
 
+def test_personal_data_column_names_are_possible_pii_in_vietnamese_and_english(
+    tmp_path: Path,
+) -> None:
+    upload = write_csv(
+        tmp_path / "don_hang.csv",
+        "Họ và tên,Địa chỉ giao hàng,SĐT,Tên nhân viên,customer_name,"
+        "Tên sản phẩm,Tên chi nhánh,Số lượng\n"
+        "An,12 Lê Lợi,090,Bình,An,Bút,Quận 1,2\n"
+        "Bảo,3 Trần Phú,091,Chi,Bao,Vở,Quận 3,5\n"
+        "Cúc,7 Hai Bà Trưng,092,Dũng,Cuc,Thước,Quận 1,1\n",
+    )
+    core = TabularDataCore(tmp_path / "session")
+
+    profile = core.profile(core.ingest(upload))
+
+    # Diacritics are folded before matching; product and branch names are not personal data.
+    assert profile.pii_candidates == (
+        "Họ và tên",
+        "Địa chỉ giao hàng",
+        "SĐT",
+        "Tên nhân viên",
+        "customer_name",
+    )
+
+
 def test_query_inspection_does_not_treat_ordered_output_alias_as_source_field(
     tmp_path: Path,
 ) -> None:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import os
 import re
 from collections.abc import Iterator
@@ -18,6 +19,7 @@ from tabular_analytics_agent.application.models import (
     AnalysisWorkspace,
     SessionSummary,
     StagedUpload,
+    ToolActionRerun,
 )
 from tabular_analytics_agent.application.overview import (
     DataOverview,
@@ -29,11 +31,15 @@ from tabular_analytics_agent.application.overview import (
 )
 from tabular_analytics_agent.data import (
     DataCoreLimits,
+    QueryExecutionError,
+    QueryResult,
     TabularDataCore,
     UnsafeFileError,
+    UnsafeQueryError,
     UnsupportedFileError,
 )
 from tabular_analytics_agent.domain import (
+    ActionStatus,
     AnalysisPlan,
     AnalysisSession,
     AnalyticalArtifact,
@@ -41,6 +47,7 @@ from tabular_analytics_agent.domain import (
     ExecutionBudget,
     SemanticAnnotation,
     SessionStatus,
+    ToolAction,
 )
 from tabular_analytics_agent.filesystem import (
     delete_tree,
@@ -56,6 +63,12 @@ from tabular_analytics_agent.orchestration import (
     AgentState,
     ApprovalDecision,
     open_sqlite_checkpointer,
+)
+from tabular_analytics_agent.statistics import (
+    StatisticalAnalysisError,
+    StatisticalRequest,
+    StatisticalResult,
+    StatisticalTool,
 )
 from tabular_analytics_agent.visualization import (
     ArtifactStore,
@@ -371,6 +384,73 @@ class LocalAnalysisApplication:
             )
         return state
 
+    def run_history(self, workspace: AnalysisWorkspace) -> tuple[str, ...]:
+        """Return the graph nodes the latest run passed through, oldest first."""
+        with self._open_orchestrator(workspace) as orchestrator:
+            try:
+                return orchestrator.run_history(str(workspace.session.session_id))
+            except Exception as exc:
+                raise ApplicationError("could not read the Analysis Session run history") from exc
+
+    def rerun_tool_action(
+        self, workspace: AnalysisWorkspace, state: AgentState, action_id: str
+    ) -> ToolActionRerun:
+        """Re-execute a saved Tool Action from its recorded parameters, without a model call."""
+        _require_state_session(state, workspace.session.session_id)
+        action = next(
+            (
+                ToolAction.model_validate(item)
+                for item in state.get("tool_actions", [])
+                if str(item.get("action_id")) == action_id
+            ),
+            None,
+        )
+        if action is None or action.status is not ActionStatus.SUCCEEDED or not action.output_ref:
+            raise ApplicationError("only a succeeded Tool Action of this run can be rerun")
+        handle = workspace.dataset_handle
+        if action.working_dataset_version != handle.working_dataset_version:
+            raise ApplicationError("the Tool Action used an earlier Working Dataset version")
+        result_id = action.output_ref.partition(":")[2]
+        core = self._workspace_core(workspace)
+        try:
+            if action.tool_name == "read_only_sql":
+                stored = QueryResult.model_validate(
+                    next(
+                        item
+                        for item in state.get("query_results", [])
+                        if str(item.get("query_id")) == result_id
+                    )
+                )
+                fresh = core.query(handle, str(action.inputs["sql"]))
+                reproduced = fresh.columns == stored.columns and fresh.rows == stored.rows
+                detail = f"{fresh.row_count} rows"
+            else:
+                saved = StatisticalResult.model_validate(
+                    next(
+                        item
+                        for item in state.get("statistical_results", [])
+                        if str(item.get("result_id")) == result_id
+                    )
+                )
+                output = StatisticalTool(core).execute(
+                    handle=handle,
+                    profile=workspace.data_profile,
+                    request=StatisticalRequest.model_validate(action.inputs["request"]),
+                )
+                reproduced = _same_statistics(output.result, saved)
+                detail = f"{len(output.result.estimates)} estimates"
+        except StopIteration as exc:
+            raise ApplicationError("the saved result of this Tool Action is missing") from exc
+        except (
+            KeyError,
+            QueryExecutionError,
+            StatisticalAnalysisError,
+            UnsafeQueryError,
+            ValidationError,
+        ) as exc:
+            raise ApplicationError(f"could not rerun the Tool Action: {exc}") from exc
+        return ToolActionRerun(action_id=action_id, reproduced=reproduced, detail=detail)
+
     def publish_candidates(
         self,
         workspace: AnalysisWorkspace,
@@ -608,6 +688,26 @@ def _safe_upload_name(original_filename: str) -> str:
     if not safe_stem:
         safe_stem = "upload"
     return f"{safe_stem}{suffix}"
+
+
+def _same_statistics(fresh: StatisticalResult, saved: StatisticalResult) -> bool:
+    """Compare a rerun statistical result with the saved one, allowing floating-point noise."""
+
+    def numbers(result: StatisticalResult) -> list[float | None]:
+        return [result.statistic, result.p_value, *(item.value for item in result.estimates)]
+
+    same_metrics = [item.metric for item in fresh.estimates] == [
+        item.metric for item in saved.estimates
+    ]
+    return same_metrics and all(
+        (left is None and right is None)
+        or (
+            left is not None
+            and right is not None
+            and math.isclose(left, right, rel_tol=1e-9, abs_tol=1e-12)
+        )
+        for left, right in zip(numbers(fresh), numbers(saved), strict=True)
+    )
 
 
 def _session_status(value: str | None) -> SessionStatus:
