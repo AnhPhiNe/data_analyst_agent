@@ -85,6 +85,10 @@ at most 50 rows.
 
 - The agent proposes KPI, table, histogram, bar, line, or scatter charts, and the chosen type can
   vary. Answers backed only by a statistical test have no chart.
+- A KPI shows every significant digit of the stored value. Whole numbers above 2^53 (about 9
+  quadrillion) cannot be drawn exactly, so they get no KPI chart. DuckDB `DECIMAL` results are
+  converted to floating point, so a value with more than about 15 significant digits loses
+  precision; numbers read from CSV are floating point from the start.
 - The Data Overview and explorer are descriptive. They run no significance test, show at most 20
   groups, filter on at most 3 fields, and never produce Verified Insights.
 

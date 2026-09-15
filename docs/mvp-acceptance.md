@@ -247,4 +247,16 @@ the outstanding Must-tier flows and reliability gates.
   failed after four SQL requests (reproduced offline). Binding now raises a plan-repair error that
   names the fields the query reads, the graph replans, and the original regression test is restored
   beside the new `COUNT(*)` test. 399 tests passed (2 skipped), branch-inclusive coverage 90.80%,
-  Ruff, formatting, and strict mypy passed. No prompt changed, so no live run was needed.
+  Ruff, formatting, and strict mypy passed. No prompt changed, so no live run was needed. A later
+  test pins the other branch: a plan that keeps omitting fields stops cleanly once the two-replan
+  budget is used.
+- Phase 2 of the post-review plan (2026-09-15): KPI charts derive their number format from the
+  value (5372.0 shows as 5,372; a model-requested `,.2f` no longer rounds), and an empty value or a
+  whole number above 2^53 gets no KPI; Mann–Whitney and Kruskal–Wallis report a Brown–Forsythe
+  `similar_spread` check, or `not_checked` when spread cannot be compared; "Dismiss this question"
+  resumes the checkpoint with a dismissal that ends the run as `rejected`, so reopening the session
+  no longer revives the question; and the plan length limit follows `max_tool_actions` instead of a
+  fixed 12 steps, with a longer plan sent back to planning. Decimal results remain floating point
+  (documented in `docs/limitations.md`). Every new test was run against the previous commit in a
+  separate clone and failed there. 416 tests passed (2 skipped), branch-inclusive coverage 90.93%,
+  Ruff, formatting, and strict mypy passed. No prompt template changed, so no live run was needed.

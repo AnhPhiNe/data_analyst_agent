@@ -137,6 +137,7 @@ The Data Profile is factual evidence and must not be labeled as an insight.
 - Re-enter clarification if a later request exposes unresolved ambiguity.
 - Map every explicitly requested metric to the dataset as direct, derived, or unavailable (Section 25.4). The agent never lets a different field stand in for a requested metric.
 - An unavailable metric pauses for clarification. The user either corrects the request, which is interpreted again from the start, or accepts that the metric is unavailable, which ends the run as a typed refusal rather than a failure.
+- A clarification that asks for a corrected question may be dismissed. The dismissal is saved in the checkpoint and ends the run with status `rejected`, so reopening the session does not bring the question back.
 
 ### FR-05 — Analytical goals
 
@@ -197,7 +198,7 @@ The initial statistical toolset supports:
 
 Statistical tools must:
 
-- Check applicable assumptions.
+- Check applicable assumptions. Rank tests (Mann–Whitney and Kruskal–Wallis) check that group spreads are similar (Brown–Forsythe), because only then do they compare medians. Independence of observations cannot be checked from the table and is never reported as checked.
 - Report sample size and missing-data handling.
 - Report effect size where meaningful.
 - Warn about multiple testing.
@@ -229,7 +230,7 @@ Row-level values are described by their SQL `GROUP BY` keys (for example `year =
 - The agent proposes a structured Chart Intent rather than frontend code.
 - A deterministic chart tool validates the intent and produces a Plotly-compatible specification.
 - Must-tier artifacts are KPI card, table, histogram, bar chart, line chart, and scatter plot. Box plot, heatmap, stacked bar chart, and missing-value chart are Should-tier.
-- A KPI shows exactly one value from a one-row result, with every significant digit rather than a rounded display. Bar charts use a categorical axis, so numeric keys such as months are not drawn as a continuous scale. Line charts accept text x values such as `2026-01` or `Q1` as ordered categories in result order. A table renders every result column, so encodings supplied for a table are ignored.
+- A KPI shows exactly one value from a one-row result, with every significant digit rather than a rounded display. The number format is derived from the value, so a requested `number_format` cannot round it; an empty value, or a whole number above 2^53 that a chart cannot show exactly, gets no KPI. Bar charts use a categorical axis, so numeric keys such as months are not drawn as a continuous scale. Line charts accept text x values such as `2026-01` or `Q1` as ordered categories in result order. A table renders every result column, so encodings supplied for a table are ignored.
 - Chart selection considers analytical goal, field types, cardinality, sample size, and readability.
 - Pie charts are not selected by default.
 - Candidate Artifacts appear separately from Pinned Artifacts.
@@ -759,6 +760,7 @@ Adds scope agreed after the Milestone 6 hardening work. No earlier decision is r
 - Milestone 7 deliverables: a two-stage Dockerfile (runtime and release-check targets) with pinned dependency constraints, a product limitations document (criterion 14), and updated architecture and workflow diagrams. A hard holdout (v8: inconsistent spellings, numbers stored as text, vague and multi-step questions) was run for measurement only, scoring 24/36 against 36/36 on the clean post-fix holdout v7; its findings are documented rather than tuned away (Section 17.3).
 - After the hard holdout, the user approved three general fixes, making v8 development evidence: (A) the profile flags values that differ only by case or surrounding spaces, and SQL guidance compares such fields with `LOWER(TRIM(...))` (FR-03; tool-request-v13); (B) planning and SQL guidance state that steps cannot read one another's results, so a question that uses one result to choose rows for another is a single query with a CTE or subquery (plan-v8); (C) an insight catalog entry for a long query result keeps its first rows, in query order and within the value budget, instead of withholding every row. The ambiguous-ranking failure was not changed. Holdout v9 measured the result: 20/36, with every inconsistent-spelling run correct, dependent questions written as one query but a pooled rate still reported per group, one failure from a table-qualified field id that is not rewritten, fix C not exercised, and six chart-only failures, four of them caused by case expectations that excluded a KPI for one-row answers (Section 17.3).
 - Phase 1 of the post-review plan (implemented by another coding agent, then reviewed): chart validation uses the session's confirmed semantic annotations, so charts no longer fail after semantic confirmation; query results and Evidence Trails record WHERE and HAVING predicates per SQL scope (`filter_scopes`) while `filters` keeps the outer query; an unfiltered whole-dataset `COUNT(*)` may run from a plan step without fields and is re-verified against the profiled row count; and field ids qualified by the `dataset` table or its alias are rewritten. Review found that removing the plan-time check let a plan step without fields reach approval and fail after repeated SQL retries; such a step is now replanned with the fields its query reads (Sections 15 and 25.1).
+- Phase 2 of the post-review plan: a KPI derives its number format from the value, so no requested format rounds it, and values a chart cannot show exactly get no KPI (FR-11); Mann–Whitney and Kruskal–Wallis check that group spreads are similar (FR-09); dismissing a clarification is checkpointed as a rejected run, so reopening the session does not revive it (FR-04); and the plan length limit follows the configured Tool Action budget instead of a fixed 12 steps, with a longer plan sent back to planning (Section 25.3). No prompt template changed.
 
 ## 25. Implementation Contracts
 
@@ -801,5 +803,5 @@ Questions fully covered by the Data Profile are answered without a tool (Section
 | Data directory | `TABULAR_AGENT_DATA_DIR` | `.data` |
 | Sample values in model prompts | `TABULAR_AGENT_SEND_SAMPLE_VALUES` (`true` or `false`) | `true`; PII candidate fields never send values (Section 14.5) |
 | Resource limits (`DataCoreLimits`) | `TABULAR_AGENT_<FIELD NAME>`, for example `TABULAR_AGENT_MAX_QUERY_ROWS`; the full list is in `.env.example`; an invalid value stops startup with the variable named | 100 MB file, 10,000 query rows, 30-second query timeout, 512 MB DuckDB memory, 500 MB uncompressed XLSX, compression ratio 100, 5 profile top values |
-| Execution budget (`ExecutionBudget`) | `TABULAR_AGENT_<FIELD NAME>`, for example `TABULAR_AGENT_MAX_TOOL_ACTIONS` | 12 Tool Actions, 2 repairs per action, 30-second model and tool timeouts, 300-second active run time |
+| Execution budget (`ExecutionBudget`) | `TABULAR_AGENT_<FIELD NAME>`, for example `TABULAR_AGENT_MAX_TOOL_ACTIONS` | 12 Tool Actions, 2 repairs per action, 30-second model and tool timeouts, 300-second active run time; a plan may have at most `max_tool_actions` steps, and a longer plan is sent back to planning |
 | Evaluation pacing | Evaluation runner `--rpm` option | 12 requests per minute per configured key (below the 15 RPM free-tier limit); a provider error is retried once after 66 seconds |
