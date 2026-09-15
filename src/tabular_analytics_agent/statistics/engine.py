@@ -212,6 +212,7 @@ def _mann_whitney(frame: pd.DataFrame, request: StatisticalRequest) -> dict[str,
         statistic=float(test.statistic),
         p_value=float(test.pvalue),
         effect=effect,
+        assumptions=(_spread_check(groups),),
     )
 
 
@@ -289,6 +290,7 @@ def _kruskal_wallis(frame: pd.DataFrame, request: StatisticalRequest) -> dict[st
         statistic=float(test.statistic),
         p_value=float(test.pvalue),
         effect=effect,
+        assumptions=(_spread_check(groups),),
     )
 
 
@@ -566,6 +568,31 @@ def _variance_check(groups: dict[str, NDArray[np.float64]]) -> AssumptionCheck:
         name="equal_variance",
         status=AssumptionStatus.PASSED if p_value >= 0.05 else AssumptionStatus.FAILED,
         message=f"Levene p-value={p_value:.6g}.",
+    )
+
+
+def _spread_check(groups: dict[str, NDArray[np.float64]]) -> AssumptionCheck:
+    """Rank tests compare medians only when the groups have a similar spread."""
+    with np.errstate(divide="ignore", invalid="ignore"):
+        p_value = float(stats.levene(*groups.values(), center="median").pvalue)
+    if not math.isfinite(p_value):
+        return AssumptionCheck(
+            name="similar_spread",
+            status=AssumptionStatus.NOT_CHECKED,
+            message="Group spreads could not be compared because no group varies around its "
+            "median.",
+        )
+    if p_value >= 0.05:
+        return AssumptionCheck(
+            name="similar_spread",
+            status=AssumptionStatus.PASSED,
+            message=f"Brown-Forsythe p-value={p_value:.6g}.",
+        )
+    return AssumptionCheck(
+        name="similar_spread",
+        status=AssumptionStatus.FAILED,
+        message=f"Brown-Forsythe p-value={p_value:.6g}. Group spreads differ, so a difference "
+        "may reflect spread or shape rather than medians.",
     )
 
 

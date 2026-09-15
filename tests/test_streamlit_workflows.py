@@ -331,7 +331,7 @@ def test_column_clarification_can_be_dismissed_without_guessing_a_column(
     ui_workspace: tuple[AppTest, AnalysisWorkspace, LocalAnalysisApplication, FakeModelGateway],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    app, _, _, _ = ui_workspace
+    app, workspace, application, _ = ui_workspace
     gateway = FakeModelGateway(
         [
             {
@@ -353,8 +353,14 @@ def test_column_clarification_can_be_dismissed_without_guessing_a_column(
     next(button for button in app.button if button.label == "Dismiss this question").click().run()
 
     assert not app.exception
-    assert app.session_state["agent_state"] is None
+    assert app.session_state["agent_state"]["status"] == "rejected"
+    assert any("dismissed" in item.value for item in app.warning)
+    assert not any(button.label == "Dismiss this question" for button in app.button)
     assert len(gateway.requests) == 1
+    # The dismissal is checkpointed, so reopening the session does not revive the question.
+    _, reopened = application.open_session(workspace.session.session_id)
+    assert reopened["status"] == "rejected"
+    assert reopened["clarification_question"] == ""
 
 
 def test_deleting_current_session_returns_to_upload_and_clears_state(

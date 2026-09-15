@@ -27,6 +27,7 @@ from tabular_analytics_agent.domain import (
     FieldKind,
     FieldProfile,
 )
+from tabular_analytics_agent.visualization import exact_number_format
 
 _MAX_FIELD_CHARTS = 8
 _MAX_CORRELATION_FIELDS = 15
@@ -576,11 +577,11 @@ def _explorer_chart(
             f"At most {_MAX_EXPLORER_GROUPS} groups with the most rows. {caption}",
         )
     result = core.query(handle, f"SELECT {value} AS measure_value FROM dataset {where}")
+    measure = result.rows[0][0] if result.rows else None
+    number = measure if isinstance(measure, int | float) and not isinstance(measure, bool) else 0
     figure = go.Figure(
         go.Indicator(
-            mode="number",
-            value=result.rows[0][0] if result.rows and result.rows[0][0] is not None else 0,
-            number={"valueformat": ",.12~g"},
+            mode="number", value=number, number={"valueformat": exact_number_format(number)}
         )
     )
     return _chart(figure, label, caption)

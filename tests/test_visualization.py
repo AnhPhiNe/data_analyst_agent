@@ -21,6 +21,7 @@ from tabular_analytics_agent.domain import (
 from tabular_analytics_agent.visualization import (
     ChartRenderResult,
     ChartValidationError,
+    exact_number_format,
     make_query_result_reference,
     render_chart,
     validate_chart_intent,
@@ -160,7 +161,7 @@ def test_bar_uses_a_category_axis_and_kpi_shows_every_digit() -> None:
 
     assert bar.plotly_spec["layout"]["xaxis"]["type"] == "category"
     assert line.plotly_spec["layout"]["xaxis"]["type"] == "category"
-    assert kpi.plotly_spec["data"][0]["number"]["valueformat"] == ",.12~g"
+    assert kpi.plotly_spec["data"][0]["number"]["valueformat"] == ",.4~g"
 
 
 def test_kpi_requires_one_row_and_renders_exact_value() -> None:
@@ -182,8 +183,49 @@ def test_kpi_requires_one_row_and_renders_exact_value() -> None:
     trace = publication.plotly_spec["data"][0]
     assert trace["type"] == "indicator"
     assert trace["value"] == 375.0
-    assert trace["number"]["valueformat"] == ",.2f"
+    # A requested number format cannot round a KPI; it always shows every significant digit.
+    assert trace["number"]["valueformat"] == ",.3~g"
     assert publication.plotly_spec["layout"]["height"] == 320
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        (5372.0, ",.4~g"),
+        (1000.0, ",.4~g"),
+        (0, ",.1~g"),
+        (-1234.5, ",.5~g"),
+        (0.1, ",.1~g"),
+        (0.000012345, ",.5~g"),
+        (123456789.123456, ",.15~g"),
+        (2**53, ",.16~g"),
+        (1e22, ",.21~g"),
+        (1.2345678901234567e25, ",.21~g"),
+    ],
+)
+def test_exact_number_format_keeps_every_significant_digit(
+    value: int | float, expected: str
+) -> None:
+    assert exact_number_format(value) == expected
+
+
+@pytest.mark.parametrize(
+    ("value", "error_fragment"),
+    [(None, "KPI value is empty"), (2**53 + 1, "more digits than a chart can show")],
+)
+def test_kpi_rejects_values_a_chart_cannot_show_exactly(
+    value: int | None, error_fragment: str
+) -> None:
+    result = sales_result().model_copy(
+        update={"rows": (("2026-01-01", "North", 375.0, value),), "row_count": 1}
+    )
+
+    with pytest.raises(ChartValidationError, match=error_fragment):
+        render_chart(
+            intent(result, ArtifactType.KPI, y_fields=("quantity",)),
+            result,
+            verified_action(result),
+        )
 
 
 def test_color_grouping_creates_one_trace_per_group() -> None:

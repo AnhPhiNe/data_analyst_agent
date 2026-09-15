@@ -371,6 +371,14 @@ def build_agent_graph(
         )
         try:
             decision = ApprovalDecision.model_validate(decision_payload)
+            if decision.dismissed:
+                return {
+                    "status": AgentRunStatus.REJECTED.value,
+                    "error": "The question was dismissed. Ask a new question to continue.",
+                    "proposed_annotations": [],
+                    "clarification_question": "",
+                    **pause_execution_budget(state, clock()),
+                }
             if not decision.approved:
                 corrected_request = decision.corrected_request or decision.revision_request
                 if corrected_request:
@@ -504,6 +512,14 @@ def build_agent_graph(
         try:
             response = model_gateway.generate_structured(request)
             trace = response.trace
+            step_count = len(response.output.steps)
+            if step_count > budget.max_tool_actions:
+                # Every step needs at least one Tool Action, so a longer plan can never finish.
+                raise PlanRepairError(
+                    f"The plan has {step_count} steps but the execution budget allows "
+                    f"{budget.max_tool_actions} Tool Actions; combine steps so there are at most "
+                    f"{budget.max_tool_actions}"
+                )
             goal = AnalyticalGoal.model_validate(state["goal"])
             metric_mappings = canonicalize_requested_metric_mappings(
                 profile, state.get("requested_metric_mappings", [])

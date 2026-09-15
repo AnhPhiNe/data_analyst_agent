@@ -147,8 +147,6 @@ class PlanDraft(GenerationSchema):
     def valid_steps(self) -> Self:
         if not self.steps:
             raise ValueError("a plan requires at least one step")
-        if len(self.steps) > 12:
-            raise ValueError("a plan cannot exceed 12 steps")
         step_ids = [step.step_id for step in self.steps]
         if len(step_ids) != len(set(step_ids)):
             raise ValueError("plan step IDs must be unique")

@@ -179,6 +179,35 @@ def test_two_group_tests_report_group_sizes_and_effects(
     }
 
 
+@pytest.mark.parametrize(
+    "operation", [StatisticalOperation.MANN_WHITNEY, StatisticalOperation.KRUSKAL_WALLIS]
+)
+def test_rank_tests_check_that_group_spreads_are_similar(operation: StatisticalOperation) -> None:
+    def spread_check(values: list[float]) -> tuple[AssumptionStatus, str]:
+        frame = pd.DataFrame({"value": values, "group": ["A"] * 6 + ["B"] * 6})
+        result = analyze(
+            frame,
+            StatisticalRequest(
+                operation=operation,
+                value_field="value",
+                group_field="group",
+                group_order=("A", "B") if operation is StatisticalOperation.MANN_WHITNEY else (),
+            ),
+        )
+        check = next(check for check in result.assumptions if check.name == "similar_spread")
+        return check.status, check.message
+
+    similar = spread_check([10, 11, 9, 10, 12, 8, 20, 21, 19, 22, 18, 20])
+    different = spread_check([10, 10.1, 9.9, 10, 10.05, 9.95, 1, 30, 5, 40, 2, 50])
+    # Every value sits exactly one unit from its group median, so spread cannot be compared.
+    undefined = spread_check([1, 1, 1, 3, 3, 3, 5, 5, 5, 7, 7, 7])
+
+    assert similar[0] is AssumptionStatus.PASSED
+    assert different[0] is AssumptionStatus.FAILED
+    assert "rather than medians" in different[1]
+    assert undefined[0] is AssumptionStatus.NOT_CHECKED
+
+
 def test_chi_square_reports_expected_count_assumption_and_cramers_v() -> None:
     result = analyze(
         analysis_frame(),

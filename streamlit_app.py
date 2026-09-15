@@ -527,8 +527,8 @@ def render_approval(
         if asks_for_question and not unavailable:
             # Continuing would make the agent guess a column the user never named.
             if approve.button("Dismiss this question", width="stretch"):
-                st.session_state.agent_state = None
-                st.rerun()
+                # Checkpoint the dismissal so reopening the session does not revive the question.
+                resume_agent(application, workspace, {"approved": False, "dismissed": True})
         else:
             confirmation = (
                 "Accept that this metric is unavailable" if unavailable else "Confirm semantics"

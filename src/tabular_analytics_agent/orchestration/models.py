@@ -81,11 +81,15 @@ class ApprovalDecision(OrchestrationModel):
     revision_request: str | None = None
     corrected_request: str | None = Field(default=None, min_length=1)
     annotations: tuple[SemanticAnnotationDraft, ...] | None = None
+    # Ends a pending clarification durably instead of only hiding it in the UI.
+    dismissed: bool = False
 
     @model_validator(mode="after")
     def decision_is_consistent(self) -> Self:
         if self.approved and (self.revision_request or self.corrected_request):
             raise ValueError("an approved decision cannot request a revision")
+        if self.dismissed and (self.approved or self.revision_request or self.corrected_request):
+            raise ValueError("a dismissed question cannot be approved or revised")
         return self
 
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable
+from decimal import Decimal
 from typing import Any
 
 import plotly.graph_objects as go
@@ -51,7 +52,24 @@ _MAX_TABLE_ROWS = 500
 _MAX_BAR_CATEGORIES = 50
 _MAX_COLOR_GROUPS = 12
 _MAX_POINT_ROWS = 5_000
+# Plotly parses numbers as doubles, which hold every integer only up to 2**53.
+_MAX_EXACT_INTEGER = 2**53
+# d3-format clamps "g" precision to at most 21 significant digits.
+_MAX_FORMAT_PRECISION = 21
+# number_format stays accepted for stored intents, but a KPI always shows every significant digit.
 SUPPORTED_FORMATTING_KEYS = {"height", "number_format", "show_legend"}
+
+
+def exact_number_format(value: int | float) -> str:
+    """Return a d3 number format that shows every significant digit of a finite number.
+
+    Floats use their shortest round-trip form, so 5372.0 shows as 5,372 and 0.1 as 0.1.
+    """
+    digits = Decimal(value if isinstance(value, int) else repr(value)).normalize()
+    significant = len(digits.as_tuple().digits)
+    integer_digits = max(digits.adjusted() + 1, 1)
+    precision = min(max(significant, integer_digits), _MAX_FORMAT_PRECISION)
+    return f",.{precision}~g"
 
 
 def make_query_result_reference(
@@ -309,6 +327,15 @@ def _readability_errors(intent: ChartIntent, result: QueryResult) -> tuple[str, 
     values = _column_values(result)
     if intent.artifact_type is ArtifactType.KPI and result.row_count != 1:
         errors.append("KPI requires exactly one result row")
+    elif intent.artifact_type is ArtifactType.KPI and intent.y_fields:
+        kpi_value = values[intent.y_fields[0]][0]
+        if kpi_value is None:
+            errors.append("KPI value is empty; report the verified result as text instead")
+        elif isinstance(kpi_value, int) and abs(kpi_value) > _MAX_EXACT_INTEGER:
+            errors.append(
+                "KPI value has more digits than a chart can show exactly; report the verified "
+                "result as text instead"
+            )
     if intent.artifact_type is ArtifactType.TABLE and result.row_count > _MAX_TABLE_ROWS:
         errors.append(f"Table exceeds the {_MAX_TABLE_ROWS}-row display limit")
     if (
@@ -340,13 +367,14 @@ def _readability_errors(intent: ChartIntent, result: QueryResult) -> tuple[str, 
 
 def _render_kpi(intent: ChartIntent, rows: list[dict[str, Any]]) -> go.Figure:
     field = intent.y_fields[0]
+    value = rows[0][field]
     return go.Figure(
         go.Indicator(
             mode="number",
-            value=rows[0][field],
+            value=value,
             title={"text": intent.labels.get(field, field)},
             # Plotly's default indicator format rounds to three significant digits (5372 -> 5370).
-            number={"valueformat": intent.formatting_intent.get("number_format", ",.12~g")},
+            number={"valueformat": exact_number_format(value)},
         )
     )
 

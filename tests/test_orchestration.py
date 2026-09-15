@@ -13,7 +13,7 @@ from pydantic import ValidationError
 
 from tabular_analytics_agent.data import DatasetHandle, QueryResult, TabularDataCore
 from tabular_analytics_agent.domain import ExecutionBudget
-from tabular_analytics_agent.model_gateway import FakeModelGateway, ModelProviderError
+from tabular_analytics_agent.model_gateway import FakeModelGateway, ModelProviderError, PlanDraft
 from tabular_analytics_agent.orchestration import (
     AgentOrchestrator,
     AgentRunRequest,
@@ -1250,6 +1250,58 @@ def test_sql_plan_step_without_fields_fails_after_the_replan_budget(tmp_path: Pa
     ]
 
 
+def test_dismissed_clarification_ends_the_run_durably(tmp_path: Path) -> None:
+    core, request = run_request(tmp_path)
+    gateway = FakeModelGateway([goal_output(with_semantics=True)])
+    checkpoint_path = tmp_path / "checkpoints.sqlite"
+
+    with open_sqlite_checkpointer(checkpoint_path) as checkpointer:
+        paused = AgentOrchestrator(gateway, core, checkpointer=checkpointer).start(request)
+    # A later process resumes a checkpoint that was paused before the dismissal was chosen.
+    with open_sqlite_checkpointer(checkpoint_path) as checkpointer:
+        dismissed = AgentOrchestrator(gateway, core, checkpointer=checkpointer).resume(
+            request.session_id, {"approved": False, "dismissed": True}
+        )
+    with open_sqlite_checkpointer(checkpoint_path) as checkpointer:
+        reopened = AgentOrchestrator(gateway, core, checkpointer=checkpointer).get_state(
+            request.session_id
+        )
+
+    assert paused["status"] == AgentRunStatus.AWAITING_SEMANTIC_REVIEW
+    assert dismissed["status"] == AgentRunStatus.REJECTED
+    assert "dismissed" in dismissed["error"]
+    assert reopened["status"] == AgentRunStatus.REJECTED
+    assert reopened["clarification_question"] == ""
+    assert reopened["tool_actions"] == []
+    assert len(gateway.requests) == 1
+
+
+def test_plan_longer_than_the_tool_action_budget_is_replanned(tmp_path: Path) -> None:
+    core, request = run_request(tmp_path)
+    step = plan_output()["steps"]
+    assert isinstance(step, list) and isinstance(step[0], dict)
+    long_plan = {"steps": [{**step[0], "step_id": f"step-{index}"} for index in range(3)]}
+    gateway = FakeModelGateway([goal_output(), long_plan, plan_output()])
+    agent = AgentOrchestrator(
+        gateway,
+        core,
+        checkpointer=InMemorySaver(),
+        execution_budget=ExecutionBudget(max_tool_actions=2),
+    )
+
+    paused = agent.start(request)
+
+    # The step limit follows the configured budget instead of a fixed schema cap.
+    assert paused["status"] == AgentRunStatus.AWAITING_PLAN_APPROVAL
+    assert len(paused["plan"]["steps"]) == 1
+    assert paused["plan_repair_count"] == 1
+    assert "The plan has 3 steps but the execution budget allows 2 Tool Actions" in (
+        gateway.requests[2].prompt
+    )
+    thirteen_steps = {"steps": [{**step[0], "step_id": f"step-{index}"} for index in range(13)]}
+    assert len(PlanDraft.model_validate(thirteen_steps).steps) == 13
+
+
 def test_new_request_replaces_a_pending_clarification(tmp_path: Path) -> None:
     core, request = run_request(tmp_path)
     gateway = FakeModelGateway([goal_output(with_semantics=True), goal_output(), plan_output()])
@@ -1838,3 +1890,5 @@ def test_orchestration_inputs_reject_mismatched_dataset_and_decision(tmp_path: P
         )
     with pytest.raises(ValidationError, match="approved decision"):
         ApprovalDecision(approved=True, revision_request="Change the plan")
+    with pytest.raises(ValidationError, match="dismissed question"):
+        ApprovalDecision(approved=False, dismissed=True, corrected_request="Another question")
