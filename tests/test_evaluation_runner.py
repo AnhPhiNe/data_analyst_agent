@@ -16,7 +16,8 @@ from tabular_analytics_agent.evaluation import (
     ExpectedProfileFact,
     GoldenCase,
 )
-from tabular_analytics_agent.evaluation.runner import grade_run, load_cases, main, run_suite
+from tabular_analytics_agent.evaluation.grading import grade_run, summarize
+from tabular_analytics_agent.evaluation.runner import load_cases, main, run_suite
 from tabular_analytics_agent.model_gateway import FakeModelGateway, ModelProviderError
 from tabular_analytics_agent.orchestration import AgentState
 
@@ -626,6 +627,53 @@ def test_grading_separates_refusals_provider_errors_and_forbidden_claims() -> No
         "outcome",
         "forbidden_claims",
     }
+
+
+def test_summary_reports_each_quality_gate_with_its_own_denominator() -> None:
+    sales = load_case("tiny_sales_summary.json")
+    clarification = load_case("tiny_missing_field_refusal.json")
+    plan = {"steps": [{"step_id": "totals"}]}
+    correct: AgentState = grouped_query_state([["North", 350.0], ["South", 200.0]])
+    correct["plan"] = plan
+    correct["tool_actions"][0]["inputs"] = {"required_fields": ["region", "revenue"]}
+    correct["chart_renders"] = [{"intent": {"artifact_type": "bar"}}]
+    wrong: AgentState = grouped_query_state([["North", 200.0], ["South", 350.0]])
+    wrong["status"] = "failed"
+    wrong["plan"] = plan
+    wrong["tool_actions"][0]["inputs"] = {"required_fields": ["region", "revenue", "email"]}
+    wrong["verified_insights"][0]["claim"] = "Region causes revenue"
+    wrong["verified_insights"][0]["evidence"] = {"values": []}
+
+    results = [
+        grade_run(sales, correct),
+        grade_run(sales, wrong, run_index=1),
+        grade_run(clarification, {"status": "awaiting_semantic_review"}),
+        grade_run(clarification, {"status": "completed", "plan": plan}, run_index=1),
+        grade_run(sales, {"status": "awaiting_semantic_review"}, run_index=2),
+        grade_run(sales, {"status": "failed", "error_kind": "provider", "plan": plan}, run_index=3),
+    ]
+    summary = summarize(results)
+
+    # Provider errors are excluded; each gate counts its own units (values, fields, insights, runs).
+    assert {gate.name: (gate.numerator, gate.denominator, gate.met) for gate in summary.gates} == {
+        "calculation_accuracy": (2, 6, False),
+        "schema_grounding": (4, 5, False),
+        "unsupported_claim_rate": (1, 2, False),
+        "tool_execution_success": (2, 3, False),
+        "chart_validity": (1, 3, False),
+        "evidence_completeness": (1, 2, False),
+        "clarification_recall": (1, 2, False),
+        "end_to_end_success": (2, 5, False),
+    }
+    assert summary.unnecessary_clarifications == 1
+    assert summary.provider_errors == 1
+    # A gate with no qualifying run is reported as unmeasured, not as passed or failed.
+    unmeasured = summarize([results[2]]).gates[0]
+    assert (unmeasured.name, unmeasured.rate, unmeasured.met) == (
+        "calculation_accuracy",
+        None,
+        None,
+    )
 
 
 @pytest.mark.parametrize(

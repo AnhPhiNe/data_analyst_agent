@@ -11,8 +11,8 @@ from pydantic import ValidationError
 
 from tabular_analytics_agent.data import TabularDataCore
 from tabular_analytics_agent.domain import GoalFamily
+from tabular_analytics_agent.evaluation.grading import _actual_outcome, grade_run
 from tabular_analytics_agent.evaluation.models import ExpectedOutcome, GoldenCase
-from tabular_analytics_agent.evaluation.runner import _actual_outcome, grade_run
 from tabular_analytics_agent.model_gateway import (
     FakeModelGateway,
     RequestedMetricMapping,
