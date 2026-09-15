@@ -9,12 +9,14 @@ claim text.
 
 ## Status
 
-The MVP scope in [Spec.md](./Spec.md) is implemented, and 12 of the 14 acceptance criteria in Spec
-Section 21 are met. Two remain open: criterion 11, because the 40-case release suite missed three of
-the eight quality gates (calculation accuracy 88.1%, tool execution 94.7%, chart validity 91.5%),
-and criterion 12, because Docker is not installed on the development machine, so the image has
-never been built; the check target that would verify it is included, and a clean virtual-environment
-check was run instead. Automated tests do not call a model. Evidence for every claim is in
+The MVP scope in [Spec.md](./Spec.md) is implemented, and 13 of the 14 acceptance criteria in Spec
+Section 21 are met. Criterion 11 is reported with both measurements: the 40-case release suite missed
+three of the eight quality gates (calculation accuracy 88.1%, tool execution 94.7%, chart validity
+91.5%), while the 10-case final holdout that measured the fixes afterwards met all eight on 29
+graded runs. Criterion 12 remains open, because Docker is not installed on the development machine,
+so the image has never been built; the check target that would verify it is included, and a clean
+virtual-environment check was run instead. Automated tests do not call a model. Evidence for every
+claim is in
 [docs/mvp-acceptance.md](./docs/mvp-acceptance.md), and known weaknesses are in
 [docs/limitations.md](./docs/limitations.md).
 
@@ -72,6 +74,7 @@ in pandas and SciPy and committed before the first run. Every case runs 3 times 
 | v8 | 24/36 (66.7%) | hard set: inconsistent spellings, numbers stored as text, vague and multi-step questions |
 | v9 | 20/36 (55.6%) | hotel bookings (Vietnamese), SaaS subscriptions; measured three fixes made after v8 |
 | Release | 103/118 (87.3%) | 40 cases on nine unseen datasets, questions written outside the repository, measured once |
+| Final holdout | 29/29 (100%) | 10 cases on two more unseen datasets, measuring the post-release fixes; all eight gates met |
 
 v7 and v8 bracket the realistic range: reliable on clear questions over clean data, much weaker on
 inconsistent values and vague requests. v9 confirmed that inconsistent spellings are now handled
@@ -83,7 +86,13 @@ The release suite is the headline measurement: 103 of 118 graded runs passed (95
 80–92%), with 2 provider errors reported separately. Five gates were met; calculation accuracy,
 tool execution success, and chart validity were not. Its expectations were never edited, and a
 strict re-check of output names reads calculation accuracy as 85.8% rather than 88.1%. Every run was
-also read by hand. Details are in [docs/limitations.md](./docs/limitations.md).
+also read by hand.
+
+The final holdout then measured the fixes made after that run, on two datasets written outside the
+repository: 29 of 29 graded runs passed and all eight gates were met, with one run lost to a provider
+rate limit. Every grouped question stated all of its groups and both ranking questions named the
+winning entity. Thirty runs is a small sample on clean data, so it confirms those fixes rather than
+replacing the release suite's result. Details are in [docs/limitations.md](./docs/limitations.md).
 
 ## Quick start
 

@@ -56,7 +56,10 @@ These items are in integration review until the verification record below is com
   still are when re-graded with grading version 5, which gives each gate its own denominator.
   Earlier holdout sets (v3–v6) are development evidence after the fixes derived from them; their
   denominators are recorded above. The release suite did not meet calculation accuracy, tool
-  execution success, or chart validity (`docs/limitations.md` Section 12).
+  execution success, or chart validity (`docs/limitations.md` Section 12). The 10-case final holdout
+  met all eight gates on 29 graded runs, which confirms the post-release fixes but does not replace
+  the release suite's larger sample; criterion 11 is therefore recorded as met on the final holdout
+  and not met on the release suite, with both results stated.
 - Review semantic correctness and filter use in addition to deterministic number/evidence checks.
   A model-produced mapping makes a decision inspectable; it does not prove the meaning is correct.
 - Milestone 6 hardening tests are in `tests/test_hardening.py` and `tests/test_settings.py`
@@ -398,3 +401,24 @@ the outstanding Must-tier flows and reliability gates.
   fields are documented in `docs/limitations.md` Section 9 and Spec Section 17.2. The nine new or
   changed tests failed against the previous commit in a separate clone. 454 tests passed
   (2 skipped), branch-inclusive coverage 91.18%, Ruff, formatting, and strict mypy passed.
+- Prompt relocation (2026-09-16, commit `850db6d`): the five model prompts moved from `graph.py`
+  into `prompts.py`, which now builds every prompt the agent sends. An offline capture of all nine
+  prompts from a SQL run and a statistical run is byte-for-byte identical before and after, and no
+  prompt template version changed. `graph.py` went from 1,351 to 1,258 lines.
+- Final holdout result (2026-09-16, commit `e239f87`, measured once): 10 cases on two unseen
+  synthetic datasets (360-row Vietnamese sports classes, 420-row English podcast episodes), three
+  runs each. Questions came from a brief pasted into a new ChatGPT chat without repository access,
+  with four corrections approved before any run (short English forbidden substrings, ANOVA or
+  Kruskal–Wallis alternatives, both date-group spellings, and concrete profile facts). Expected
+  values were computed with pandas and SciPy and recomputed with SQL through the data core with no
+  difference. 29 of 29 graded runs passed and all eight Section 17.4 gates were met: calculation
+  accuracy 65/65, schema grounding 40/40, forbidden claims 0/123, tool execution 20/20, chart
+  validity 17/17, evidence completeness 123/123, clarification recall 6/6, end-to-end 29/29. One run
+  hit a provider rate limit and is reported separately; two retries occurred; no clarification was
+  unnecessary. A run averaged 3.7 model calls, about 4,200 tokens, and 5.9 seconds. All 32 stored
+  runs were read by hand: every number matched the committed expectation, every grouped question
+  stated all of its groups, both ranking questions named the winning sport and date rather than the
+  value alone, statistic names kept their capitals, and generated aliases read as their function.
+  Expectations were not edited. Two runs of one question also reported median, minimum, maximum, and
+  standard deviation, which is correct but longer than asked; it is recorded as an observation, not
+  fixed, under the agreed stop rule.

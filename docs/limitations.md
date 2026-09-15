@@ -30,6 +30,7 @@ The same question can receive a different plan, SQL, chart type, or set of repor
 | v8 (hard) | 24/36 (66.7%) | messy values, vague and multi-step questions; see Section 10 |
 | v9 | 20/36 (55.6%) | measured the post-v8 fixes; 6 failures were chart-only; see Section 10 |
 | Release suite | 103/118 (87.3%) | 40 cases on unseen datasets, measured once; see Section 12 |
+| Final holdout | 29/29 (100%) | 10 cases on two more unseen datasets, measured once; see Section 12 |
 
 The gap between v7 and v8 is the most useful reading of these numbers: the agent is reliable on
 clear questions over clean data and much weaker when values are inconsistent or the question is
@@ -363,3 +364,25 @@ release run. No prompt template or grading rule changed in this round:
   longer rewrites the session file or reorders the session list.
 - Dead code (the stale-insight model, an unused SQL helper) was removed, and identifier parsing, the
   `row_number` convention, and repeated literal thresholds now have one definition each.
+
+### What the final holdout showed
+
+The 10-case final holdout was committed before any run and measured once: 29 of 29 graded runs
+passed, and every Section 17.4 gate was met. One run hit a provider rate limit and is reported
+separately. The round it was written to measure worked on data the agent had never seen:
+
+- All twelve runs of the four grouped questions stated every group, not a subset.
+- Both ranking questions named the winning sport and the winning date, not only the value.
+- All three runs of the ambiguous question asked which measure to rank by, and all three runs of the
+  unavailable-metric question listed the dataset's numeric fields.
+
+Read this score for what it is. Thirty runs is a small sample, clarification recall rests on six
+runs, and the two datasets are clean by design, because the round being measured was about stating a
+correct answer in full rather than about messy data. The release suite's 118 runs on nine datasets,
+including deliberately dirty ones, remains the more demanding measurement, and its unmet gates stand
+as recorded above.
+
+One observation, not fixed: two runs of the completion-rate question also reported each genre's
+median, minimum, maximum, and standard deviation, twenty claims where four were asked for. The
+numbers were correct; the answer was simply longer than the question. Under the agreed stop rule no
+further code change was made after this measurement.
