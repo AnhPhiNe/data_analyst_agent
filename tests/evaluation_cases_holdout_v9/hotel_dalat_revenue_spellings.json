@@ -1,0 +1,24 @@
+{
+  "case_id": "holdout-v9-hotel-dalat-revenue-spellings-v1",
+  "dataset_path": "tests/fixtures/eval_holdout_v9/dat_phong_khach_san.csv",
+  "dataset_sha256": "67228986ed6bfaeb6ecdb41b05551ec82e61358a82e0f798b48359105aea50ce",
+  "user_request": "Tổng tiền đặt phòng ở chi nhánh Đà Lạt là bao nhiêu?",
+  "goal_family": "summary",
+  "required_calculations": [
+    {
+      "metric": "total_amount",
+      "expected": 390700000
+    }
+  ],
+  "allowed_fields": [
+    "Chi nhánh",
+    "Tổng tiền"
+  ],
+  "supported_conclusions": [
+    "Tổng tiền ở Đà Lạt gộp mọi cách viết tên chi nhánh."
+  ],
+  "valid_chart_types": [
+    "kpi",
+    "table"
+  ]
+}

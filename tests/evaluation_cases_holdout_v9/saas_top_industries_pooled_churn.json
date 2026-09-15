@@ -1,0 +1,26 @@
+{
+  "case_id": "holdout-v9-saas-top-industries-pooled-churn-v1",
+  "dataset_path": "tests/fixtures/eval_holdout_v9/saas_subscriptions.csv",
+  "dataset_sha256": "b5422d646482987c0752d2b9e0fbeadf88c530e3540ee572a127d2084478331c",
+  "user_request": "Across all accounts in the three industries with the highest total MRR, counted together, what share of accounts churned, as a value between 0 and 1?",
+  "goal_family": "summary",
+  "required_calculations": [
+    {
+      "metric": "churn_rate",
+      "expected": 0.16778523489932887,
+      "absolute_tolerance": 0.0001
+    }
+  ],
+  "allowed_fields": [
+    "industry",
+    "mrr_usd",
+    "churned"
+  ],
+  "supported_conclusions": [
+    "The pooled churn rate of the three highest-MRR industries is reported."
+  ],
+  "valid_chart_types": [
+    "kpi",
+    "table"
+  ]
+}

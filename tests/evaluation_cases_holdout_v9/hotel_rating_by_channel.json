@@ -1,0 +1,47 @@
+{
+  "case_id": "holdout-v9-hotel-rating-by-channel-v1",
+  "dataset_path": "tests/fixtures/eval_holdout_v9/dat_phong_khach_san.csv",
+  "dataset_sha256": "67228986ed6bfaeb6ecdb41b05551ec82e61358a82e0f798b48359105aea50ce",
+  "user_request": "Điểm đánh giá trung bình theo từng kênh đặt là bao nhiêu?",
+  "goal_family": "comparison",
+  "required_calculations": [
+    {
+      "metric": "Đánh giá",
+      "group": {
+        "field": "Kênh đặt",
+        "value": "Doanh nghiệp"
+      },
+      "expected": 3.893939393939394,
+      "absolute_tolerance": 1e-06
+    },
+    {
+      "metric": "Đánh giá",
+      "group": {
+        "field": "Kênh đặt",
+        "value": "OTA"
+      },
+      "expected": 3.801282051282051,
+      "absolute_tolerance": 1e-06
+    },
+    {
+      "metric": "Đánh giá",
+      "group": {
+        "field": "Kênh đặt",
+        "value": "Trực tiếp"
+      },
+      "expected": 3.9545454545454546,
+      "absolute_tolerance": 1e-06
+    }
+  ],
+  "allowed_fields": [
+    "Kênh đặt",
+    "Đánh giá"
+  ],
+  "supported_conclusions": [
+    "Điểm đánh giá trung bình của từng kênh được báo cáo."
+  ],
+  "valid_chart_types": [
+    "bar",
+    "table"
+  ]
+}

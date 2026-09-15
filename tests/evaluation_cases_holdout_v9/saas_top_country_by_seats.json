@@ -1,0 +1,28 @@
+{
+  "case_id": "holdout-v9-saas-top-country-by-seats-v1",
+  "dataset_path": "tests/fixtures/eval_holdout_v9/saas_subscriptions.csv",
+  "dataset_sha256": "b5422d646482987c0752d2b9e0fbeadf88c530e3540ee572a127d2084478331c",
+  "user_request": "Which country code has the most seats in total, and how many seats?",
+  "goal_family": "comparison",
+  "required_calculations": [
+    {
+      "metric": "seats",
+      "group": {
+        "field": "country_code",
+        "value": "CC69"
+      },
+      "expected": 1268
+    }
+  ],
+  "allowed_fields": [
+    "country_code",
+    "seats"
+  ],
+  "supported_conclusions": [
+    "CC69 has the most seats."
+  ],
+  "valid_chart_types": [
+    "bar",
+    "table"
+  ]
+}

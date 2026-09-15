@@ -1,0 +1,24 @@
+{
+  "case_id": "holdout-v9-saas-tickets-nps-correlation-v1",
+  "dataset_path": "tests/fixtures/eval_holdout_v9/saas_subscriptions.csv",
+  "dataset_sha256": "b5422d646482987c0752d2b9e0fbeadf88c530e3540ee572a127d2084478331c",
+  "user_request": "Is the number of support tickets correlated with the NPS score?",
+  "goal_family": "relationship",
+  "required_calculations": [
+    {
+      "metric": "pearson_r",
+      "expected": -0.7425105117514591,
+      "absolute_tolerance": 0.001
+    }
+  ],
+  "allowed_fields": [
+    "support_tickets",
+    "nps_score"
+  ],
+  "supported_conclusions": [
+    "Support tickets and NPS are negatively associated, which does not establish causation."
+  ],
+  "forbidden_claims": [
+    "cause"
+  ]
+}

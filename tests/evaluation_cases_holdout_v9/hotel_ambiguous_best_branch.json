@@ -1,0 +1,11 @@
+{
+  "case_id": "holdout-v9-hotel-ambiguous-best-branch-v1",
+  "dataset_path": "tests/fixtures/eval_holdout_v9/dat_phong_khach_san.csv",
+  "dataset_sha256": "67228986ed6bfaeb6ecdb41b05551ec82e61358a82e0f798b48359105aea50ce",
+  "user_request": "Chi nhánh nào đang hoạt động tốt nhất?",
+  "goal_family": "summary",
+  "expected_outcome": "clarification",
+  "acceptable_outcomes": [
+    "refused"
+  ]
+}

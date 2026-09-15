@@ -1,0 +1,24 @@
+{
+  "case_id": "holdout-v9-hotel-suite-nights-v1",
+  "dataset_path": "tests/fixtures/eval_holdout_v9/dat_phong_khach_san.csv",
+  "dataset_sha256": "67228986ed6bfaeb6ecdb41b05551ec82e61358a82e0f798b48359105aea50ce",
+  "user_request": "Tổng số đêm đã đặt cho loại phòng Suite là bao nhiêu?",
+  "goal_family": "summary",
+  "required_calculations": [
+    {
+      "metric": "total_nights",
+      "expected": 196
+    }
+  ],
+  "allowed_fields": [
+    "Loại phòng",
+    "Số đêm"
+  ],
+  "supported_conclusions": [
+    "Loại phòng Suite có 196 đêm."
+  ],
+  "valid_chart_types": [
+    "kpi",
+    "table"
+  ]
+}

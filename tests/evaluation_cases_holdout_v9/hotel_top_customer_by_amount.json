@@ -1,0 +1,28 @@
+{
+  "case_id": "holdout-v9-hotel-top-customer-by-amount-v1",
+  "dataset_path": "tests/fixtures/eval_holdout_v9/dat_phong_khach_san.csv",
+  "dataset_sha256": "67228986ed6bfaeb6ecdb41b05551ec82e61358a82e0f798b48359105aea50ce",
+  "user_request": "Khách hàng nào có tổng tiền đặt phòng cao nhất, và tổng tiền đó là bao nhiêu?",
+  "goal_family": "comparison",
+  "required_calculations": [
+    {
+      "metric": "Tổng tiền",
+      "group": {
+        "field": "Mã khách hàng",
+        "value": "KH115"
+      },
+      "expected": 96300000
+    }
+  ],
+  "allowed_fields": [
+    "Mã khách hàng",
+    "Tổng tiền"
+  ],
+  "supported_conclusions": [
+    "KH115 có tổng tiền đặt phòng cao nhất."
+  ],
+  "valid_chart_types": [
+    "bar",
+    "table"
+  ]
+}

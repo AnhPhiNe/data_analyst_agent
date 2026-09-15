@@ -1,0 +1,23 @@
+{
+  "case_id": "holdout-v9-saas-non-pro-account-count-v1",
+  "dataset_path": "tests/fixtures/eval_holdout_v9/saas_subscriptions.csv",
+  "dataset_sha256": "b5422d646482987c0752d2b9e0fbeadf88c530e3540ee572a127d2084478331c",
+  "user_request": "How many accounts are not on the Pro plan?",
+  "goal_family": "summary",
+  "required_calculations": [
+    {
+      "metric": "account_count",
+      "expected": 251
+    }
+  ],
+  "allowed_fields": [
+    "plan"
+  ],
+  "supported_conclusions": [
+    "The number of accounts outside the Pro plan is reported."
+  ],
+  "valid_chart_types": [
+    "kpi",
+    "table"
+  ]
+}

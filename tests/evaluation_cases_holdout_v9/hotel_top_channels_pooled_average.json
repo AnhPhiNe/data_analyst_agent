@@ -1,0 +1,25 @@
+{
+  "case_id": "holdout-v9-hotel-top-channels-pooled-average-v1",
+  "dataset_path": "tests/fixtures/eval_holdout_v9/dat_phong_khach_san.csv",
+  "dataset_sha256": "67228986ed6bfaeb6ecdb41b05551ec82e61358a82e0f798b48359105aea50ce",
+  "user_request": "Trong 2 kênh đặt có nhiều lượt đặt nhất, tổng tiền trung bình mỗi lượt đặt tính gộp chung cho cả hai kênh là bao nhiêu?",
+  "goal_family": "summary",
+  "required_calculations": [
+    {
+      "metric": "avg_amount",
+      "expected": 3433208.9552238807,
+      "absolute_tolerance": 0.01
+    }
+  ],
+  "allowed_fields": [
+    "Kênh đặt",
+    "Tổng tiền"
+  ],
+  "supported_conclusions": [
+    "Tổng tiền trung bình gộp của hai kênh đặt nhiều nhất được báo cáo."
+  ],
+  "valid_chart_types": [
+    "kpi",
+    "table"
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "case_id": "holdout-v9-saas-pro-mrr-spellings-v1",
+  "dataset_path": "tests/fixtures/eval_holdout_v9/saas_subscriptions.csv",
+  "dataset_sha256": "b5422d646482987c0752d2b9e0fbeadf88c530e3540ee572a127d2084478331c",
+  "user_request": "What is the total MRR from accounts on the Pro plan?",
+  "goal_family": "summary",
+  "required_calculations": [
+    {
+      "metric": "total_mrr",
+      "expected": 73219.70000000001,
+      "absolute_tolerance": 0.01
+    }
+  ],
+  "allowed_fields": [
+    "plan",
+    "mrr_usd"
+  ],
+  "supported_conclusions": [
+    "Total MRR on the Pro plan, across every spelling of the plan name, is reported."
+  ],
+  "valid_chart_types": [
+    "kpi",
+    "table"
+  ]
+}
