@@ -21,7 +21,8 @@ it is included. Evidence for every claim is in
 
 - **Safe ingestion and profiling.** CSV and XLSX uploads are validated (size, zip-bomb, and
   encoding checks), stored immutably, and profiled: field types, missing values, duplicates,
-  outliers, identifier-like fields, and possible PII.
+  outliers, identifier-like fields, possible PII, and values spelled inconsistently (case or
+  spaces).
 - **Data Overview.** Right after upload, deterministic charts describe the data, including a
   correlation heatmap. An explorer lets you chart any measure by group, time period, and filters.
   No model is called.

@@ -470,6 +470,22 @@ def test_interpretation_prompt_says_counting_records_needs_no_mapping(tmp_path: 
     assert gateway.requests[0].prompt_template_version == "semantic-v13"
 
 
+def test_prompts_explain_independent_steps_and_inconsistent_spellings(tmp_path: Path) -> None:
+    core, request = run_request(tmp_path)
+    gateway = FakeModelGateway([goal_output(), plan_output(), tool_output(), insight_output()])
+    agent = AgentOrchestrator(gateway, core, checkpointer=InMemorySaver())
+
+    agent.start(request)
+    agent.resume(request.session_id, True)
+    plan_request, tool_request = gateway.requests[1], gateway.requests[2]
+
+    assert "cannot read an earlier step's result" in plan_request.prompt
+    assert plan_request.prompt_template_version == "plan-v8"
+    assert "LOWER(TRIM(field))" in tool_request.prompt
+    assert "cannot read an earlier step's result" in tool_request.prompt
+    assert tool_request.prompt_template_version == "tool-request-v13"
+
+
 def test_structure_question_is_answered_from_profile_without_tools(tmp_path: Path) -> None:
     core, request = run_request(tmp_path)
     gateway = FakeModelGateway([{**goal_output(), "answer_from_profile": True}])
@@ -1498,8 +1514,11 @@ def test_insight_synthesis_omits_large_row_level_results(tmp_path: Path) -> None
     assert completed["status"] == AgentRunStatus.COMPLETED
     # Row cells stay out of the prompt, but the verified result size remains assertable.
     assert '"metric": "result.row_count"' in synthesis_prompt
-    assert '"metric": "row[0].label"' not in synthesis_prompt
-    assert "more than 50 rows" in synthesis_prompt
+    # The first rows stay available in query order; the rest stay out of the prompt.
+    assert '"metric": "row[0].label"' in synthesis_prompt
+    assert '"metric": "row[49].label"' in synthesis_prompt
+    assert '"metric": "row[50].label"' not in synthesis_prompt
+    assert "Only the first 50 of 60 result rows" in synthesis_prompt
     assert "row-59" not in synthesis_prompt
     assert completed["verified_insights"] == []
 

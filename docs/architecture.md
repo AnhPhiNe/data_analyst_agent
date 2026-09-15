@@ -72,6 +72,8 @@ session's dataset.
   Source copies are read-only and hash-bound; every read verifies the Working Dataset identity.
 - Profiling infers field kinds, missing values, duplicates, outliers, identifier-like fields, and
   possible PII. A column whose values are all ISO dates is a datetime field in any language.
+  Text values that differ only by case or surrounding spaces are flagged with examples; the data
+  itself is never rewritten.
 - `sql_policy` parses SQL with sqlglot and allows one `SELECT` or `WITH ... SELECT` over the session
   table. It rejects DDL, DML, external-access functions, wildcard projections, and other tables,
   rewrites field ids such as `c1` to exact quoted names, and gives unaliased calculated outputs
@@ -123,8 +125,11 @@ routes; supporting modules keep each concern small:
 - `binding.py` grounds requested-metric mappings in real fields, requires mapped inputs in the plan,
   binds each tool payload to its approved step, and rejects repeated identical Tool Actions.
   Counting rows or records needs no mapping and no identifier field.
-- `evidence_catalog.py` bounds what reaches the model during synthesis: at most 200 evidence values
-  and query results of at most 50 rows, excluding results that read PII fields.
+- `evidence_catalog.py` bounds what reaches the model during synthesis: at most 200 evidence values,
+  and for a longer query result only its first rows (at most 50, in query order), excluding results
+  that read PII fields.
+- SQL guidance tells the model that steps cannot read one another's results, so a question that
+  uses one result to choose rows for another is written as one query with a CTE or subquery.
 - `field_ids.py` resolves exact names and ids; `run_state.py` owns failure, refusal, repair, trace,
   and budget state transitions.
 

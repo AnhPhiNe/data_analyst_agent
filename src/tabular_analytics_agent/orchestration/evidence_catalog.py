@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
 from uuid import UUID
 
@@ -44,6 +45,7 @@ MAX_MODEL_ASSUMPTIONS = 50
 
 
 MAX_MODEL_CAVEATS = 20
+_ROW_METRIC = re.compile(r"^row\[(\d+)\]\.")
 
 
 def insight_evidence_catalog(state: AgentState, profile: DataProfile) -> list[dict[str, Any]]:
@@ -72,20 +74,31 @@ def insight_evidence_catalog(state: AgentState, profile: DataProfile) -> list[di
             break
         raw_values = available_evidence_values(result)
         omission_reason = None
-        if isinstance(result, QueryResult) and result.row_count > MAX_MODEL_QUERY_ROWS:
-            omission_reason = (
-                f"Row-level evidence omitted because the result has more than "
-                f"{MAX_MODEL_QUERY_ROWS} rows. Request an aggregate plan step."
+        if isinstance(result, QueryResult):
+            # A long ranking keeps its first rows, in query order, within the value budget.
+            row_limit = min(
+                MAX_MODEL_QUERY_ROWS,
+                max(0, (remaining_values - 1) // max(1, len(result.columns))),
             )
+            if result.row_count > row_limit:
+                raw_values = tuple(
+                    value
+                    for value in raw_values
+                    if (index := _row_index(value.metric)) is None or index < row_limit
+                )
+                omission_reason = (
+                    f"Only the first {row_limit} of {result.row_count} result rows are "
+                    "included, in query order."
+                )
         elif len(raw_values) > remaining_values:
             omission_reason = (
                 "Evidence omitted because the bounded model-evidence budget was exhausted."
             )
-        values = [
-            value.model_dump(mode="json")
-            for value in raw_values
-            if not omission_reason or value.metric == "result.row_count"
-        ]
+        values = (
+            []
+            if omission_reason and isinstance(result, StatisticalResult)
+            else [value.model_dump(mode="json") for value in raw_values]
+        )
         assumptions = (
             [
                 {
@@ -143,6 +156,11 @@ def insight_evidence_catalog(state: AgentState, profile: DataProfile) -> list[di
         remaining_chars -= serialized_size
         catalog.append(entry)
     return catalog
+
+
+def _row_index(metric: str) -> int | None:
+    match = _ROW_METRIC.match(metric)
+    return int(match.group(1)) if match else None
 
 
 def evidence_result_for_action(

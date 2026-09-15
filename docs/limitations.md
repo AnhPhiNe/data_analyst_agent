@@ -60,8 +60,10 @@ at most 50 rows.
 
 - Only one rectangular table per session: CSV, or one selected XLSX sheet, up to 100 MB by default.
   There are no joins across files.
-- Category values are not normalized. `Hà Nội`, `Hà Nội ` (trailing space), and `hà nội` are
-  different values unless the generated SQL trims and case-folds them.
+- Category values are not normalized. `Hà Nội`, `Hà Nội ` (trailing space), and `hà nội` stay
+  different values. The profile flags such fields and the SQL guidance asks for
+  `LOWER(TRIM(...))` comparisons, but whether the generated query follows it depends on the model.
+  Spellings that differ in other ways, such as `Ha Noi` or `HN`, are not detected.
 - Numbers stored as text, such as `1.250.000` or `$4.99`, stay text in the profile. The agent must
   convert them in SQL, which it may not do.
 - Dates in ISO form (`2026-03-02`) are detected in any language. Other date formats are converted
@@ -143,3 +145,18 @@ converted correctly in every run, a synonym ("basket size") was mapped to `items
 near-miss metric (conversion rate without traffic data) was correctly treated as unavailable, the
 most-missing column was answered from the profile, and instruction text inside a cell had no effect
 on any claim.
+
+### Changes made after holdout v8
+
+Three general fixes followed, so holdout v8 is now development evidence:
+
+- Inconsistent spellings that differ only by case or surrounding spaces are flagged in the profile,
+  and SQL guidance compares such fields with `LOWER(TRIM(...))`.
+- Guidance states that plan steps cannot read one another's results, so a question that uses one
+  result to choose rows for another should be a single query with a CTE or subquery.
+- A long query result now keeps its first rows (at most 50, in query order) in the model's evidence
+  instead of withholding every row.
+
+Vague ranking requests such as "best customer" were deliberately left unchanged, because a rule
+that asks for clarification on every superlative would also block clear questions such as "highest
+revenue region". Holdout v9 measures what the fixes changed.

@@ -22,7 +22,7 @@ from tabular_analytics_agent.data import (
     UnsupportedFileError,
     replace_column_references,
 )
-from tabular_analytics_agent.domain import FieldKind
+from tabular_analytics_agent.domain import INCONSISTENT_SPELLING_WARNING, FieldKind
 
 
 def write_csv(path: Path, content: str) -> Path:
@@ -190,6 +190,35 @@ def test_identifier_warning_skips_tiny_tables_and_continuous_measures(tmp_path: 
     assert "identifier-like unique field" not in small_fields["code"].warnings
     assert "identifier-like unique field" in large_fields["code"].warnings
     assert "identifier-like unique field" not in large_fields["score"].warnings
+
+
+def test_profile_flags_values_that_differ_only_by_case_or_spaces(tmp_path: Path) -> None:
+    upload = write_csv(
+        tmp_path / "cities.csv",
+        "city,contact,region\n"
+        "Hà Nội,a@example.com,North\n"
+        "Hà Nội ,A@example.com,North\n"
+        "hà nội,b@example.com,South\n"
+        "Huế,c@example.com,South\n",
+    )
+    core = TabularDataCore(tmp_path / "session")
+
+    profile = core.profile(core.ingest(upload))
+    fields = {field.name: field for field in profile.fields}
+
+    def spelling_warnings(name: str) -> list[str]:
+        return [w for w in fields[name].warnings if w.startswith(INCONSISTENT_SPELLING_WARNING)]
+
+    (city_warning,) = spelling_warnings("city")
+    assert '"Hà Nội"' in city_warning
+    assert '"Hà Nội "' in city_warning
+    assert '"hà nội"' in city_warning
+    # A possible PII field is flagged without repeating any of its values.
+    assert "contact" in profile.pii_candidates
+    assert spelling_warnings("contact") == [INCONSISTENT_SPELLING_WARNING]
+    assert spelling_warnings("region") == []
+    # Values are reported, never rewritten.
+    assert fields["city"].unique_count == 4
 
 
 def test_iso_dates_are_detected_in_any_language_and_are_not_phone_numbers(tmp_path: Path) -> None:

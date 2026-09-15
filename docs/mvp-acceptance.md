@@ -207,3 +207,12 @@ the outstanding Must-tier flows and reliability gates.
   path is marked safe for that command, and a deep working folder exceeded the Windows path-length
   limit while installing pyarrow. The Docker image build (criterion 12) is still unverified
   because Docker is not installed on the development machine.
+- Fixes after the hard holdout (2026-09-15, approved by the user): (A) inconsistent-spelling
+  profile warnings plus `LOWER(TRIM(...))` SQL guidance (tool-request-v13); (B) guidance that plan
+  steps cannot read one another's results, so dependent questions use one query with a CTE or
+  subquery (plan-v8); (C) long query results keep their first rows in the insight evidence instead
+  of none. On the v8 fixtures the new warning flags exactly the city and status fields that caused
+  failures, and the development fixture `orders_dirty.csv` gets no warning. Vague ranking requests
+  were not changed. 370 tests passed (2 skipped), branch-inclusive coverage 90.95%, Ruff,
+  formatting, and strict mypy passed. Holdout v8 is development evidence from now on; holdout v9
+  measures the fixes.

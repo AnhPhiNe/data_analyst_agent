@@ -43,6 +43,7 @@ from tabular_analytics_agent.data.models import (
 from tabular_analytics_agent.data.sql_policy import analyze_read_only_sql
 from tabular_analytics_agent.domain import (
     IDENTIFIER_LIKE_WARNING,
+    INCONSISTENT_SPELLING_WARNING,
     CategoryFrequency,
     DataProfile,
     DatasetIdentity,
@@ -62,6 +63,8 @@ _PII_NAME = re.compile(
 _EMAIL_VALUE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
 _PHONE_VALUE = re.compile(r"^\+?[0-9][0-9 ()-]{7,}[0-9]$")
 _ISO_DATE_VALUE = re.compile(r"^\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?)?$")
+_MAX_SPELLING_EXAMPLES = 3
+_MAX_SPELLING_EXAMPLE_CHARS = 40
 _NUMERIC_TYPES = {
     "BIGINT",
     "DECIMAL",
@@ -521,7 +524,14 @@ class TabularDataCore:
             warnings.append("high missingness")
         if is_text and unique_count > 50:
             warnings.append("high cardinality")
-        if self._looks_like_pii(connection, name, quoted):
+        looks_like_pii = self._looks_like_pii(connection, name, quoted)
+        if is_text and unique_count > 1:
+            spelling_warning = _inconsistent_spelling_warning(
+                connection, quoted, null_expression, include_examples=not looks_like_pii
+            )
+            if spelling_warning:
+                warnings.append(spelling_warning)
+        if looks_like_pii:
             warnings.append("possible PII")
 
         numeric_summary = None
@@ -695,6 +705,36 @@ def _coerce_unambiguous_dates(frame: pd.DataFrame) -> None:
         if parsed.notna().all():
             normalized = pd.to_datetime(series, errors="coerce", format=date_format, utc=True)
             frame[name] = normalized.dt.tz_convert(None)
+
+
+def _inconsistent_spelling_warning(
+    connection: duckdb.DuckDBPyConnection,
+    quoted: str,
+    null_expression: str,
+    *,
+    include_examples: bool,
+) -> str | None:
+    """Flag text values that differ only by letter case or surrounding spaces.
+
+    Values are never changed; the warning lets the user and the planner see that an exact filter
+    would miss rows. Examples are omitted for possible PII so no personal value is repeated.
+    """
+    rows = connection.execute(
+        f"SELECT LOWER(TRIM({quoted})) AS spelling_key, "
+        f"LIST(DISTINCT {quoted} ORDER BY {quoted}) AS spellings FROM dataset "
+        f"WHERE NOT ({null_expression}) GROUP BY spelling_key "
+        f"HAVING COUNT(DISTINCT {quoted}) > 1 "
+        f"ORDER BY COUNT(*) DESC, spelling_key LIMIT {_MAX_SPELLING_EXAMPLES}"
+    ).fetchall()
+    if not rows:
+        return None
+    if not include_examples:
+        return INCONSISTENT_SPELLING_WARNING
+    examples = "; ".join(
+        " / ".join(f'"{str(value)[:_MAX_SPELLING_EXAMPLE_CHARS]}"' for value in spellings[:3])
+        for _, spellings in rows
+    )
+    return f"{INCONSISTENT_SPELLING_WARNING}: {examples}"
 
 
 def _infer_field_kind(

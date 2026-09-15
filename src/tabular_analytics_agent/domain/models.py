@@ -137,6 +137,7 @@ class TemporalSummary(DomainModel):
 
 
 IDENTIFIER_LIKE_WARNING = "identifier-like unique field"
+INCONSISTENT_SPELLING_WARNING = "inconsistent spelling (values differ only by case or spaces)"
 
 
 class FieldProfile(DomainModel):

@@ -484,6 +484,9 @@ def build_agent_graph(
                 "SQL aggregates alone cannot answer that. "
                 "To count rows, such as orders or tickets, list only the fields that filter or "
                 "group them in required_fields; counting rows needs no identifier field. "
+                "SQL steps run independently and cannot read an earlier step's result, so a "
+                "question that uses one result to choose rows for another, such as the "
+                "top-ranked groups, is a single SQL step with a CTE or subquery. "
                 "Reference only listed fields. SQL reads rows of the dataset table only; schema "
                 "catalogs such as information_schema are unavailable. Set requires_approval to "
                 "true only for a step the user should review before it runs; ordinary read-only "
@@ -495,7 +498,7 @@ def build_agent_graph(
             ),
             response_schema=PlanDraft,
             system_instruction=SYSTEM_INSTRUCTION,
-            prompt_template_version="plan-v7",
+            prompt_template_version="plan-v8",
             timeout_seconds=model_call_timeout_seconds(state, budget, clock()),
         )
         trace: ModelCallTrace | None = None
@@ -635,7 +638,7 @@ def build_agent_graph(
                 else StatisticalToolRequestDraft
             ),
             system_instruction=SYSTEM_INSTRUCTION,
-            prompt_template_version="tool-request-v12",
+            prompt_template_version="tool-request-v13",
             timeout_seconds=model_call_timeout_seconds(state, plan.budget, clock()),
         )
         trace: ModelCallTrace | None = None
