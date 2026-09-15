@@ -71,9 +71,12 @@ def validate_chart_intent(
     intent: ChartIntent,
     result: QueryResult,
     source_action: ToolAction,
+    semantic_annotations: tuple[SemanticAnnotation, ...] = (),
 ) -> VerificationResult:
     """Check source identity, encodings, types, and MVP readability limits."""
-    expected_ref = make_query_result_reference(result)
+    # Build the expected identity from trusted current session state.  The intent is
+    # model-provided data and must never be used to choose the expected fingerprint.
+    expected_ref = make_query_result_reference(result, semantic_annotations)
     column_types = {column.name: column.data_type for column in result.columns}
     referenced_fields = tuple(
         dict.fromkeys(
@@ -199,9 +202,15 @@ def render_chart(
     intent: ChartIntent,
     result: QueryResult,
     source_action: ToolAction,
+    semantic_annotations: tuple[SemanticAnnotation, ...] = (),
 ) -> ChartRenderResult:
     """Render a validated Chart Intent without recomputing or aggregating source values."""
-    verification = validate_chart_intent(intent, result, source_action)
+    verification = validate_chart_intent(
+        intent,
+        result,
+        source_action,
+        semantic_annotations,
+    )
     if verification.status is VerificationStatus.FAILED:
         reasons = "; ".join(check.message for check in verification.checks if not check.passed)
         raise ChartValidationError(reasons)

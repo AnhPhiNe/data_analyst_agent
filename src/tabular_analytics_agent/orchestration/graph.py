@@ -1122,7 +1122,7 @@ def build_agent_graph(
                 },
                 validation_constraints=draft.validation_constraints,
             )
-            rendered = render_chart(intent, result, source_action)
+            rendered = render_chart(intent, result, source_action, semantic_annotations=annotations)
             update: AgentState = {
                 "chart_renders": [rendered.model_dump(mode="json")],
                 "artifact_error": "",

@@ -12,6 +12,7 @@ from tabular_analytics_agent.domain import (
     ActionStatus,
     ArtifactType,
     ChartIntent,
+    SemanticAnnotation,
     ToolAction,
     VerificationCheck,
     VerificationResult,
@@ -57,11 +58,12 @@ def intent(
     y_fields: tuple[str, ...] = (),
     color_field: str | None = None,
     formatting_intent: dict[str, object] | None = None,
+    semantic_annotations: tuple[SemanticAnnotation, ...] = (),
 ) -> ChartIntent:
     return ChartIntent(
         artifact_type=artifact_type,
         analytical_purpose="Explain the verified sales result",
-        source_result_ref=make_query_result_reference(result),
+        source_result_ref=make_query_result_reference(result, semantic_annotations),
         x_field=x_field,
         y_fields=y_fields,
         color_field=color_field,
@@ -89,6 +91,16 @@ def verified_action(result: QueryResult) -> ToolAction:
         status=ActionStatus.SUCCEEDED,
         output_ref=f"query-result:{result.query_id}",
         verification_results=(verification,),
+    )
+
+
+def confirmed_revenue_annotation(*, meaning: str = "Gross sales") -> SemanticAnnotation:
+    return SemanticAnnotation(
+        field_name="revenue",
+        meaning=meaning,
+        unit="USD",
+        role="measure",
+        confirmed_by_user=True,
     )
 
 
@@ -258,6 +270,68 @@ def test_exact_result_binding_and_complete_rows_are_required() -> None:
     ).passed
     assert completeness.status is VerificationStatus.FAILED
     assert not next(check for check in completeness.checks if check.name == "usable_result").passed
+
+
+def test_confirmed_semantic_annotations_bind_query_chart_successfully() -> None:
+    result = sales_result()
+    annotations = (confirmed_revenue_annotation(),)
+    candidate = intent(
+        result,
+        ArtifactType.BAR,
+        x_field="month",
+        y_fields=("revenue",),
+        semantic_annotations=annotations,
+    )
+
+    publication = render_chart(candidate, result, verified_action(result), annotations)
+
+    assert publication.verification.status is VerificationStatus.PASSED
+    assert publication.source_result_ref == make_query_result_reference(result, annotations)
+
+
+def test_changed_semantic_annotations_reject_existing_chart_binding() -> None:
+    result = sales_result()
+    confirmed = (confirmed_revenue_annotation(),)
+    changed = (confirmed_revenue_annotation(meaning="Net revenue"),)
+    candidate = intent(
+        result,
+        ArtifactType.BAR,
+        x_field="month",
+        y_fields=("revenue",),
+        semantic_annotations=confirmed,
+    )
+
+    verification = validate_chart_intent(candidate, result, verified_action(result), changed)
+
+    assert verification.status is VerificationStatus.FAILED
+    assert not next(
+        check for check in verification.checks if check.name == "source_result_binding"
+    ).passed
+
+
+def test_semantic_binding_keeps_result_and_version_checks() -> None:
+    result = sales_result()
+    annotations = (confirmed_revenue_annotation(),)
+    candidate = intent(
+        result,
+        ArtifactType.BAR,
+        x_field="month",
+        y_fields=("revenue",),
+        semantic_annotations=annotations,
+    )
+    wrong_version_action = verified_action(result).model_copy(
+        update={"working_dataset_version": result.working_dataset_version + 1}
+    )
+
+    verification = validate_chart_intent(candidate, result, wrong_version_action, annotations)
+
+    assert verification.status is VerificationStatus.FAILED
+    assert next(
+        check for check in verification.checks if check.name == "source_result_binding"
+    ).passed
+    assert not next(
+        check for check in verification.checks if check.name == "verified_source_action"
+    ).passed
 
 
 def test_render_result_contract_requires_verified_matching_source() -> None:

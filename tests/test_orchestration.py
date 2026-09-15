@@ -591,7 +591,13 @@ def test_graph_pauses_for_plan_approval_then_executes_verified_query(tmp_path: P
 def test_graph_requires_semantic_confirmation_before_planning(tmp_path: Path) -> None:
     core, request = run_request(tmp_path)
     gateway = FakeModelGateway(
-        [goal_output(with_semantics=True), plan_output(), tool_output(), insight_output()]
+        [
+            goal_output(with_semantics=True),
+            plan_output(),
+            tool_output(),
+            insight_output(),
+            chart_output(),
+        ]
     )
     agent = AgentOrchestrator(gateway, core, checkpointer=InMemorySaver())
 
@@ -619,6 +625,11 @@ def test_graph_requires_semantic_confirmation_before_planning(tmp_path: Path) ->
 
     completed = agent.resume(request.session_id, True)
     assert completed["status"] == AgentRunStatus.COMPLETED
+    assert completed["artifact_error"] == ""
+    assert (
+        completed["chart_renders"][0]["source_result_ref"]["semantic_annotation_fingerprint"]
+        == completed["verified_insights"][0]["evidence"]["semantic_annotation_fingerprint"]
+    )
 
 
 def test_semantic_hypothesis_can_be_declined_and_clarified_without_ending_run(

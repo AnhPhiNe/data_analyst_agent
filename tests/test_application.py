@@ -76,6 +76,23 @@ def model_outputs() -> list[dict[str, object]]:
     ]
 
 
+def semantic_model_outputs() -> list[dict[str, object]]:
+    outputs = model_outputs()
+    outputs[0] = {
+        **outputs[0],
+        "semantic_annotations": [
+            {
+                "field_name": "revenue",
+                "meaning": "Gross sales",
+                "unit": "USD",
+                "role": "measure",
+            }
+        ],
+        "clarification_question": "Should revenue be treated as gross sales in USD?",
+    }
+    return outputs
+
+
 def sales_csv() -> bytes:
     return b"region,revenue\nNorth,100\nSouth,150\nNorth,50\n"
 
@@ -116,6 +133,47 @@ def test_end_to_end_application_publishes_and_pins_dashboard_artifact(
     restored = restarted.load_workspace(workspace.session.session_id)
     assert restored.session.status is SessionStatus.COMPLETED
     assert restarted.get_state(restored)["status"] == AgentRunStatus.COMPLETED
+    assert restarted.list_dashboard(restored) == (pinned,)
+    assert restarted.read_render_spec(pinned)["plotly_spec"]["data"][0]["type"] == "bar"
+
+
+def test_confirmed_semantics_survive_chart_pin_and_reopen(tmp_path: Path) -> None:
+    application = LocalAnalysisApplication(
+        tmp_path / "app-data",
+        FakeModelGateway(semantic_model_outputs()),
+    )
+    staged = application.stage_upload("sales.csv", sales_csv())
+    workspace = application.ingest(staged)
+
+    semantic_pause = application.start(workspace, "Compare total revenue by region")
+    assert semantic_pause["status"] == AgentRunStatus.AWAITING_SEMANTIC_REVIEW
+    plan_pause = application.resume(
+        workspace,
+        {
+            "approved": True,
+            "annotations": [
+                {
+                    "field_name": "revenue",
+                    "meaning": "Gross sales",
+                    "unit": "USD",
+                    "role": "measure",
+                }
+            ],
+        },
+    )
+    assert plan_pause["status"] == AgentRunStatus.AWAITING_PLAN_APPROVAL
+
+    completed = application.resume(workspace, True)
+    assert completed["status"] == AgentRunStatus.COMPLETED
+    assert completed["artifact_error"] == ""
+    candidate = application.publish_candidates(workspace, completed)[0]
+    current_workspace = application.load_workspace(workspace.session.session_id)
+    pinned = application.pin(current_workspace, candidate.artifact_id)
+
+    restarted = LocalAnalysisApplication(tmp_path / "app-data", FakeModelGateway([]))
+    restored = restarted.load_workspace(workspace.session.session_id)
+
+    assert restored.session.semantic_annotations[0].meaning == "Gross sales"
     assert restarted.list_dashboard(restored) == (pinned,)
     assert restarted.read_render_spec(pinned)["plotly_spec"]["data"][0]["type"] == "bar"
 
