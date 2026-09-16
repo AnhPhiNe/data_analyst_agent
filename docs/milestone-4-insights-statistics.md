@@ -22,15 +22,27 @@ logistic regression record unsupported diagnostics as `NOT_CHECKED` instead of s
 them. The orchestration policy fixes inferential alpha at 0.05, and requests using a one-sided
 alternative are rejected for operations whose implementation is two-sided only.
 Two-group requests record an explicit ordered pair of group identities, so directional hypotheses
-and signed effect sizes do not depend on source-row or reservoir-sample order. Group labels use a
+and signed effect sizes do not depend on source-row order. Group labels use a
 type-tagged encoding to keep values such as numeric `1` distinct from text `"1"`.
 
-## Bounded execution
+## Full-data execution
 
 `StatisticalTool` validates dataset identity and field types before extraction. It selects only the
-requested fields through `TabularDataCore` and uses a reservoir sample capped by the data-core row
-limit. Sampling is reproducible because the method, maximum rows, and random seed are recorded in
-the Tool Action. Statistical calculations operate on this bounded in-memory frame.
+requested fields through a statistics-specific full-data path. Every row in the approved analysis
+scope is read before the deterministic calculation. The result records `dataset_row_count` for the
+original dataset, `population_row_count` for the approved scope, and `rows_loaded` for the rows read
+into the calculation. `sample_size` keeps its existing meaning as valid observations after missing
+data handling, and `missing_row_count` records excluded rows.
+
+New successful actions record `sampled=false`, `sampling_method=null`, `sampling_seed=null`,
+`partial=false`, and `truncated=false` in `StatisticalResult` and `ToolAction.inputs`. Full-data
+verification requires `rows_loaded == population_row_count`. `max_query_rows` can still bound rows
+returned for display or model context; it never bounds aggregate or statistical input. A timeout or
+resource failure is an error with cleanup, never a sample fallback or a partial result.
+
+The Python calculation runs inside a terminable worker process that receives only serializable data and
+parameters. The parent owns the DuckDB connection, temporary files, and cleanup; Windows uses the
+`spawn` start method.
 
 ## Insight publication
 
@@ -62,7 +74,9 @@ Working Dataset version or confirmed Semantic Annotations change.
 ## Test strategy
 
 Tests use manually checkable frames and real session-scoped DuckDB files. They cover all supported
-statistical operations, invalid or degenerate data, seeded sampling, type and identity validation,
-evidence publication, structured overclaim rejection, stale invalidation, PII exclusion,
-and end-to-end SQL and statistical orchestration. Model calls remain deterministic through
-`FakeModelGateway`; automated tests require no API key or network access.
+statistical operations, invalid or degenerate data, full-data scope metadata, missing-value handling,
+type and identity validation, evidence publication, structured overclaim rejection, stale invalidation,
+PII exclusion, and end-to-end SQL and statistical orchestration. The regression suite includes a
+10,001-row fixture whose last value changes the expected aggregate, a filter through an already
+supported SQL/analysis scope, true timeout/cleanup, and legacy sampled evidence. Model calls remain
+deterministic through `FakeModelGateway`; automated tests require no API key or network access.

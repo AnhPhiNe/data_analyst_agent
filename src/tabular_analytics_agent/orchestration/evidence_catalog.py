@@ -29,6 +29,7 @@ from tabular_analytics_agent.statistics import (
 from tabular_analytics_agent.verification import (
     available_evidence_values,
 )
+from tabular_analytics_agent.verification.provenance import result_provenance_metadata
 
 MAX_MODEL_EVIDENCE_VALUES = 200
 
@@ -144,6 +145,7 @@ def insight_evidence_catalog(state: AgentState, profile: DataProfile) -> list[di
             )
             if isinstance(result, StatisticalResult)
             else 0,
+            "provenance": result_provenance_metadata(result),
         }
         serialized_size = len(json_for_prompt(entry))
         if serialized_size > remaining_chars and values:

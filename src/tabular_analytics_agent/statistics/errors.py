@@ -5,6 +5,10 @@ class StatisticalAnalysisError(ValueError):
     """The requested analysis is invalid or unsupported by the available data."""
 
 
+class StatisticalTimeoutError(StatisticalAnalysisError):
+    """A full-data statistical execution exceeded its deadline and was terminated."""
+
+
 class InsufficientSampleError(StatisticalAnalysisError):
     """The data has too few usable values for a reliable statistical result."""
 

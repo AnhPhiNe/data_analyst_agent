@@ -91,9 +91,16 @@ session's dataset.
 The engine implements descriptive statistics, correlation, confidence intervals, t and Mann-Whitney
 tests, chi-square, ANOVA, Kruskal-Wallis, and linear and logistic regression with NumPy and SciPy.
 Results record sample sizes, missing-data handling, assumption checks, p-values, Bonferroni-adjusted
-alpha, effect sizes, and warnings. `StatisticalTool` reads only approved fields through the data
-core, caps input with a seeded reservoir sample, and raises a typed `InsufficientSampleError` when a
-test lacks data.
+alpha, effect sizes, warnings, and the scope of the input. `StatisticalTool` reads only approved fields
+through a full-data statistics path: it processes every row in the approved scope and keeps
+`dataset_row_count`, `population_row_count`, and `rows_loaded` separate from valid `sample_size` and
+missing-row counts. `max_query_rows` remains a presentation limit for query results and does not cap
+statistical input. Automatic sampling is not used by the MVP; a timeout or resource failure ends the
+action without a fallback or partial result.
+
+The Python read/conversion/calculation boundary is a terminable worker process. The parent owns the
+DuckDB connection, temporary files, and cleanup, and sends only serializable data and parameters to the
+worker. Windows uses `spawn`, so no live connection crosses the process boundary.
 
 ### Verification
 

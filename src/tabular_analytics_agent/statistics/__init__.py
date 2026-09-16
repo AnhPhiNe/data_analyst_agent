@@ -5,6 +5,7 @@ from tabular_analytics_agent.statistics.errors import (
     InsufficientSampleError,
     StatisticalAnalysisError,
     StatisticalParameterError,
+    StatisticalTimeoutError,
 )
 from tabular_analytics_agent.statistics.models import (
     AlternativeHypothesis,
@@ -31,6 +32,7 @@ __all__ = [
     "StatisticalParameterError",
     "StatisticalRequest",
     "StatisticalResult",
+    "StatisticalTimeoutError",
     "StatisticalTool",
     "StatisticalToolOutput",
     "analyze",

@@ -31,6 +31,12 @@ from tabular_analytics_agent.statistics import (
     StatisticalResult,
     display_group_label,
 )
+from tabular_analytics_agent.verification.provenance import (
+    query_claim_status,
+    query_provenance_status,
+    statistical_action_status,
+    statistical_full_data_status,
+)
 from tabular_analytics_agent.verification.query_evidence import (
     verified_dataset_count_matches_profile,
 )
@@ -136,6 +142,25 @@ def publish_insight(
         else action.working_dataset_version
     )
     result_reference_matches = action.output_ref == _result_reference(result)
+    if isinstance(result, QueryResult):
+        provenance_passed, provenance_message = query_provenance_status(result)
+        claimed_metrics = tuple(
+            dict.fromkeys(
+                (
+                    *evidence_metrics,
+                    assertion.left_metric,
+                    *((assertion.right_metric,) if assertion.right_metric else ()),
+                )
+            )
+        )
+        lineage_passed, lineage_message = query_claim_status(
+            result,
+            claimed_metrics,
+            profile_fields={field.casefold() for field in profile_fields},
+        )
+    else:
+        provenance_passed, provenance_message = statistical_full_data_status(result)
+        lineage_passed, lineage_message = statistical_action_status(action, result)
     checks = (
         VerificationCheck(
             name="tool_action",
@@ -176,6 +201,16 @@ def publish_insight(
                 and result_version == current_working_dataset_version
                 else "Evidence is stale relative to the current Working Dataset."
             ),
+        ),
+        VerificationCheck(
+            name="provenance",
+            passed=provenance_passed,
+            message=provenance_message,
+        ),
+        VerificationCheck(
+            name="execution_scope",
+            passed=lineage_passed,
+            message=lineage_message,
         ),
         VerificationCheck(
             name="schema_grounding",
@@ -224,6 +259,31 @@ def publish_insight(
             tool_parameters=(action.inputs,),
             values=tuple(available[metric] for metric in evidence_metrics),
             caveats=tuple(dict.fromkeys((*_result_caveats(result), *caveats))),
+            provenance_version=(
+                result.inspection.provenance_version
+                if isinstance(result, QueryResult) and result.inspection is not None
+                else "v1"
+                if isinstance(result, StatisticalResult) and result.sampled is False
+                else None
+            ),
+            dataset_row_count=(
+                result.dataset_row_count if isinstance(result, StatisticalResult) else None
+            ),
+            population_row_count=(
+                result.population_row_count if isinstance(result, StatisticalResult) else None
+            ),
+            rows_loaded=result.rows_loaded if isinstance(result, StatisticalResult) else None,
+            sample_size=result.sample_size if isinstance(result, StatisticalResult) else None,
+            missing_row_count=(
+                result.missing_row_count if isinstance(result, StatisticalResult) else None
+            ),
+            sampled=result.sampled if isinstance(result, StatisticalResult) else None,
+            sampling_method=(
+                result.sampling_method if isinstance(result, StatisticalResult) else None
+            ),
+            sampling_seed=(result.sampling_seed if isinstance(result, StatisticalResult) else None),
+            partial=result.partial if isinstance(result, StatisticalResult) else None,
+            truncated=(result.truncated if isinstance(result, StatisticalResult) else None),
         )
     if status is VerificationStatus.FAILED:
         failed_messages = "; ".join(check.message for check in checks if not check.passed)

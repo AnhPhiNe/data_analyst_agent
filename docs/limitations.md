@@ -89,8 +89,15 @@ result values of at most 50 rows.
 
 ## 6. Resource and quota limits
 
-- Queries return at most 10,000 rows; statistical tests use a deterministic reservoir sample of at
-  most that many rows. Limits are configurable (Spec Section 25.3).
+- Query results returned to the UI or model contain at most 10,000 rows; this is a presentation limit.
+  Statistical calculations use every row in the approved analysis scope and record the dataset,
+  population, loaded, valid, and missing-row counts. Automatic sampling is not used by the MVP. If
+  full-data reading or calculation exceeds the timeout or resource limits, the action fails and does
+  not fall back to a smaller sample or publish a partial result. Limits are configurable (Spec
+  Section 25.3).
+- Historical evidence created while the implementation used reservoir sampling is legacy evidence.
+  It is labeled with its original sampling metadata and must be recomputed before current publication
+  or export; it is not silently treated as a full-data result.
 - A question uses 3 to 5 model calls; the release suite averaged 3.5 per run. Failed Tool Actions
   count toward the Tool Action budget, so a long plan whose steps need repairs can exhaust it.
 - The free tier allows 15 requests per minute per API key;

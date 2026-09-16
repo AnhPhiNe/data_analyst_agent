@@ -5,7 +5,8 @@ or Vietnamese. The agent plans the analysis, runs read-only SQL and statistical 
 only conclusions whose numbers pass deterministic verification.
 
 The language model plans and interprets. It never computes a number, and it never writes the final
-claim text.
+claim text. Statistical calculations run on all rows in the approved analysis scope; sampling is not
+used automatically by the MVP.
 
 ## Status
 
@@ -19,6 +20,11 @@ virtual-environment check was run instead. Automated tests do not call a model. 
 claim is in
 [docs/mvp-acceptance.md](./docs/mvp-acceptance.md), and known weaknesses are in
 [docs/limitations.md](./docs/limitations.md).
+
+The v1.7 full-data amendment is being integrated and must be revalidated before earlier
+reservoir-based evaluation measurements are used as current release evidence. See
+[docs/implementation-acceptance.md](./docs/implementation-acceptance.md) for the live checklist and
+environment status.
 
 ## What it does
 
@@ -35,7 +41,9 @@ claim is in
 - **Inspectable plans.** Each question becomes a plan of typed steps. Steps flagged for review
   pause for your approval.
 - **Deterministic tools.** Read-only DuckDB SQL under a validating policy, and ten statistical
-  operations in NumPy and SciPy with assumption checks and multiple-testing correction.
+  operations in NumPy and SciPy with assumption checks and multiple-testing correction. Statistical
+  operations read every row in the approved scope; `TABULAR_AGENT_MAX_QUERY_ROWS` only limits rows
+  returned for display or model context.
 - **Verified Insights.** Every conclusion links to its evidence: the exact query or test, source
   fields, filters, and values. Claims that fail a gate are shown as unsupported.
 - **Dashboard and export.** Validated Plotly charts can be pinned, and a candidate can be shown as
@@ -52,6 +60,7 @@ claim is in
 | Only read-only access to the session table | SQL is parsed with sqlglot; DDL, DML, external access, and other tables are rejected |
 | Uploaded text cannot act as instructions | Cell values, headers, the user's question, and tool errors are delimited and escaped as untrusted data |
 | Runs are bounded | Tool Action, repair, query, model-call, and run-time budgets, all configurable |
+| Statistical scope is explicit | New results record dataset, population, loaded, valid, missing, and sampling metadata; full-data verification rejects partial or truncated input |
 | Personal data is withheld | Values of likely PII fields are never sent to the model |
 
 Verification proves that a number is correct for the query that produced it. It does not prove the

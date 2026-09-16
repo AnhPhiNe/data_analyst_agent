@@ -3,12 +3,20 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from pathlib import Path
 from uuid import uuid4
 
 import pandas as pd
 import pytest
 
-from tabular_analytics_agent.data import QueryColumn, QueryResult, generated_alias_function
+from tabular_analytics_agent.data import (
+    QueryColumn,
+    QueryInspection,
+    QueryResult,
+    TabularDataCore,
+    analyze_read_only_sql,
+    generated_alias_function,
+)
 from tabular_analytics_agent.domain import (
     ActionStatus,
     DataProfile,
@@ -30,6 +38,8 @@ from tabular_analytics_agent.domain import (
 from tabular_analytics_agent.statistics import (
     StatisticalOperation,
     StatisticalRequest,
+    StatisticalResult,
+    StatisticalTool,
     analyze,
 )
 from tabular_analytics_agent.verification import (
@@ -37,6 +47,37 @@ from tabular_analytics_agent.verification import (
     publish_insight,
 )
 from tabular_analytics_agent.verification.insights import _METRIC_LABELS, _display_metric
+
+
+def inspection_for(sql: str) -> QueryInspection:
+    analysis = analyze_read_only_sql(sql, allowed_table="dataset")
+    return QueryInspection(
+        normalized_sql=analysis.normalized_sql,
+        referenced_columns=analysis.referenced_columns,
+        has_wildcard=analysis.has_wildcard,
+        group_by_columns=analysis.group_by_columns,
+        unaliased_outputs=analysis.unaliased_outputs,
+        filters=analysis.filters,
+        filter_scopes=analysis.filter_scopes,
+        dataset_count_scope=analysis.dataset_count_scope,
+        provenance_version=analysis.provenance_version,
+        base_relations=analysis.base_relations,
+        output_dependencies=analysis.output_dependencies,
+    )
+
+
+def statistical_context(
+    tmp_path: Path,
+    frame: pd.DataFrame,
+    request: StatisticalRequest,
+) -> tuple[DataProfile, ToolAction, StatisticalResult]:
+    input_path = tmp_path / "statistical-input.csv"
+    frame.to_csv(input_path, index=False)
+    core = TabularDataCore(tmp_path / "statistical-session")
+    handle = core.ingest(input_path)
+    profile = core.profile(handle)
+    output = StatisticalTool(core).execute(handle=handle, profile=profile, request=request)
+    return profile, output.action, output.result
 
 
 def context() -> tuple[DataProfile, ToolAction, QueryResult]:
@@ -73,6 +114,9 @@ def context() -> tuple[DataProfile, ToolAction, QueryResult]:
         status=VerificationStatus.PASSED,
         checks=(VerificationCheck(name="query", passed=True, message="Query evidence passed."),),
     )
+    sql = "SELECT region, SUM(revenue) AS revenue FROM dataset GROUP BY region"
+    analysis = analyze_read_only_sql(sql, allowed_table="dataset")
+    inspection = inspection_for(sql)
     action = ToolAction(
         action_id=uuid4(),
         tool_name="read_only_sql",
@@ -80,7 +124,7 @@ def context() -> tuple[DataProfile, ToolAction, QueryResult]:
         working_dataset_version=1,
         inputs={
             "required_fields": ["region", "revenue"],
-            "sql": "SELECT region, SUM(revenue) AS revenue FROM dataset GROUP BY region",
+            "sql": analysis.normalized_sql,
             "filters": ["none"],
         },
         status=ActionStatus.SUCCEEDED,
@@ -91,7 +135,7 @@ def context() -> tuple[DataProfile, ToolAction, QueryResult]:
         query_id=uuid4(),
         dataset_id=dataset.dataset_id,
         working_dataset_version=1,
-        sql=str(action.inputs["sql"]),
+        sql=analysis.normalized_sql,
         columns=(
             QueryColumn(name="region", data_type="VARCHAR"),
             QueryColumn(name="revenue", data_type="DOUBLE"),
@@ -100,6 +144,7 @@ def context() -> tuple[DataProfile, ToolAction, QueryResult]:
         row_count=2,
         truncated=False,
         duration_ms=1,
+        inspection=inspection,
     )
     return (
         profile,
@@ -190,14 +235,17 @@ def test_claim_shows_a_float_with_at_most_15_significant_digits(value: float, sh
 
 def test_generated_aggregate_alias_reads_as_its_function() -> None:
     profile, action, result = context()
+    sql = "SELECT region, COUNT(*) AS count_1 FROM dataset GROUP BY region"
     counted = result.model_copy(
         update={
+            "sql": inspection_for(sql).normalized_sql,
             "columns": (
                 QueryColumn(name="region", data_type="VARCHAR"),
                 QueryColumn(name="count_1", data_type="BIGINT"),
             ),
             "rows": (("North", 2), ("South", 1)),
             "group_by_columns": ("region",),
+            "inspection": inspection_for(sql),
         }
     )
 
@@ -267,11 +315,12 @@ def test_row_claim_uses_numeric_group_by_keys_as_context() -> None:
     profile, action, _ = context()
     year_field = profile.fields[0].model_copy(update={"name": "year", "kind": FieldKind.NUMERIC})
     year_profile = profile.model_copy(update={"fields": (year_field, profile.fields[1])})
+    sql = "SELECT year, SUM(revenue) AS revenue FROM dataset GROUP BY year"
     result = QueryResult(
         query_id=uuid4(),
         dataset_id=profile.dataset.dataset_id,
         working_dataset_version=1,
-        sql="SELECT year, SUM(revenue) AS revenue FROM dataset GROUP BY year",
+        sql=inspection_for(sql).normalized_sql,
         columns=(
             QueryColumn(name="year", data_type="BIGINT"),
             QueryColumn(name="revenue", data_type="DOUBLE"),
@@ -281,6 +330,7 @@ def test_row_claim_uses_numeric_group_by_keys_as_context() -> None:
         truncated=False,
         duration_ms=1,
         group_by_columns=("year",),
+        inspection=inspection_for(sql),
     )
     year_action = action.model_copy(
         update={
@@ -311,16 +361,18 @@ def test_row_claim_uses_numeric_group_by_keys_as_context() -> None:
 
 def test_single_row_claim_omits_row_position() -> None:
     profile, action, _ = context()
+    sql = "SELECT AVG(revenue) AS avg_revenue FROM dataset"
     result = QueryResult(
         query_id=uuid4(),
         dataset_id=profile.dataset.dataset_id,
         working_dataset_version=1,
-        sql="SELECT AVG(revenue) AS avg_revenue FROM dataset",
+        sql=inspection_for(sql).normalized_sql,
         columns=(QueryColumn(name="avg_revenue", data_type="DOUBLE"),),
         rows=((110.0,),),
         row_count=1,
         truncated=False,
         duration_ms=1,
+        inspection=inspection_for(sql),
     )
     single_row_action = action.model_copy(
         update={
@@ -365,21 +417,28 @@ def test_reporting_a_group_by_label_is_unsupported() -> None:
 
 def test_sql_filters_stay_in_evidence_instead_of_claim_text() -> None:
     profile, action, _ = context()
+    sql = "SELECT COUNT(*) AS row_count FROM dataset WHERE revenue >= 100"
+    inspection = inspection_for(sql)
     result = QueryResult(
         query_id=uuid4(),
         dataset_id=profile.dataset.dataset_id,
         working_dataset_version=1,
-        sql="SELECT COUNT(*) AS row_count FROM dataset WHERE revenue >= 100",
+        sql=inspection.normalized_sql,
         columns=(QueryColumn(name="row_count", data_type="BIGINT"),),
         rows=((2,),),
         row_count=1,
         truncated=False,
         duration_ms=1,
         filters=("revenue >= 100",),
+        inspection=inspection,
     )
     filtered_action = action.model_copy(
         update={
-            "inputs": {**action.inputs, "required_fields": ["revenue"]},
+            "inputs": {
+                **action.inputs,
+                "required_fields": ["revenue"],
+                "sql": inspection.normalized_sql,
+            },
             "output_ref": f"query-result:{result.query_id}",
         }
     )
@@ -486,32 +545,18 @@ def test_result_must_match_the_tool_action_output_reference() -> None:
     assert "does not identify this deterministic result" in publication.reason
 
 
-def test_association_assertion_publishes_only_canonical_noncausal_language() -> None:
-    profile, query_action, _ = context()
+def test_association_assertion_publishes_only_canonical_noncausal_language(
+    tmp_path: Path,
+) -> None:
     frame = pd.DataFrame({"revenue": [1, 2, 3, 4, 5], "score": [2, 4, 6, 8, 10]})
-    statistical_result = analyze(
+    statistical_profile, action, statistical_result = statistical_context(
+        tmp_path,
         frame,
         StatisticalRequest(
             operation=StatisticalOperation.CORRELATION,
             x_field="revenue",
             y_field="score",
         ),
-    )
-    statistical_profile = profile.model_copy(
-        update={
-            "fields": (
-                profile.fields[1],
-                profile.fields[1].model_copy(update={"name": "score"}),
-            ),
-            "row_count": 5,
-        }
-    )
-    action = query_action.model_copy(
-        update={
-            "tool_name": "statistical_analysis",
-            "inputs": statistical_result.parameters,
-            "output_ref": f"statistical-result:{statistical_result.result_id}",
-        }
     )
     publication = publish_insight(
         assertion=InsightAssertion(
@@ -543,31 +588,16 @@ def test_association_assertion_publishes_only_canonical_noncausal_language() -> 
 )
 def test_correlation_p_value_names_its_test_and_preserves_assertion(
     operator: InsightOperator,
+    tmp_path: Path,
 ) -> None:
-    profile, query_action, _ = context()
     # A monotonic nonlinear relationship: Spearman and Pearson differ.
     frame = pd.DataFrame({"revenue": [1, 2, 3, 4, 5, 6], "score": [1, 4, 9, 16, 25, 36]})
-    result = analyze(
+    statistical_profile, action, result = statistical_context(
+        tmp_path,
         frame,
         StatisticalRequest(
             operation=StatisticalOperation.CORRELATION, x_field="revenue", y_field="score"
         ),
-    )
-    statistical_profile = profile.model_copy(
-        update={
-            "fields": (
-                profile.fields[1],
-                profile.fields[1].model_copy(update={"name": "score"}),
-            ),
-            "row_count": len(frame),
-        }
-    )
-    action = query_action.model_copy(
-        update={
-            "tool_name": "statistical_analysis",
-            "inputs": result.parameters,
-            "output_ref": f"statistical-result:{result.result_id}",
-        }
     )
     assertion = InsightAssertion(operator=operator, left_metric="p_value")
     publication = publish_insight(
@@ -606,37 +636,23 @@ def test_correlation_p_value_names_its_test_and_preserves_assertion(
     assert "identified test statistic" in rejected.reason
 
 
-def test_failed_statistical_assumptions_are_preserved_as_evidence_caveats() -> None:
-    profile, query_action, _ = context()
+def test_failed_statistical_assumptions_are_preserved_as_evidence_caveats(
+    tmp_path: Path,
+) -> None:
     frame = pd.DataFrame(
         {
             "category": ["low"] * 4 + ["mid"] * 4 + ["high"] * 4,
             "segment": ["one", "one", "two", "two"] * 3,
         }
     )
-    statistical_result = analyze(
+    statistical_profile, action, statistical_result = statistical_context(
+        tmp_path,
         frame,
         StatisticalRequest(
             operation=StatisticalOperation.CHI_SQUARE,
             x_field="category",
             y_field="segment",
         ),
-    )
-    statistical_profile = profile.model_copy(
-        update={
-            "fields": (
-                profile.fields[0].model_copy(update={"name": "category", "unique_count": 3}),
-                profile.fields[0].model_copy(update={"name": "segment"}),
-            ),
-            "row_count": len(frame),
-        }
-    )
-    action = query_action.model_copy(
-        update={
-            "tool_name": "statistical_analysis",
-            "inputs": statistical_result.parameters,
-            "output_ref": f"statistical-result:{statistical_result.result_id}",
-        }
     )
 
     publication = publish_insight(

@@ -69,6 +69,10 @@ class QueryInspection(DataModel):
     filters: tuple[str, ...] = ()
     filter_scopes: tuple[FilterScope, ...] = ()
     dataset_count_scope: Literal["whole_dataset"] | None = None
+    # ``None`` means the record predates provenance v1; do not infer full-data provenance from it.
+    provenance_version: Literal["v1"] | None = None
+    base_relations: tuple[str, ...] = ()
+    output_dependencies: tuple[tuple[str, tuple[str, ...]], ...] = ()
 
 
 class QueryResult(DataModel):
@@ -85,6 +89,9 @@ class QueryResult(DataModel):
     filters: tuple[str, ...] = ()
     filter_scopes: tuple[FilterScope, ...] = ()
     dataset_count_scope: Literal["whole_dataset"] | None = None
+    # The inspection is optional for legacy persisted results and direct test fixtures.  New
+    # successful executions attach the exact policy analysis used to normalize and execute SQL.
+    inspection: QueryInspection | None = None
 
     @model_validator(mode="after")
     def validate_shape(self) -> QueryResult:

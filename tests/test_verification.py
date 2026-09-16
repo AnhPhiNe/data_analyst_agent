@@ -6,7 +6,12 @@ from uuid import uuid4
 import pytest
 from pydantic import ValidationError
 
-from tabular_analytics_agent.data import QueryColumn, QueryResult
+from tabular_analytics_agent.data import (
+    QueryColumn,
+    QueryInspection,
+    QueryResult,
+    analyze_read_only_sql,
+)
 from tabular_analytics_agent.domain import (
     DataProfile,
     DatasetIdentity,
@@ -57,11 +62,13 @@ def make_result(
     rows: tuple[tuple[Scalar, ...], ...] | None = None,
 ) -> QueryResult:
     selected_rows = rows if rows is not None else (("North", 350.0), ("South", 200.0))
+    sql = "SELECT region, SUM(revenue) AS revenue FROM dataset GROUP BY region"
+    analysis = analyze_read_only_sql(sql, allowed_table="dataset")
     return QueryResult(
         query_id=uuid4(),
         dataset_id=profile.dataset.dataset_id,
         working_dataset_version=1,
-        sql="SELECT region, SUM(revenue) AS revenue FROM dataset GROUP BY region",
+        sql=analysis.normalized_sql,
         columns=(
             QueryColumn(name="region", data_type="VARCHAR"),
             QueryColumn(name="revenue", data_type="DOUBLE"),
@@ -70,6 +77,19 @@ def make_result(
         row_count=len(selected_rows),
         truncated=False,
         duration_ms=2,
+        inspection=QueryInspection(
+            normalized_sql=analysis.normalized_sql,
+            referenced_columns=analysis.referenced_columns,
+            has_wildcard=analysis.has_wildcard,
+            group_by_columns=analysis.group_by_columns,
+            unaliased_outputs=analysis.unaliased_outputs,
+            filters=analysis.filters,
+            filter_scopes=analysis.filter_scopes,
+            dataset_count_scope=analysis.dataset_count_scope,
+            provenance_version=analysis.provenance_version,
+            base_relations=analysis.base_relations,
+            output_dependencies=analysis.output_dependencies,
+        ),
     )
 
 

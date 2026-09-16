@@ -27,6 +27,10 @@ from tabular_analytics_agent.domain import (
     fingerprint_semantic_annotations,
 )
 from tabular_analytics_agent.statistics import StatisticalResult
+from tabular_analytics_agent.verification.provenance import (
+    query_provenance_status,
+    statistical_action_status,
+)
 
 EXPORT_SCHEMA_VERSION: Final[str] = "1"
 EXPORT_TYPE: Final[str] = "verified_insights"
@@ -123,6 +127,26 @@ def evidence_results(request: ExportRequest) -> tuple[EvidenceResult, ...]:
                     f"Verified Insight references unavailable evidence for Tool Action {action_id}"
                 )
             result = results[action.output_ref]
+            if action.status.value != "succeeded":
+                raise ExportValidationError(
+                    f"Verified Insight references a non-successful Tool Action {action_id}"
+                )
+            if isinstance(result, QueryResult):
+                provenance_valid, provenance_message = query_provenance_status(result)
+                expected_version = (
+                    result.inspection.provenance_version if result.inspection is not None else None
+                )
+                if not provenance_valid:
+                    raise ExportValidationError(provenance_message)
+                if evidence.provenance_version != expected_version:
+                    raise ExportValidationError(
+                        "Verified Insight evidence SQL provenance does not match its result"
+                    )
+            else:
+                provenance_valid, provenance_message = statistical_action_status(action, result)
+                if not provenance_valid:
+                    raise ExportValidationError(provenance_message)
+                _validate_statistical_evidence_scope(evidence, result)
             if isinstance(result, QueryResult) and result.working_dataset_version != version:
                 raise ExportValidationError(f"result {action.output_ref} is stale")
             selected[action.output_ref] = result
@@ -216,6 +240,29 @@ def _result_metadata(result: EvidenceResult) -> dict[str, Any]:
             **result.model_dump(mode="json", exclude={"rows"}),
         }
     return {**reference, "result_type": "statistical", **result.model_dump(mode="json")}
+
+
+def _validate_statistical_evidence_scope(evidence: object, result: StatisticalResult) -> None:
+    """Ensure a published Evidence Trail mirrors the executed statistical full-data metadata."""
+    fields = (
+        "provenance_version",
+        "dataset_row_count",
+        "population_row_count",
+        "rows_loaded",
+        "sample_size",
+        "missing_row_count",
+        "sampled",
+        "sampling_method",
+        "sampling_seed",
+        "partial",
+        "truncated",
+    )
+    for name in fields:
+        expected = "v1" if name == "provenance_version" else getattr(result, name)
+        if getattr(evidence, name, None) != expected:
+            raise ExportValidationError(
+                f"Verified Insight evidence {name} does not match the executed result"
+            )
 
 
 __all__ = [

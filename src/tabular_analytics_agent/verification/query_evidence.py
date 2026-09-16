@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
-from tabular_analytics_agent.data import DATASET_TABLE, QueryResult
+from tabular_analytics_agent.data import (
+    DATASET_TABLE,
+    ROW_COUNT_DEPENDENCY,
+    ROW_NUMBER_COLUMN,
+    QueryResult,
+)
 from tabular_analytics_agent.data.sql_policy import is_whole_dataset_count
 from tabular_analytics_agent.domain import (
     DataProfile,
@@ -10,6 +15,7 @@ from tabular_analytics_agent.domain import (
     VerificationResult,
     VerificationStatus,
 )
+from tabular_analytics_agent.verification.provenance import query_provenance_status
 
 
 def verify_query_evidence(
@@ -23,6 +29,8 @@ def verify_query_evidence(
     profile_fields = {field.name for field in profile.fields}
     unknown_fields = sorted(set(source_fields) - profile_fields)
     verified_dataset_count = verified_dataset_count_matches_profile(profile, result)
+    provenance_valid, provenance_message = query_provenance_status(result)
+    lineage_valid, lineage_message = _query_lineage_matches_profile(result, profile_fields)
     schema_grounded = (bool(source_fields) and not unknown_fields) or (
         not source_fields and verified_dataset_count
     )
@@ -44,6 +52,16 @@ def verify_query_evidence(
                 if result.working_dataset_version == current_working_dataset_version
                 else "Query result is stale relative to the current Working Dataset."
             ),
+        ),
+        VerificationCheck(
+            name="sql_provenance",
+            passed=provenance_valid,
+            message=provenance_message,
+        ),
+        VerificationCheck(
+            name="output_lineage",
+            passed=lineage_valid,
+            message=lineage_message,
         ),
         VerificationCheck(
             name="schema_grounding",
@@ -81,6 +99,7 @@ def verified_dataset_count_matches_profile(profile: DataProfile, result: QueryRe
     if (
         result.dataset_count_scope != "whole_dataset"
         or not is_whole_dataset_count(result.sql, allowed_table=DATASET_TABLE)
+        or not query_provenance_status(result)[0]
         or result.truncated
         or result.row_count != 1
         or len(result.rows) != 1
@@ -94,6 +113,36 @@ def verified_dataset_count_matches_profile(profile: DataProfile, result: QueryRe
         and count_value >= 0
         and count_value == profile.row_count
     )
+
+
+def _query_lineage_matches_profile(
+    result: QueryResult, profile_fields: set[str]
+) -> tuple[bool, str]:
+    """Ensure every inspected output dependency is grounded in the profiled source schema."""
+    inspection = result.inspection
+    if inspection is None:
+        return False, "Query output lineage is unavailable for this legacy result."
+    output_names = {column.name.casefold() for column in result.columns}
+    inspected_names = {name.casefold() for name, _ in inspection.output_dependencies}
+    if not output_names <= inspected_names:
+        missing = sorted(output_names - inspected_names)
+        return False, f"Query output lineage is missing columns: {', '.join(missing)}."
+    known_fields = {field.casefold() for field in profile_fields}
+    unknown = sorted(
+        dependency
+        for output, dependencies in inspection.output_dependencies
+        for dependency in dependencies
+        if dependency != ROW_COUNT_DEPENDENCY
+        and not (
+            output.casefold() == ROW_NUMBER_COLUMN.casefold() and dependency.casefold() == "rowid"
+        )
+        and dependency.casefold() not in known_fields
+    )
+    if unknown:
+        return False, (
+            f"Query output lineage has unknown source fields: {', '.join(dict.fromkeys(unknown))}."
+        )
+    return True, "Every query output is linked to profiled source fields or a row-count marker."
 
 
 def _schema_failure_message(source_fields: tuple[str, ...], unknown_fields: list[str]) -> str:

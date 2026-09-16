@@ -6,6 +6,49 @@ from pathlib import Path
 
 import pytest
 from streamlit.testing.v1 import AppTest
+from streamlit_app import legacy_evidence_message
+
+
+@pytest.mark.parametrize(
+    "evidence",
+    [
+        {},
+        {"provenance_version": None},
+        {"provenance_version": "v1", "sampled": None, "sample_size": 4},
+        {"provenance_version": "v1", "sampled": True},
+        {
+            "provenance_version": "v1",
+            "sampled": False,
+            "dataset_row_count": 4,
+            "population_row_count": 3,
+            "rows_loaded": 2,
+            "partial": False,
+            "truncated": False,
+        },
+    ],
+)
+def test_legacy_evidence_is_marked_for_rerun(evidence: dict[str, object]) -> None:
+    message = legacy_evidence_message(evidence)
+    assert message is not None
+    assert "rerun" in message.lower()
+
+
+def test_current_sql_and_full_data_evidence_are_not_marked() -> None:
+    assert legacy_evidence_message({"provenance_version": "v1"}) is None
+    assert (
+        legacy_evidence_message(
+            {
+                "provenance_version": "v1",
+                "sampled": False,
+                "dataset_row_count": 4,
+                "population_row_count": 4,
+                "rows_loaded": 4,
+                "partial": False,
+                "truncated": False,
+            }
+        )
+        is None
+    )
 
 
 def test_streamlit_upload_screen_starts_without_runtime_errors(

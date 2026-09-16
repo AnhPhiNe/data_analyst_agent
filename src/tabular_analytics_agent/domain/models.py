@@ -353,6 +353,19 @@ class EvidenceTrail(DomainModel):
     tool_parameters: tuple[dict[str, Any], ...]
     values: tuple[EvidenceValue, ...]
     caveats: tuple[str, ...] = ()
+    # Full-data provenance is optional only so historical payloads remain readable.  New
+    # publication paths require these fields to be complete and consistent with execution.
+    provenance_version: Literal["v1"] | None = None
+    dataset_row_count: NonNegativeInt | None = None
+    population_row_count: NonNegativeInt | None = None
+    rows_loaded: NonNegativeInt | None = None
+    sample_size: NonNegativeInt | None = None
+    missing_row_count: NonNegativeInt | None = None
+    sampled: bool | None = None
+    sampling_method: str | None = None
+    sampling_seed: NonNegativeInt | None = None
+    partial: bool | None = None
+    truncated: bool | None = None
 
     @model_validator(mode="after")
     def require_reproducible_evidence(self) -> Self:
@@ -368,6 +381,34 @@ class EvidenceTrail(DomainModel):
             raise ValueError("every evidence tool action requires exact parameters")
         if not self.values:
             raise ValueError("an evidence trail requires computed values")
+        return self
+
+    @model_validator(mode="after")
+    def full_data_metadata_matches(self) -> Self:
+        """Require complete full-data metadata on newly published statistical evidence.
+
+        SQL evidence also uses provenance v1, but its scope is represented by the attached query
+        inspection rather than statistical row metadata.  Historical records keep ``None`` and
+        remain readable until a new Tool Action is run.
+        """
+        if self.provenance_version == "v1" and self.sampled is False:
+            required = (
+                self.dataset_row_count,
+                self.population_row_count,
+                self.rows_loaded,
+                self.sample_size,
+                self.missing_row_count,
+                self.partial,
+                self.truncated,
+            )
+            if any(value is None for value in required):
+                raise ValueError("full-data evidence requires complete execution metadata")
+            if self.rows_loaded != self.population_row_count:
+                raise ValueError("full-data evidence requires rows_loaded == population_row_count")
+            if self.partial or self.truncated:
+                raise ValueError("full-data evidence cannot be partial or truncated")
+            if self.sampling_method is not None or self.sampling_seed is not None:
+                raise ValueError("full-data evidence cannot declare sampling metadata")
         return self
 
 

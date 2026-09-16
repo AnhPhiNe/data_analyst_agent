@@ -36,6 +36,7 @@ RUN python -m ruff check . \
 FROM base AS runtime
 
 COPY streamlit_app.py ./
+COPY .streamlit/config.toml ./.streamlit/config.toml
 RUN useradd --create-home --uid 10001 app \
     && mkdir -p /data \
     && chown app:app /data

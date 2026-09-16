@@ -1,6 +1,6 @@
 # MVP acceptance checklist
 
-This checklist tracks acceptance against Spec v1.6. Implementation, deterministic tests, and live
+This checklist tracks acceptance against Spec v1.7 and its full-data amendment. Implementation, deterministic tests, and live
 acceptance are separate claims. A passing unit suite is not a passing live-agent evaluation.
 
 ## Current implementation batch
@@ -32,6 +32,22 @@ These items are in integration review until the verification record below is com
   numeric values remain numeric. JSON does not include model prompts, traces, or provider settings.
 - Legacy insights without assertions remain readable, but do not establish assertion coverage in
   evaluation. Legacy sessions and new generated outputs have different compatibility requirements.
+
+### Full-data analysis amendment (Spec v1.7 — 2026-09-16)
+
+This is a separate acceptance layer for the current MVP implementation. Historical release and holdout
+measurements that were produced with reservoir sampling remain historical evidence until the amended
+implementation is measured again.
+
+| Requirement | Acceptance evidence | Status at document update |
+|---|---|---|
+| Statistical calculations use all rows in the approved scope | 10,001-row fixture checks the real aggregate/statistic and `rows_loaded == population_row_count` | Passed: independent acceptance regression (13/13) |
+| Supported filters preserve full scope | Test uses only an existing SQL/analysis scope; no new `statistical_analysis` filter API | Passed: existing SQL scope regression |
+| Metadata semantics stay distinct | `sample_size` remains valid observations; execution records dataset/population/loaded/missing counts | Passed: execution-count and missing-data regressions |
+| No automatic sampling or partial success | New `ToolAction.inputs`, result, evidence, trail, verification, and export carry `sampled=false`, null sampling fields, `partial=false`, `truncated=false`; timeout has no fallback | Passed: metadata and timeout regressions |
+| Hard timeout and cleanup | Read and Python calculation run in a terminable serializable worker; parent owns DuckDB/temp files; Windows uses `spawn` | Passed: spawned-worker marker/PID cleanup regression |
+| Legacy safety | Sampled or incomplete historical evidence is marked legacy/unverified and requires rerun before current publish/export | Passed: publication/export regression |
+| Runtime packaging | `.streamlit/config.toml` is included in runtime image | Docker unavailable on this host; inspect Dockerfile, build later |
 
 ## Release work still required
 

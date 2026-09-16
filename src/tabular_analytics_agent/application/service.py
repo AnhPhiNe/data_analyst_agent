@@ -49,6 +49,7 @@ from tabular_analytics_agent.domain import (
     SemanticAnnotation,
     SessionStatus,
     ToolAction,
+    VerificationStatus,
     canonical_uuid,
 )
 from tabular_analytics_agent.filesystem import (
@@ -72,6 +73,7 @@ from tabular_analytics_agent.statistics import (
     StatisticalResult,
     StatisticalTool,
 )
+from tabular_analytics_agent.verification.provenance import query_provenance_status
 from tabular_analytics_agent.visualization import (
     ArtifactStore,
     ArtifactStoreError,
@@ -152,7 +154,15 @@ class LocalAnalysisApplication:
             upload_path.write_bytes(content)
             inspection = core.inspect(upload_path)
         except Exception:
-            upload_path.unlink(missing_ok=True)
+            try:
+                delete_tree(
+                    session_directory,
+                    self._sessions_root,
+                    label="failed staged upload cleanup",
+                )
+            except (OSError, ValueError):
+                # Preserve the original upload-validation error if cleanup itself is unavailable.
+                upload_path.unlink(missing_ok=True)
             raise
         return StagedUpload(
             session_id=session_id,
@@ -173,26 +183,45 @@ class LocalAnalysisApplication:
         if upload_path.parent != incoming_directory or not upload_path.is_file():
             raise ApplicationError("staged upload path is not owned by its Analysis Session")
         core = TabularDataCore(session_directory, self._limits)
-        handle = core.ingest(upload_path, sheet_name=sheet_name)
-        profile = core.profile(handle)
-        now = datetime.now(UTC)
-        session = AnalysisSession(
-            session_id=staged.session_id,
-            status=SessionStatus.RUNNING,
-            source_dataset_id=handle.dataset.dataset_id,
-            working_dataset_version=handle.working_dataset_version,
-            data_profile_id=profile.profile_id,
-            graph_checkpoint_id=str(staged.session_id),
-            created_at=now,
-            updated_at=now,
-        )
-        workspace = AnalysisWorkspace(
-            session=session,
-            dataset_handle=handle,
-            data_profile=profile,
-        )
-        self._save_workspace(workspace)
-        return workspace
+        try:
+            handle = core.ingest(upload_path, sheet_name=sheet_name)
+            profile = core.profile(
+                handle,
+                timeout_seconds=self._limits.query_timeout_seconds,
+            )
+            now = datetime.now(UTC)
+            session = AnalysisSession(
+                session_id=staged.session_id,
+                status=SessionStatus.RUNNING,
+                source_dataset_id=handle.dataset.dataset_id,
+                working_dataset_version=handle.working_dataset_version,
+                data_profile_id=profile.profile_id,
+                graph_checkpoint_id=str(staged.session_id),
+                created_at=now,
+                updated_at=now,
+            )
+            workspace = AnalysisWorkspace(
+                session=session,
+                dataset_handle=handle,
+                data_profile=profile,
+            )
+            self._save_workspace(workspace)
+            return workspace
+        except Exception:
+            # Ingest is the only operation that creates this session directory.  A failure before
+            # the workspace is durable must not leave a temporary upload/database behind, while a
+            # later statistical failure operates on an existing session and never reaches here.
+            try:
+                if session_directory.exists():
+                    delete_tree(
+                        session_directory,
+                        self._sessions_root,
+                        label="failed Analysis Session cleanup",
+                    )
+            except (OSError, ValueError):
+                # Preserve the original ingestion/profile error; startup cleanup is best effort.
+                pass
+            raise
 
     def list_sessions(self) -> tuple[SessionSummary, ...]:
         """Return valid persisted sessions in deterministic recent-first order."""
@@ -469,26 +498,49 @@ class LocalAnalysisApplication:
         current_workspace = self.sync_workspace(workspace, state)
         existing = self._artifact_store.list_artifacts(current_workspace.session.session_id)
         publications: list[AnalyticalArtifact] = []
-        for payload in state.get("chart_renders", []):
-            rendered = ChartRenderResult.model_validate(payload)
-            # One candidate per verified result; a refined candidate keeps its new chart type.
-            artifact = next(
-                (item for item in existing if item.source_result_ref == rendered.source_result_ref),
-                None,
-            )
-            if artifact is None:
-                try:
-                    artifact = self._artifact_store.create_candidate(
-                        current_workspace.session,
-                        rendered,
-                        insight_ids=_insight_ids_for_source(state, rendered),
+        with self._open_orchestrator(current_workspace) as orchestrator:
+            for payload in state.get("chart_renders", []):
+                rendered = ChartRenderResult.model_validate(payload)
+                evidence = orchestrator.query_evidence(
+                    str(current_workspace.session.session_id),
+                    str(rendered.source_result_ref.query_id),
+                )
+                if evidence is None:
+                    raise ApplicationError(
+                        "the chart result is no longer available; rerun the Tool Action"
                     )
-                except ArtifactStoreError as exc:
-                    raise ApplicationError(f"could not publish the chart: {exc}") from exc
-                existing = (*existing, artifact)
-                # Only a new candidate changes the saved session; viewing a result does not.
-                self._save_workspace(current_workspace)
-            publications.append(artifact)
+                result = QueryResult.model_validate(evidence[0])
+                action = ToolAction.model_validate(evidence[1])
+                _require_current_query_evidence(current_workspace, result, action)
+                expected_ref = make_query_result_reference(
+                    result, current_workspace.session.semantic_annotations
+                )
+                if rendered.source_result_ref != expected_ref:
+                    raise ApplicationError(
+                        "the chart result is stale or mismatched; rerun the Tool Action"
+                    )
+                # One candidate per verified result; a refined candidate keeps its new chart type.
+                artifact = next(
+                    (
+                        item
+                        for item in existing
+                        if item.source_result_ref == rendered.source_result_ref
+                    ),
+                    None,
+                )
+                if artifact is None:
+                    try:
+                        artifact = self._artifact_store.create_candidate(
+                            current_workspace.session,
+                            rendered,
+                            insight_ids=_insight_ids_for_source(state, rendered),
+                        )
+                    except ArtifactStoreError as exc:
+                        raise ApplicationError(f"could not publish the chart: {exc}") from exc
+                    existing = (*existing, artifact)
+                    # Only a new candidate changes the saved session; viewing a result does not.
+                    self._save_workspace(current_workspace)
+                publications.append(artifact)
         return tuple(publications)
 
     def list_candidates(self, workspace: AnalysisWorkspace) -> tuple[AnalyticalArtifact, ...]:
@@ -529,6 +581,10 @@ class LocalAnalysisApplication:
             raise ApplicationError("the verified result behind this chart is no longer available")
         result = QueryResult.model_validate(evidence[0])
         action = ToolAction.model_validate(evidence[1])
+        _require_current_query_evidence(workspace, result, action)
+        expected_ref = make_query_result_reference(result, session.semantic_annotations)
+        if artifact.source_result_ref != expected_ref:
+            raise ApplicationError("the chart result is stale or mismatched; rerun the Tool Action")
         intent = retarget_chart_intent(artifact.intent, result, artifact_type).model_copy(
             update={
                 "source_result_ref": make_query_result_reference(
@@ -729,8 +785,57 @@ def _safe_upload_name(original_filename: str) -> str:
     return f"{safe_stem}{suffix}"
 
 
+def _require_current_query_evidence(
+    workspace: AnalysisWorkspace,
+    result: QueryResult,
+    action: ToolAction,
+) -> None:
+    """Guard chart publication and refinement with the current, inspected query evidence."""
+    expected_reference = f"query-result:{result.query_id}"
+    action_is_verified = bool(action.verification_results) and all(
+        item.status is VerificationStatus.PASSED for item in action.verification_results
+    )
+    provenance_valid, provenance_message = query_provenance_status(result)
+    valid = (
+        action.tool_name == "read_only_sql"
+        and action.status is ActionStatus.SUCCEEDED
+        and action.output_ref == expected_reference
+        and action.working_dataset_version == workspace.dataset_handle.working_dataset_version
+        and result.dataset_id == workspace.dataset_handle.dataset.dataset_id
+        and result.working_dataset_version == workspace.dataset_handle.working_dataset_version
+        and not result.truncated
+        and action_is_verified
+        and isinstance(action.inputs.get("sql"), str)
+        and action.inputs["sql"] == result.sql
+        and provenance_valid
+    )
+    if valid:
+        return
+    reason = (
+        provenance_message if not provenance_valid else "the Tool Action is stale or unverified"
+    )
+    raise ApplicationError(f"{reason}; rerun the Tool Action before creating a chart")
+
+
 def _same_statistics(fresh: StatisticalResult, saved: StatisticalResult) -> bool:
     """Compare a rerun statistical result with the saved one, allowing floating-point noise."""
+
+    # A checkpoint created while the product still used reservoir sampling is legacy evidence.
+    # It may remain readable, but a full-data rerun must not claim to reproduce that old scope.
+    scope_fields = (
+        "dataset_row_count",
+        "population_row_count",
+        "rows_loaded",
+        "sampled",
+        "sampling_method",
+        "sampling_seed",
+        "partial",
+        "truncated",
+    )
+    if any(getattr(fresh, field) != getattr(saved, field) for field in scope_fields):
+        return False
+    if fresh.sampled is not False:
+        return False
 
     def numbers(result: StatisticalResult) -> list[float | None]:
         return [result.statistic, result.p_value, *(item.value for item in result.estimates)]

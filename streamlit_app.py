@@ -593,6 +593,50 @@ def evidence_conditions(evidence: dict[str, Any]) -> list[str]:
     ]
 
 
+def legacy_evidence_message(evidence: dict[str, Any]) -> str | None:
+    """Return a user-facing marker when evidence predates the current provenance contract."""
+    if evidence.get("provenance_version") != "v1":
+        return (
+            "Legacy evidence: its SQL or statistical scope predates the current provenance "
+            "contract. Rerun the Tool Action before publishing or exporting it."
+        )
+    sampled = evidence.get("sampled")
+    if sampled is True:
+        return (
+            "Sampled evidence: this result was created with an earlier sampling path. "
+            "Rerun the Tool Action before publishing or exporting it."
+        )
+    if sampled is None and evidence.get("sample_size") is not None:
+        return (
+            "Legacy evidence: its full-data execution metadata is incomplete. "
+            "Rerun the Tool Action before publishing or exporting it."
+        )
+    if sampled is False:
+        required = (
+            "dataset_row_count",
+            "population_row_count",
+            "rows_loaded",
+            "partial",
+            "truncated",
+        )
+        if any(evidence.get(name) is None for name in required):
+            return (
+                "Legacy evidence: its full-data execution metadata is incomplete. "
+                "Rerun the Tool Action before publishing or exporting it."
+            )
+        if evidence.get("rows_loaded") != evidence.get("population_row_count"):
+            return (
+                "Partial evidence: it does not cover the complete approved scope. "
+                "Rerun the Tool Action before publishing or exporting it."
+            )
+        if evidence.get("partial") or evidence.get("truncated"):
+            return (
+                "Partial evidence: it does not cover the complete approved scope. "
+                "Rerun the Tool Action before publishing or exporting it."
+            )
+    return None
+
+
 def render_completed_analysis(
     application: LocalAnalysisApplication,
     workspace: AnalysisWorkspace,
@@ -630,7 +674,10 @@ def render_completed_analysis(
         for item, caveats in zip(insights, caveat_lists, strict=True):
             with st.container(border=True):
                 st.write(item.get("claim", "Verified insight"))
-                conditions = evidence_conditions(item.get("evidence", {}))
+                evidence = item.get("evidence", {})
+                if marker := legacy_evidence_message(evidence):
+                    st.warning(marker)
+                conditions = evidence_conditions(evidence)
                 if conditions:
                     # Claim text leaves SQL conditions out, so show them beneath the claim.
                     st.caption("Filters: " + "; ".join(conditions))
@@ -946,6 +993,8 @@ def render_audit_tab(
     for item in insights:
         evidence = item.get("evidence", {})
         with st.expander(str(item.get("claim", "Verified insight"))):
+            if marker := legacy_evidence_message(evidence):
+                st.warning(marker)
             st.caption(
                 f"Fields: {', '.join(evidence.get('source_fields', []))} · filters: "
                 f"{'; '.join(evidence_conditions(evidence)) or 'none'} · source rows: "

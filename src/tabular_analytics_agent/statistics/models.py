@@ -205,6 +205,19 @@ class StatisticalResult(StatisticsModel):
     sample_size: NonNegativeInt
     missing_row_count: NonNegativeInt
     missing_data_handling: NonEmptyText
+    # Scope and execution metadata are optional so checkpoints written before the full-data
+    # contract remain readable.  New StatisticalTool executions always populate these fields and
+    # set ``sampled`` to False.
+    dataset_row_count: NonNegativeInt | None = None
+    population_row_count: NonNegativeInt | None = None
+    rows_loaded: NonNegativeInt | None = None
+    sampled: bool | None = None
+    sampling_method: str | None = None
+    sampling_seed: NonNegativeInt | None = None
+    partial: bool | None = None
+    truncated: bool | None = None
+    usable_counts_by_field: dict[str, NonNegativeInt] = Field(default_factory=dict)
+    excluded_counts_by_field: dict[str, NonNegativeInt] = Field(default_factory=dict)
     group_sizes: dict[str, NonNegativeInt] = Field(default_factory=dict)
     estimates: tuple[StatisticalEstimate, ...]
     statistic_name: str | None = None
@@ -232,4 +245,28 @@ class StatisticalResult(StatisticsModel):
             raise ValueError("adjusted alpha and significance status require a p-value")
         if not self.estimates:
             raise ValueError("statistical results require computed estimates")
+        return self
+
+    @model_validator(mode="after")
+    def full_data_metadata_is_consistent(self) -> Self:
+        """Validate the full-data invariant when a result explicitly claims it.
+
+        Older persisted results have ``sampled=None`` and are intentionally left as legacy data;
+        they must not be silently interpreted as full-data results by callers.
+        """
+        if self.sampled is False:
+            if self.dataset_row_count is None or self.population_row_count is None:
+                raise ValueError("full-data results require dataset and population row counts")
+            if self.rows_loaded is None:
+                raise ValueError("full-data results require rows_loaded")
+            if self.rows_loaded != self.population_row_count:
+                raise ValueError("full-data results require rows_loaded == population_row_count")
+            if self.partial is not False or self.truncated is not False:
+                raise ValueError("full-data results cannot be partial or truncated")
+            if self.sampling_method is not None or self.sampling_seed is not None:
+                raise ValueError("full-data results cannot declare a sampling method or seed")
+            if self.sample_size > self.rows_loaded:
+                raise ValueError("sample_size cannot exceed rows_loaded")
+            if self.missing_row_count > self.rows_loaded:
+                raise ValueError("missing_row_count cannot exceed rows_loaded")
         return self

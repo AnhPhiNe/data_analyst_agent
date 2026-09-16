@@ -72,6 +72,12 @@ def analyze(frame: pd.DataFrame, request: StatisticalRequest) -> StatisticalResu
         warnings.append(
             "Bonferroni correction applied because multiple statistical tests were requested."
         )
+    # These counts describe the usable observations available in each requested source field.
+    # ``sample_size`` keeps the operation-specific meaning (for example, complete cases for a
+    # correlation or the smaller group for a two-group test), so consumers can distinguish field
+    # missingness from the observations used by the actual test.
+    payload.setdefault("usable_counts_by_field", _usable_counts(frame, request.source_fields))
+    payload.setdefault("excluded_counts_by_field", _excluded_counts(frame, request.source_fields))
     return StatisticalResult(
         result_id=uuid4(),
         operation=request.operation,
@@ -448,6 +454,16 @@ def _require_columns(frame: pd.DataFrame, fields: tuple[str, ...]) -> None:
     unknown = sorted(set(fields) - set(frame.columns))
     if unknown:
         raise StatisticalAnalysisError(f"unknown statistical fields: {', '.join(unknown)}")
+
+
+def _usable_counts(frame: pd.DataFrame, fields: tuple[str, ...]) -> dict[str, int]:
+    """Count non-missing observations per source field after input validation."""
+    return {field: int(frame[field].notna().sum()) for field in fields}
+
+
+def _excluded_counts(frame: pd.DataFrame, fields: tuple[str, ...]) -> dict[str, int]:
+    """Count rows excluded by missing values per source field."""
+    return {field: int(frame[field].isna().sum()) for field in fields}
 
 
 def _numeric(series: pd.Series[Any], field: str) -> pd.Series[float]:

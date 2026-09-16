@@ -1,9 +1,9 @@
 # Tabular Analytics Agent — Product and Technical Specification
 
-**Status:** Approved — v1.5 targeted amendments (see Section 24)
+**Status:** Approved — v1.7 full-data analysis amendment (see Section 24)
 **Target:** Local-first MVP and AI Engineer portfolio project
 **Primary interface:** Streamlit
-**Last updated:** 2026-09-15
+**Last updated:** 2026-09-16
 
 ## 1. Product Summary
 
@@ -201,6 +201,22 @@ Statistical tools must:
 
 - Check applicable assumptions. Rank tests (Mann–Whitney and Kruskal–Wallis) check that group spreads are similar (Brown–Forsythe), because only then do they compare medians. Independence of observations cannot be checked from the table and is never reported as checked.
 - Report sample size and missing-data handling.
+- Run on every row in the approved analysis scope. The MVP never automatically samples or reduces the
+  input to avoid a timeout or resource limit.
+- Keep the population scope separate from the number of usable observations. `dataset_row_count` is
+  the row count of the original dataset, `population_row_count` is the number of rows in the approved
+  filter scope, and `rows_loaded` is the number of rows actually read into the calculation. A supported
+  filter is applied to the complete dataset before statistical calculation; this amendment does not add
+  a filter API to `statistical_analysis`.
+- Preserve `sample_size` as the number of valid observations used by the statistic after missing-data
+  handling. `missing_row_count` records rows excluded for missing data and is not sampling.
+- Record `sampled=false`, `sampling_method=null`, `sampling_seed=null`, `partial=false`, and
+  `truncated=false` on new successful results. Full-data verification requires
+  `rows_loaded == population_row_count`, `sampled == false`, `partial == false`, and
+  `truncated == false`.
+- Carry the scope metadata through `StatisticalResult`, `ToolAction.inputs`, the evidence catalog,
+  `EvidenceTrail`, insight verification, and JSON/export artifacts. `max_query_rows` limits rows
+  returned for presentation or model context only; it never limits aggregate or statistical input.
 - Report effect size where meaningful.
 - Warn about multiple testing.
 - Distinguish statistical significance from practical significance.
@@ -467,7 +483,24 @@ Before an insight or artifact is published, deterministic checks must verify:
 - Parse and validate SQL before execution.
 - Permit access only to allowlisted session tables and views.
 - Reject DDL, DML, `COPY`, `ATTACH`, `INSTALL`, `LOAD`, and filesystem/network functions.
-- Enforce timeout, memory, and output-row limits.
+- Enforce timeout, memory, and output-row limits. `max_query_rows` limits rows returned for a query
+  result shown to the UI or model; it does not limit rows read by an aggregate or statistical
+  calculation.
+
+#### 14.2.1 Statistical data scope
+
+- Statistical calculations run over all rows in the approved analysis scope. Automatic sampling is
+  outside the MVP; a resource or timeout failure is a typed failure, never a fallback to a smaller
+  sample or a partial success.
+- For a supported filter, count the original dataset as `dataset_row_count`, count the rows satisfying
+  the approved scope as `population_row_count`, and record the rows actually read as `rows_loaded`.
+  A successful full-data calculation must satisfy `rows_loaded == population_row_count`.
+- `sample_size` remains the valid-observation count after missing-data handling. It must not be used as
+  a synonym for population size, and the execution must provide `missing_row_count` rather than copying
+  counts from the profile.
+- New statistical Tool Actions record the same scope fields in `ToolAction.inputs`: `sampled=false`,
+  `sampling_method=null`, `sampling_seed=null`, `partial=false`, `truncated=false`, together with
+  `dataset_row_count`, `population_row_count`, and `rows_loaded`.
 
 ### 14.3 Agent budget
 
@@ -511,6 +544,14 @@ Limits must be configurable and visible in failure messages.
 - Make Tool Actions idempotent where practical.
 - Write tool outputs to temporary locations before verification and publication.
 - Mark failed runs clearly without converting partial output into Verified Insights.
+- The read, conversion, and Python statistical calculation share one deadline. Python calculation runs
+  inside a worker process that the parent can terminate for real; the worker receives only serializable
+  data and parameters, never a live DuckDB connection. The parent owns the connection, temporary files,
+  and cleanup; Windows uses the `spawn` start method. A timeout terminates the workload and confirms the
+  worker has exited before returning an error.
+- A timed-out or resource-limited statistical action produces no successful or partial result, insight,
+  evidence publication, or export. The parent interrupts/closes the DuckDB connection when applicable,
+  terminates the worker, and cleans temporary session resources.
 - Allow users to resume from a safe checkpoint.
 - Explain when the requested analysis cannot be supported because of missing fields, inadequate sample size, unresolved semantics, unsupported causal claims, or an exceeded budget. Too few usable values for a statistical test end the run as a typed `insufficient_sample` refusal that names the affected group or field.
 - Show users a plain-language failure message with a next step; keep technical details in a collapsed view and in the audit trail.
@@ -535,7 +576,11 @@ Every run records:
 - Error classification.
 - Created insights and artifacts.
 
-Computations must be reproducible by preserving exact SQL or Tool Action parameters and fixed random seeds where sampling is used. A saved Tool Action keeps the exact SQL or statistical parameters needed to rerun it, and the Audit view reruns it without another model call and reports whether the result was reproduced.
+Computations must be reproducible by preserving exact SQL or Tool Action parameters and the dataset,
+scope, and version used. MVP statistical actions do not sample, so their sampling method and seed are
+`null`; historical sampled actions retain their original metadata and are not silently reclassified.
+A saved Tool Action keeps the exact SQL or statistical parameters needed to rerun it, and the Audit view
+reruns it without another model call and reports whether the result was reproduced.
 
 The Audit view shows, for the current request, each Tool Action's exact SQL or statistical parameters, approved fields, verification checks, error, and retry count; each Verified Insight's fields, filters, row counts, and evidence values; rejected claims with their reasons; and model-call metadata including prompt-template versions and errors.
 
@@ -790,6 +835,27 @@ Records the release suite result and presentation fixes from a manual review of 
 - Final fix round, for the one release failure class seen on two or more datasets — a correct small result stated in part (materials and batches in the release suite, a month comparison in holdout v8): synthesis reports the rest of a small grouped or single-row query result once the model asserts part of it (FR-10). Prompt examples that echoed holdout or release questions (`top performer`, `hiệu quả nhất`, `readings`, and a profile question) were replaced with neutral wording without changing any rule (semantic-v15, plan-v9). Failures seen on one dataset only — numbers stored with a unit, mixed date formats in one column, removing duplicates across every column, an abbreviated measure name, and averages given for a requested test — are documented rather than fixed, so the agent is not tuned to the release suite. A new small holdout measures this round.
 - Final holdout, committed before its single measurement and run once at commit `e239f87`: 10 cases on two more unseen datasets, three runs each. 29 of 29 graded runs passed and every Section 17.4 gate was met (calculation accuracy 65/65, schema grounding 40/40, forbidden claims 0/123, tool execution 20/20, chart validity 17/17, evidence completeness 123/123, clarification recall 6/6, end-to-end 29/29), with one run lost to a provider rate limit and reported separately. The round it measures worked: every grouped question stated all of its groups, and both ranking questions named the winning entity, not only its value. The sample is small — 30 runs, and clarification recall rests on 6 — so it confirms the fixes rather than replacing the release suite's 118-run result (Section 17.3).
 
+### v1.7 — 2026-09-16
+
+Replaces automatic statistical sampling with full-data analysis for the MVP. Historical results and
+evidence retain their original status and are not reclassified.
+
+- `statistical_analysis` runs on all rows in the approved analysis scope; supported filters apply to the
+  complete dataset before calculation. This does not add a filter API to the statistical tool.
+- `max_query_rows` remains a presentation/result-row limit and never bounds aggregate or statistical
+  input. A timeout or resource limit fails the action without a sample fallback or partial result.
+- New results and `ToolAction.inputs` record `dataset_row_count`, `population_row_count`,
+  `rows_loaded`, `sampled=false`, `sampling_method=null`, `sampling_seed=null`, `partial=false`, and
+  `truncated=false`. `sample_size` keeps its existing valid-observation meaning, and
+  `missing_row_count` records exclusions from missing-data handling.
+- Full-data verification requires `rows_loaded == population_row_count` and all three boolean invariants
+  (`sampled=false`, `partial=false`, `truncated=false`). Metadata flows through the evidence catalog,
+  Evidence Trail, insight verification, and JSON/export artifacts.
+- Python statistical work runs in a terminable serializable worker process; the parent owns DuckDB,
+  temporary files, and cleanup, and Windows uses `spawn`.
+- Evidence from sampled or metadata-incomplete historical actions is marked legacy/unverified and must
+  be recomputed before current publication or export.
+
 ## 25. Implementation Contracts
 
 ### 25.1 Tool Catalog
@@ -797,7 +863,28 @@ Records the release suite result and presentation fixes from a manual review of 
 | Tool | Input | Output | Constraints |
 |---|---|---|---|
 | `read_only_sql` | One DuckDB `SELECT` or `WITH ... SELECT` over the single table named `dataset`; its source columns must come from the approved step's `required_fields` (reading fewer of them is allowed); field ids such as `c1` are rewritten to exact quoted field names before validation, including ids qualified by the `dataset` table or its alias (CTE output columns are left alone); a step may list no `required_fields` only when its query is an unfiltered whole-dataset `COUNT(*)`, and any other SQL step without fields is sent back to planning with the fields its query reads; an unaliased calculated output receives a deterministic ASCII alias such as `sum_1`, and an explicit alias that is not a short ASCII identifier is repaired | `QueryResult`: columns, rows, row count, truncation flag, normalized SQL, `GROUP BY` output columns, and `WHERE`/`HAVING` filters | No wildcard projections, schema catalogs, external-access functions, or other tables |
-| `statistical_analysis` | The approved operation plus the parameters its rule requires (the operation rule table in `statistics.models`) | `StatisticalResult`: estimates, test statistic, p-value, adjusted alpha, effect size, assumption checks, and warnings | Runs on a deterministic reservoir sample of at most the configured query row limit |
+| `statistical_analysis` | The approved operation plus the parameters its rule requires (the operation rule table in `statistics.models`) | `StatisticalResult`: estimates, test statistic, p-value, adjusted alpha, effect size, assumption checks, warnings, scope metadata, and missing-data counts | Runs on all rows in the approved analysis scope. Sampling is not used automatically by the MVP. |
+
+For a new successful statistical action, the scope metadata is:
+
+```text
+dataset_row_count = rows in the original dataset
+population_row_count = rows in the approved filter scope
+rows_loaded = rows actually read into the calculation
+sample_size = valid observations used by the statistic after missing-data handling
+missing_row_count = rows excluded for missing data
+sampled = false
+sampling_method = null
+sampling_seed = null
+partial = false
+truncated = false
+```
+
+The full-data invariant is `rows_loaded == population_row_count` with `sampled=false`,
+`partial=false`, and `truncated=false`. These fields must be written from execution results, not copied
+from the profile. The same values are included in `ToolAction.inputs`, the evidence catalog,
+`EvidenceTrail`, insight verification, and JSON/export artifacts. `max_query_rows` may still cap rows
+returned for display or model context.
 
 Questions fully covered by the Data Profile are answered without a tool (Section 6, step 7).
 

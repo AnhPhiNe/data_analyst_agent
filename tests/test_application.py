@@ -9,8 +9,14 @@ from uuid import uuid4
 import pytest
 
 from tabular_analytics_agent.application import ApplicationError, LocalAnalysisApplication
-from tabular_analytics_agent.data import UnsafeFileError, UnsupportedFileError
-from tabular_analytics_agent.domain import ArtifactStatus, ArtifactType, SessionStatus
+from tabular_analytics_agent.application.service import _require_current_query_evidence
+from tabular_analytics_agent.data import (
+    QueryResult,
+    TabularDataCore,
+    UnsafeFileError,
+    UnsupportedFileError,
+)
+from tabular_analytics_agent.domain import ArtifactStatus, ArtifactType, SessionStatus, ToolAction
 from tabular_analytics_agent.model_gateway import FakeModelGateway, ModelTask
 from tabular_analytics_agent.orchestration import AgentRunStatus, ApprovalDecision
 
@@ -358,3 +364,58 @@ def test_candidate_chart_type_changes_without_a_model_call(tmp_path: Path) -> No
     assert (bar.version, bar.intent.artifact_type) == (4, ArtifactType.BAR)
     with pytest.raises(ApplicationError, match="could not pin"):
         application.pin(workspace, uuid4())
+
+
+def test_ingest_failure_removes_new_session_storage(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    application = LocalAnalysisApplication(tmp_path / "app-data", FakeModelGateway([]))
+    staged = application.stage_upload("sales.csv", sales_csv())
+    session_directory = tmp_path / "app-data" / "sessions" / str(staged.session_id)
+
+    def fail_profile(
+        _self: TabularDataCore, _handle: object, *, timeout_seconds: float | None = None
+    ) -> object:
+        del timeout_seconds
+        raise RuntimeError("profile failed")
+
+    monkeypatch.setattr(TabularDataCore, "profile", fail_profile)
+    with pytest.raises(RuntimeError, match="profile failed"):
+        application.ingest(staged)
+
+    assert not session_directory.exists()
+
+
+def test_chart_publication_guard_requires_current_query_provenance(
+    tmp_path: Path,
+) -> None:
+    application = LocalAnalysisApplication(tmp_path / "app-data", FakeModelGateway(model_outputs()))
+    workspace = application.ingest(application.stage_upload("sales.csv", sales_csv()))
+    application.start(workspace, "Compare total revenue by region")
+    completed = application.resume(workspace, True)
+    result = QueryResult.model_validate(completed["query_results"][0])
+    action_payload = next(
+        item for item in completed["tool_actions"] if item["tool_name"] == "read_only_sql"
+    )
+    verified_action = ToolAction.model_validate(action_payload)
+    _require_current_query_evidence(workspace, result, verified_action)
+
+    with pytest.raises(ApplicationError, match="rerun"):
+        _require_current_query_evidence(
+            workspace,
+            result.model_copy(update={"inspection": None}),
+            verified_action,
+        )
+    with pytest.raises(ApplicationError, match="rerun"):
+        _require_current_query_evidence(
+            workspace,
+            result,
+            verified_action.model_copy(
+                update={
+                    "inputs": {
+                        **verified_action.inputs,
+                        "sql": "SELECT 1",
+                    }
+                }
+            ),
+        )

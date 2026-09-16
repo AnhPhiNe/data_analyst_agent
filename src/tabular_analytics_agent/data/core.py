@@ -14,6 +14,7 @@ import unicodedata
 import zipfile
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FutureTimeoutError
+from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path, PurePosixPath
@@ -101,6 +102,56 @@ _NUMERIC_TYPES = {
 }
 
 
+@dataclass(frozen=True, slots=True)
+class FullDataRead:
+    """The complete rows returned for an approved statistical input query.
+
+    This is an internal data-core value rather than a presentation ``QueryResult``.  In
+    particular, it never adds the display ``max_query_rows`` limit.  The raw values are kept in
+    the parent process and are later sent to the statistical worker as a serializable payload.
+    """
+
+    sql: str
+    columns: tuple[QueryColumn, ...]
+    rows: tuple[tuple[Any, ...], ...]
+    row_count: int
+    dataset_row_count: int
+    population_row_count: int
+    dataset_id: UUID
+    working_dataset_version: int
+    duration_ms: int
+    inspection: QueryInspection
+
+    def as_query_result(self, max_rows: int) -> QueryResult:
+        """Build a bounded preview without changing the full-read row count used for analysis."""
+        visible_rows = self.rows[:max_rows]
+        rows = tuple(tuple(_normalize_scalar(value) for value in row) for row in visible_rows)
+        values: dict[str, Any] = {
+            "query_id": uuid4(),
+            "dataset_id": self.dataset_id,
+            "working_dataset_version": self.working_dataset_version,
+            "sql": self.sql,
+            "columns": self.columns,
+            "rows": rows,
+            "row_count": len(rows),
+            "truncated": self.row_count > max_rows,
+            "duration_ms": self.duration_ms,
+            "group_by_columns": tuple(
+                name
+                for name in self.inspection.group_by_columns
+                if any(column.name == name for column in self.columns)
+            ),
+            "filters": self.inspection.filters,
+            "filter_scopes": self.inspection.filter_scopes,
+            "dataset_count_scope": self.inspection.dataset_count_scope,
+        }
+        # SQL provenance is being added to QueryResult by the SQL-policy owner.  Keep this
+        # adapter compatible with both the pre-change model and the new optional field.
+        if "inspection" in QueryResult.model_fields:
+            values["inspection"] = self.inspection
+        return QueryResult(**values)
+
+
 class TabularDataCore:
     """Deep module for safe local operations on one session's tabular dataset.
 
@@ -117,6 +168,14 @@ class TabularDataCore:
     def limits(self) -> DataCoreLimits:
         """Expose immutable resource limits to bounded analytical adapters."""
         return self._limits
+
+    def _effective_timeout(self, timeout_seconds: float | None) -> float:
+        if timeout_seconds is not None and timeout_seconds <= 0:
+            raise ValueError("timeout_seconds must be positive")
+        return min(
+            timeout_seconds or self._limits.query_timeout_seconds,
+            self._limits.query_timeout_seconds,
+        )
 
     def inspect(self, upload_path: Path) -> UploadInspection:
         """Validate an upload and return facts required before ingestion."""
@@ -215,11 +274,30 @@ class TabularDataCore:
             selected_sheet=selected_sheet,
         )
 
-    def profile(self, handle: DatasetHandle) -> DataProfile:
-        """Build a deterministic Data Profile for a persisted Working Dataset."""
+    def profile(
+        self,
+        handle: DatasetHandle,
+        *,
+        timeout_seconds: float | None = None,
+    ) -> DataProfile:
+        """Build a deterministic Data Profile for a persisted Working Dataset.
+
+        Profiling runs all of its DuckDB work in one parent-owned connection.  The connection is
+        interrupted if the deadline expires, so callers receive a typed timeout instead of a
+        profile assembled from whichever field queries happened to finish first.
+        """
+        started = time.perf_counter()
+        effective_timeout = self._effective_timeout(timeout_seconds)
         self._verify_handle(handle)
+        remaining = _remaining_seconds(started, effective_timeout)
+        if remaining <= 0:
+            raise QueryTimeoutError(
+                f"Profiling exceeded the effective {effective_timeout}-second timeout"
+            )
         connection = self._connect(handle.working_database_path)
-        try:
+        executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="duckdb-profile")
+
+        def execute() -> DataProfile:
             row_count = int(
                 _require_row(connection.execute("SELECT COUNT(*) FROM dataset").fetchone())[0]
             )
@@ -248,19 +326,56 @@ class TabularDataCore:
                 profile_version="1",
                 created_at=datetime.now().astimezone(),
             )
-        finally:
-            connection.close()
 
-    def inspect_query(self, handle: DatasetHandle, sql: str) -> QueryInspection:
-        """Validate and bind one read-only query against this Working Dataset."""
-        self._verify_handle(handle)
-        analysis = analyze_read_only_sql(sql, allowed_table=handle.table_name)
-        connection = self._connect(handle.working_database_path)
+        future = executor.submit(execute)
         try:
-            connection.execute(f"EXPLAIN {analysis.normalized_sql}")
+            return future.result(timeout=remaining)
+        except FutureTimeoutError as exc:
+            connection.interrupt()
+            raise QueryTimeoutError(
+                f"Profiling exceeded the effective {effective_timeout}-second timeout"
+            ) from exc
         except duckdb.Error as exc:
             raise QueryExecutionError(str(exc)) from exc
         finally:
+            executor.shutdown(wait=True, cancel_futures=True)
+            connection.close()
+
+    def inspect_query(
+        self,
+        handle: DatasetHandle,
+        sql: str,
+        *,
+        timeout_seconds: float | None = None,
+    ) -> QueryInspection:
+        """Validate and bind one read-only query against this Working Dataset."""
+        started = time.perf_counter()
+        effective_timeout = self._effective_timeout(timeout_seconds)
+        self._verify_handle(handle)
+        analysis = analyze_read_only_sql(sql, allowed_table=handle.table_name)
+        remaining = _remaining_seconds(started, effective_timeout)
+        if remaining <= 0:
+            raise QueryTimeoutError(
+                f"Query inspection exceeded the effective {effective_timeout}-second timeout"
+            )
+        connection = self._connect(handle.working_database_path)
+        executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="duckdb-inspect")
+
+        def execute() -> None:
+            connection.execute(f"EXPLAIN {analysis.normalized_sql}")
+
+        future = executor.submit(execute)
+        try:
+            future.result(timeout=remaining)
+        except FutureTimeoutError as exc:
+            connection.interrupt()
+            raise QueryTimeoutError(
+                f"Query inspection exceeded the effective {effective_timeout}-second timeout"
+            ) from exc
+        except duckdb.Error as exc:
+            raise QueryExecutionError(str(exc)) from exc
+        finally:
+            executor.shutdown(wait=True, cancel_futures=True)
             connection.close()
         return QueryInspection(
             normalized_sql=analysis.normalized_sql,
@@ -271,6 +386,9 @@ class TabularDataCore:
             filters=analysis.filters,
             filter_scopes=analysis.filter_scopes,
             dataset_count_scope=analysis.dataset_count_scope,
+            provenance_version=analysis.provenance_version,
+            base_relations=analysis.base_relations,
+            output_dependencies=analysis.output_dependencies,
         )
 
     def query(
@@ -281,17 +399,26 @@ class TabularDataCore:
         timeout_seconds: float | None = None,
     ) -> QueryResult:
         """Execute one validated read-only query against the session dataset."""
-        inspection = self.inspect_query(handle, sql)
-        normalized_sql = inspection.normalized_sql
-        if timeout_seconds is not None and timeout_seconds <= 0:
-            raise ValueError("timeout_seconds must be positive")
-        effective_timeout = min(
-            timeout_seconds or self._limits.query_timeout_seconds,
-            self._limits.query_timeout_seconds,
+        started = time.perf_counter()
+        effective_timeout = self._effective_timeout(timeout_seconds)
+        remaining = _remaining_seconds(started, effective_timeout)
+        if remaining <= 0:
+            raise QueryTimeoutError(
+                f"Query exceeded the effective {effective_timeout}-second timeout"
+            )
+        inspection = self.inspect_query(
+            handle,
+            sql,
+            timeout_seconds=remaining,
         )
+        normalized_sql = inspection.normalized_sql
+        remaining = _remaining_seconds(started, effective_timeout)
+        if remaining <= 0:
+            raise QueryTimeoutError(
+                f"Query exceeded the effective {effective_timeout}-second timeout"
+            )
         connection = self._connect(handle.working_database_path)
         executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="duckdb-query")
-        started = time.perf_counter()
 
         def execute() -> tuple[list[tuple[Any, ...]], tuple[QueryColumn, ...]]:
             wrapped = (
@@ -307,7 +434,7 @@ class TabularDataCore:
 
         future = executor.submit(execute)
         try:
-            raw_rows, columns = future.result(timeout=effective_timeout)
+            raw_rows, columns = future.result(timeout=remaining)
         except FutureTimeoutError as exc:
             connection.interrupt()
             raise QueryTimeoutError(
@@ -341,6 +468,103 @@ class TabularDataCore:
             filters=inspection.filters,
             filter_scopes=inspection.filter_scopes,
             dataset_count_scope=inspection.dataset_count_scope,
+            inspection=inspection,
+        )
+
+    def read_full(
+        self,
+        handle: DatasetHandle,
+        sql: str,
+        *,
+        timeout_seconds: float | None = None,
+    ) -> FullDataRead:
+        """Read every row of an approved input query for a statistical calculation.
+
+        Unlike :meth:`query`, this method never wraps the SQL in a presentation ``LIMIT``.  The
+        parent process owns the connection and interrupts it when the deadline expires.  The
+        returned rows are normalized immediately so the statistical worker receives only a
+        serializable payload and never needs access to DuckDB.
+        """
+        started = time.perf_counter()
+        effective_timeout = self._effective_timeout(timeout_seconds)
+        remaining = _remaining_seconds(started, effective_timeout)
+        if remaining <= 0:
+            raise QueryTimeoutError(
+                f"Full-data read exceeded the effective {effective_timeout}-second timeout"
+            )
+        inspection = self.inspect_query(
+            handle,
+            sql,
+            timeout_seconds=remaining,
+        )
+        remaining = _remaining_seconds(started, effective_timeout)
+        if remaining <= 0:
+            raise QueryTimeoutError(
+                f"Full-data read exceeded the effective {effective_timeout}-second timeout"
+            )
+        connection = self._connect(handle.working_database_path)
+        executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="duckdb-full-read")
+
+        def execute() -> tuple[int, list[tuple[Any, ...]], tuple[QueryColumn, ...]]:
+            dataset_row_count = int(
+                _require_row(
+                    connection.execute(
+                        f"SELECT COUNT(*) FROM {quote_identifier(handle.table_name)}"
+                    ).fetchone()
+                )[0]
+            )
+            cursor = connection.execute(inspection.normalized_sql)
+            raw_rows = cursor.fetchall()
+            columns = tuple(
+                QueryColumn(name=item[0], data_type=str(item[1])) for item in cursor.description
+            )
+            return dataset_row_count, raw_rows, columns
+
+        future = executor.submit(execute)
+        try:
+            dataset_row_count, raw_rows, columns = future.result(timeout=remaining)
+        except FutureTimeoutError as exc:
+            connection.interrupt()
+            raise QueryTimeoutError(
+                f"Full-data read exceeded the effective {effective_timeout}-second timeout"
+            ) from exc
+        except MemoryError as exc:
+            connection.interrupt()
+            raise QueryExecutionError(
+                "Full-data statistical input exceeded available memory"
+            ) from exc
+        except duckdb.Error as exc:
+            raise QueryExecutionError(str(exc)) from exc
+        finally:
+            executor.shutdown(wait=True, cancel_futures=True)
+            connection.close()
+
+        # Conversion belongs to the same end-to-end deadline, but runs in the parent thread so a
+        # timeout cannot leave a Python normalization loop alive in an abandoned executor thread.
+        try:
+            rows = _normalize_rows_with_deadline(
+                raw_rows,
+                deadline=started + effective_timeout,
+            )
+        except QueryTimeoutError:
+            raise
+        except MemoryError as exc:
+            raise QueryExecutionError(
+                "Full-data statistical input exceeded available memory"
+            ) from exc
+
+        duration_ms = max(0, round((time.perf_counter() - started) * 1000))
+        return FullDataRead(
+            sql=inspection.normalized_sql,
+            columns=columns,
+            rows=rows,
+            row_count=len(rows),
+            dataset_row_count=dataset_row_count,
+            population_row_count=len(rows),
+            dataset_id=handle.dataset.dataset_id,
+            working_dataset_version=handle.working_dataset_version,
+            duration_ms=duration_ms,
+            inspection=inspection,
         )
 
     def _inspect_xlsx(self, path: Path) -> tuple[str, ...]:
@@ -871,3 +1095,22 @@ def _require_row(row: tuple[Any, ...] | None) -> tuple[Any, ...]:
     if row is None:
         raise DatasetIntegrityError("Internal analytical query returned no result row")
     return row
+
+
+def _remaining_seconds(started: float, timeout_seconds: float) -> float:
+    """Return the remaining monotonic deadline budget, never as a negative timeout."""
+    return max(0.0, timeout_seconds - (time.perf_counter() - started))
+
+
+def _normalize_rows_with_deadline(
+    raw_rows: list[tuple[Any, ...]], *, deadline: float
+) -> tuple[tuple[Any, ...], ...]:
+    """Normalize database values while allowing the caller's full-read deadline to expire."""
+    rows: list[tuple[Any, ...]] = []
+    for index, row in enumerate(raw_rows):
+        if index % 256 == 0 and time.perf_counter() >= deadline:
+            raise QueryTimeoutError("Full-data read exceeded its end-to-end deadline")
+        rows.append(tuple(_normalize_scalar(value) for value in row))
+    if time.perf_counter() >= deadline:
+        raise QueryTimeoutError("Full-data read exceeded its end-to-end deadline")
+    return tuple(rows)

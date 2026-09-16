@@ -32,7 +32,32 @@ _DENIED_FUNCTIONS = {
     "read_parquet",
     "sqlite_scan",
 }
+# Functions whose value can change between executions of the same SQL text.  The SQL policy is
+# deliberately conservative here: deterministic analytical functions remain allowed, while a
+# volatile expression cannot be used as reproducible evidence.
+_VOLATILE_FUNCTIONS = {
+    "clock_timestamp",
+    "current_date",
+    "current_time",
+    "current_timestamp",
+    "currentdate",
+    "currenttime",
+    "currenttimestamp",
+    "gen_random_uuid",
+    "localtime",
+    "localtimestamp",
+    "now",
+    "random",
+    "rand",
+    "today",
+    "uuid",
+    "uuidv4",
+    "uuidv7",
+}
 _OUTPUT_ALIAS = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+# This dependency is a source relation marker, not a user field.  It lets verification
+# distinguish COUNT(*) from a literal output with no source columns.
+ROW_COUNT_DEPENDENCY = "__row_count__"
 
 
 @dataclass(frozen=True, slots=True)
@@ -45,6 +70,10 @@ class SQLAnalysis:
     filters: tuple[str, ...] = ()
     filter_scopes: tuple[FilterScope, ...] = ()
     dataset_count_scope: Literal["whole_dataset"] | None = None
+    # ``None`` is reserved for legacy/directly-created records.  The policy always emits v1.
+    provenance_version: Literal["v1"] | None = None
+    base_relations: tuple[str, ...] = ()
+    output_dependencies: tuple[tuple[str, tuple[str, ...]], ...] = ()
 
 
 def replace_column_references(sql: str, replacements: Mapping[str, str]) -> str:
@@ -187,6 +216,10 @@ def analyze_read_only_sql(sql: str, *, allowed_table: str) -> SQLAnalysis:
         raise UnsafeQueryError("Dynamic COLUMNS selectors are forbidden")
 
     cte_names = {cte.alias_or_name.casefold() for cte in statement.find_all(exp.CTE)}
+    if allowed_table.casefold() in cte_names:
+        raise UnsafeQueryError(
+            f"CTE name {allowed_table!r} is reserved for the session dataset and cannot be shadowed"
+        )
     allowed_names = {allowed_table.casefold(), *cte_names}
     referenced_tables = {
         table.name.casefold() for table in statement.find_all(exp.Table) if table.name
@@ -197,6 +230,19 @@ def analyze_read_only_sql(sql: str, *, allowed_table: str) -> SQLAnalysis:
         raise UnsafeQueryError(
             f"Query references tables outside this session: {names}. "
             f"The only available table is named {allowed_table!r}."
+        )
+
+    base_relations = tuple(
+        dict.fromkeys(
+            table.name
+            for table in statement.find_all(exp.Table)
+            if table.name and table.name.casefold() == allowed_table.casefold()
+        )
+    )
+    if not base_relations:
+        raise UnsafeQueryError(
+            f"Query must reference the session dataset table {allowed_table!r}; "
+            "a CTE or literal-only query is not a reproducible dataset analysis"
         )
 
     relation_identifiers = {
@@ -212,9 +258,13 @@ def analyze_read_only_sql(sql: str, *, allowed_table: str) -> SQLAnalysis:
         raise UnsafeQueryError("Table values cannot be used as scalar row structs")
 
     for function in statement.find_all(exp.Func):
-        name = str(function.name or function.key).casefold()
+        name = _function_name(function)
         if name.startswith("read_") or name in _DENIED_FUNCTIONS:
             raise UnsafeQueryError(f"External-access function is forbidden: {name}")
+        if name in _VOLATILE_FUNCTIONS:
+            raise UnsafeQueryError(
+                f"Volatile function is forbidden for reproducible evidence: {name}"
+            )
 
     _alias_calculated_outputs(statement)
     output_alias_references = _output_alias_references(statement)
@@ -243,6 +293,162 @@ def analyze_read_only_sql(sql: str, *, allowed_table: str) -> SQLAnalysis:
             if is_whole_dataset_count(statement, allowed_table=allowed_table)
             else None
         ),
+        provenance_version="v1",
+        base_relations=base_relations,
+        output_dependencies=_output_dependencies(statement, allowed_table=allowed_table),
+    )
+
+
+def _function_name(function: exp.Func) -> str:
+    """Return a stable lower-case function name for named and anonymous SQL functions."""
+    if isinstance(function, exp.Anonymous):
+        return str(function.this or "").casefold()
+    return str(function.name or function.key).casefold()
+
+
+def _output_dependencies(
+    statement: exp.Query,
+    *,
+    allowed_table: str,
+) -> tuple[tuple[str, tuple[str, ...]], ...]:
+    """Resolve outer output columns to source fields through SQLGlot scopes.
+
+    An empty dependency tuple means the output has no field dependency (for example a literal).
+    ``ROW_COUNT_DEPENDENCY`` marks COUNT(*) so it is not confused with a literal.  This is
+    intentionally a conservative lineage record: it identifies syntactic source columns and
+    does not claim that a business meaning or unit has been proved.
+    """
+    if not isinstance(statement, exp.Select):
+        return ()
+    try:
+        scopes = tuple(traverse_scope(statement))
+    except sqlglot.errors.SqlglotError:
+        return ()
+    scopes_by_expression = {id(scope.expression): scope for scope in scopes}
+    memo: dict[int, dict[str, tuple[str, ...]]] = {}
+
+    def source_map(scope: Scope) -> dict[str, dict[str, tuple[str, ...]]]:
+        result: dict[str, dict[str, tuple[str, ...]]] = {}
+        for alias, (_, source) in scope.selected_sources.items():
+            if isinstance(source, Scope):
+                result[alias.casefold()] = scope_outputs(source)
+            elif isinstance(source, exp.Table):
+                # SQL identifiers are case-insensitive.  SQLGlot may materialize a CTE
+                # reference with a Table node when the reference casing differs from the
+                # declaration (for example ``Totals`` versus ``TOTALS``).  Recover the
+                # corresponding scope before treating it as an external table.
+                cte_source = next(
+                    (
+                        candidate
+                        for name, candidate in scope.sources.items()
+                        if name.casefold() == alias.casefold() and isinstance(candidate, Scope)
+                    ),
+                    None,
+                )
+                if cte_source is not None:
+                    result[alias.casefold()] = scope_outputs(cte_source)
+                elif source.name.casefold() == allowed_table.casefold():
+                    # A base relation has no schema available to the SQL policy.  Any
+                    # resolved column is therefore represented by its own source field name.
+                    result[alias.casefold()] = {}
+        return result
+
+    def column_dependencies(
+        column: exp.Column,
+        scope: Scope,
+        sources: dict[str, dict[str, tuple[str, ...]]],
+    ) -> tuple[str, ...]:
+        def source_dependency(
+            relation: dict[str, tuple[str, ...]],
+            source_name: str,
+        ) -> tuple[str, ...]:
+            """Resolve a projected name using SQL's case-insensitive identifier rules."""
+            if not relation:
+                return (source_name,)
+            if source_name in relation:
+                return relation[source_name]
+            folded_name = source_name.casefold()
+            for name, dependencies in relation.items():
+                if name.casefold() == folded_name:
+                    return dependencies
+            return (source_name,)
+
+        name = column.name
+        if not name:
+            return ()
+        if column.table:
+            relation = sources.get(column.table.casefold())
+            if relation is None:
+                return ()
+            return source_dependency(relation, name)
+
+        matches: list[tuple[str, ...]] = []
+        for relation in sources.values():
+            matches.append(source_dependency(relation, name))
+        if matches:
+            return tuple(dict.fromkeys(item for match in matches for item in match))
+        # Correlated columns can be resolved in an outer scope.  The column name remains useful
+        # provenance even when SQLGlot does not expose the outer relation through this scope.
+        return (name,)
+
+    def expression_dependencies(
+        expression: exp.Expression,
+        scope: Scope,
+        sources: dict[str, dict[str, tuple[str, ...]]],
+    ) -> tuple[str, ...]:
+        if _is_count_star(expression):
+            return (ROW_COUNT_DEPENDENCY,)
+        dependencies: list[str] = []
+        if any(_count_uses_star(count) for count in expression.find_all(exp.Count)):
+            dependencies.append(ROW_COUNT_DEPENDENCY)
+        for column in expression.find_all(exp.Column):
+            dependencies.extend(column_dependencies(column, scope, sources))
+        return tuple(dict.fromkeys(dependencies))
+
+    def scope_outputs(scope: Scope) -> dict[str, tuple[str, ...]]:
+        key = id(scope)
+        if key in memo:
+            return memo[key]
+        sources = source_map(scope)
+        output: dict[str, tuple[str, ...]] = {}
+        # Store before descending so a malformed recursive CTE cannot recurse forever.
+        memo[key] = output
+        for projection in scope.expression.expressions:
+            name = projection.alias_or_name or projection.sql(dialect="duckdb")
+            output[name] = expression_dependencies(projection, scope, sources)
+        return output
+
+    outer_scope = scopes_by_expression.get(id(statement))
+    if outer_scope is None:
+        return ()
+    try:
+        output = scope_outputs(outer_scope)
+    except sqlglot.errors.SqlglotError:
+        # SQLGlot can reject malformed scope aliases (for example a duplicate JOIN alias) while
+        # lazily materializing ``selected_sources``.  Leave execution to DuckDB's existing
+        # schema/query error boundary instead of leaking an optimizer exception from inspection.
+        return ()
+    return tuple(
+        (
+            projection.alias_or_name or projection.sql(dialect="duckdb"),
+            output.get(projection.alias_or_name or projection.sql(dialect="duckdb"), ()),
+        )
+        for projection in statement.expressions
+    )
+
+
+def _is_count_star(expression: exp.Expression) -> bool:
+    """Identify COUNT(*) projections without treating COUNT(field) as a row-source marker."""
+    count = expression.this if isinstance(expression, exp.Alias) else expression
+    return isinstance(count, exp.Count) and _count_uses_star(count)
+
+
+def _count_uses_star(count: exp.Count) -> bool:
+    """Return whether a COUNT node counts rows rather than a source field."""
+    if not isinstance(count, exp.Count):
+        return False
+    return isinstance(count.this, exp.Star) or any(
+        isinstance(argument, exp.Star) for argument in count.args.get("expressions", ())
     )
 
 
