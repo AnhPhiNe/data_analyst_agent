@@ -78,9 +78,11 @@ result values of at most 50 rows.
 - Only one rectangular table per session: CSV, or one selected XLSX sheet, up to 100 MB by default.
   There are no joins across files.
 - Category values are not normalized. `Hà Nội`, `Hà Nội ` (trailing space), and `hà nội` stay
-  different values. The profile flags such fields and the SQL guidance asks for
+  different values in the data. The profile flags such fields. A statistical test groups the
+  flagged field's spellings together and labels each group with its most frequent spelling, so a
+  comparison is not split one group per spelling. SQL is different: the guidance asks the model for
   `LOWER(TRIM(...))` comparisons, but whether the generated query follows it depends on the model.
-  Spellings that differ in other ways, such as `Ha Noi` or `HN`, are not detected.
+  Spellings that differ in other ways, such as `Ha Noi` or `HN`, are not detected anywhere.
 - Numbers stored as text, such as `1.250.000` or `$4.99`, stay text in the profile. The agent must
   convert them in SQL, which it may not do.
 - Dates in ISO form (`2026-03-02`) are detected in any language. Other date formats are converted
@@ -88,6 +90,21 @@ result values of at most 50 rows.
   month-first forms such as `03/04/2026` can be read the wrong way.
 - Working Dataset transformations (cleaning, recoding) are a Should-tier feature and are not
   implemented.
+
+### Rows dropped by a SQL aggregate are not counted for you
+
+A statistical result reports how many observations it used and how many rows it excluded for
+missing values. A SQL aggregate does not. `AVG(rating)` over a column with empty cells silently
+ignores them, exactly as SQL defines, and the published claim states the average with no mention of
+how many rows were left out. The number is correct for the rows that had a value; what is missing
+is the disclosure.
+
+This is a gap in the full-data contract, which promises that excluded observations are stated. The
+contract is met on the statistical path and not on the SQL path, because `QueryResult` has no field
+to carry the count. Closing it means threading a per-column excluded count from execution through
+verification, claims, and exports, which was judged too broad a change to make while closing the
+MVP. Until then, read a SQL average or sum together with the field's missing count in the Data
+Profile.
 
 ## 6. Resource and quota limits
 
@@ -451,6 +468,26 @@ consumed the repair budget, each one failed a whole run and took its chart with 
 chart validity fell without the renderer changing. That round is preserved on its own branch and is
 not part of this code. The lesson is recorded here: a rule that can only reject needs a corpus of
 correct inputs, in the shapes models actually produce, that it must let through.
+
+**What manual testing found afterwards.** A hand session on an 840-row Vietnamese dataset
+written for the purpose, with deliberately inconsistent branch spellings, missing values, a
+personal-data column, and three measures that rank the branches differently, confirmed the parts
+this round was about: the profile reported both missing counts exactly, flagged the inconsistent
+spellings, the identifier column, and the personal-data column; a grouped total returned one row
+per branch with every figure correct; and an unranked "which is best" question asked which of the
+three measures was meant instead of choosing one. Three findings came out of it:
+
+- A statistical test grouped by a field with inconsistent spellings refused the analysis, reporting
+  that a group had two usable values when it had one hundred and twenty-nine. Each spelling had
+  become its own group. This is fixed, with regression tests; the fix is described in Section 5.
+- A SQL average did not say how many rows it skipped for missing values, as described in Section 5.
+  Recorded, not fixed.
+- After the clarification question above was answered with one measure, the analysis still computed
+  all of them: fourteen claims where four were asked for. The numbers were right and the question
+  was answered, but the answer was wider than the question. This is the same behaviour the final
+  holdout recorded on a different dataset, so it is not specific to one set of data. It is recorded
+  rather than fixed, because narrowing it means changing a prompt, and no unobserved set remains to
+  measure the change on.
 
 **The final holdout is no longer an unobserved set.** It was measured once as intended, then run
 again by each later round, at least three times in total. Its 30/30 is reported here as a

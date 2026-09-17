@@ -442,6 +442,18 @@ the outstanding Must-tier flows and reliability gates.
   Expectations were not edited. Two runs of one question also reported median, minimum, maximum, and
   standard deviation, which is correct but longer than asked; it is recorded as an observation, not
   fixed, under the agreed stop rule.
+- Manual Streamlit acceptance (2026-09-17, on `mvp-close`). A hand session on a purpose-written
+  840-row Vietnamese dataset, held outside the repository so no evaluation set was touched,
+  exercised the profile, a grouped total, an ambiguous ranking request, a two-group statistical
+  comparison, a grouped average over a column with missing values, and an unavailable metric.
+  Missing counts, the inconsistent-spelling warning, the identifier warning, and the possible-PII
+  warning were all reported correctly, every published figure matched an independently computed
+  expectation, the ambiguous request asked which of three measures was meant, and the unavailable
+  metric was refused with the dataset's numeric fields listed. One defect was found and fixed: a
+  statistical test grouped by a field with inconsistent spellings split into one group per spelling
+  and refused the analysis for too few values. Two findings were recorded without a change: a SQL
+  aggregate does not report the rows it skipped for missing values, and an answered clarification
+  does not narrow the analysis to the chosen measure (`docs/limitations.md` Sections 5 and 13).
 - Branch decision (2026-09-17). MVP closing continues on `mvp-close`, cut from the full-data
   checkpoint `8548f8d`, whose measurement is recorded in `docs/limitations.md` Section 13 and
   `docs/implementation-acceptance.md`. The later semantic-correctness round, implemented by another

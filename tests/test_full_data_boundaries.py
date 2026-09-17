@@ -8,7 +8,6 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from tests.worker_support import silent_statistical_worker
 
 import tabular_analytics_agent.data.core as data_core_module
 import tabular_analytics_agent.statistics.service as statistics_service
@@ -24,6 +23,7 @@ from tabular_analytics_agent.statistics import (
     StatisticalTool,
 )
 from tabular_analytics_agent.statistics.worker import statistical_worker_entry
+from tests.worker_support import silent_statistical_worker
 
 
 def _core_with_values(tmp_path: Path, count: int = 4) -> tuple[TabularDataCore, Any]:

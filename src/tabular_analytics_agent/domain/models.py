@@ -163,6 +163,24 @@ class FieldProfile(DomainModel):
         return self
 
 
+def spelling_key(value: str) -> str:
+    """Return the key that decides whether two spellings are the same value.
+
+    This is the Python counterpart of the profiler's SQL ``LOWER(TRIM(value))``, which defines
+    `INCONSISTENT_SPELLING_WARNING`. Both must agree, so the warning and anything that acts on it
+    group exactly the same values.
+    """
+    return value.strip().lower()
+
+
+def flags_inconsistent_spelling(field: FieldProfile | None) -> bool:
+    """True when the profiler reported that this field's values differ only by case or spaces."""
+    # The warning carries example spellings when the field is not possible PII, so match the prefix.
+    return field is not None and any(
+        warning.startswith(INCONSISTENT_SPELLING_WARNING) for warning in field.warnings
+    )
+
+
 class DataProfile(DomainModel):
     profile_id: UUID
     dataset: DatasetIdentity

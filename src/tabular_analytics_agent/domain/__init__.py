@@ -42,8 +42,10 @@ from tabular_analytics_agent.domain.models import (
     canonical_uuid,
     display_float,
     fingerprint_semantic_annotations,
+    flags_inconsistent_spelling,
     measure_field_names,
     semantic_fingerprint_matches,
+    spelling_key,
 )
 
 __all__ = [
@@ -88,6 +90,8 @@ __all__ = [
     "canonical_uuid",
     "display_float",
     "fingerprint_semantic_annotations",
+    "flags_inconsistent_spelling",
     "measure_field_names",
     "semantic_fingerprint_matches",
+    "spelling_key",
 ]

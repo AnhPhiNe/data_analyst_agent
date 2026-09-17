@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import multiprocessing as mp
 import time
+from collections import Counter, defaultdict
 from typing import Any, Self
 from uuid import uuid4
 
@@ -25,6 +26,8 @@ from tabular_analytics_agent.domain import (
     VerificationCheck,
     VerificationResult,
     VerificationStatus,
+    flags_inconsistent_spelling,
+    spelling_key,
 )
 from tabular_analytics_agent.statistics.errors import (
     InsufficientSampleError,
@@ -36,6 +39,7 @@ from tabular_analytics_agent.statistics.models import (
     StatisticalOperation,
     StatisticalRequest,
     StatisticalResult,
+    categorical_key_fields,
 )
 from tabular_analytics_agent.statistics.worker import statistical_worker_entry
 
@@ -111,9 +115,24 @@ class StatisticalTool:
         rows_loaded = full_read.row_count
         population_row_count = full_read.population_row_count
         dataset_row_count = full_read.dataset_row_count
-        result = _run_statistical_worker(
+        column_names = tuple(column.name for column in full_read.columns)
+        # A grouping key whose spellings differ only by case or spaces is one group, exactly as
+        # the profiler's warning says and as the SQL tool already treats it. Without this an
+        # analysis splits into one group per spelling and reports too few values to test.
+        spellings = _canonical_spellings_by_field(
             rows=full_read.rows,
-            columns=tuple(column.name for column in full_read.columns),
+            column_names=column_names,
+            fields=tuple(
+                name
+                for name in categorical_key_fields(request)
+                if flags_inconsistent_spelling(field_profiles.get(name))
+            ),
+        )
+        worker_rows = _with_canonical_spellings(full_read.rows, column_names, spellings)
+        request = _request_with_canonical_spellings(request, spellings)
+        result = _run_statistical_worker(
+            rows=worker_rows,
+            columns=column_names,
             request_payload=request.model_dump(mode="json"),
             deadline=started + effective_timeout,
         )
@@ -148,6 +167,7 @@ class StatisticalTool:
             inputs={
                 "request": request.reproducible_parameters(),
                 "input_sql": full_read.sql,
+                "spelling_normalized_fields": sorted(spellings),
                 "dataset_row_count": dataset_row_count,
                 "population_row_count": population_row_count,
                 "rows_loaded": rows_loaded,
@@ -169,6 +189,88 @@ class StatisticalTool:
             sampled=False,
             full_input_row_count=rows_loaded,
         )
+
+
+def _canonical_spellings_by_field(
+    *,
+    rows: tuple[tuple[Any, ...], ...],
+    column_names: tuple[str, ...],
+    fields: tuple[str, ...],
+) -> dict[str, dict[str, str]]:
+    """Choose one spelling to represent every set of spellings that mean the same value.
+
+    The most frequent spelling in the data wins, so a group keeps the name the data uses most
+    often; equally frequent spellings are broken by sort order, so the choice never depends on
+    row order. Fields with a single spelling per key are left out, since nothing needs mapping.
+    """
+    mappings: dict[str, dict[str, str]] = {}
+    for field in fields:
+        if field not in column_names:
+            continue
+        index = column_names.index(field)
+        counts: dict[str, Counter[str]] = defaultdict(Counter)
+        for row in rows:
+            value = row[index]
+            if isinstance(value, str):
+                counts[spelling_key(value)][value] += 1
+        mapping = {
+            key: max(sorted(spellings), key=spellings.__getitem__)
+            for key, spellings in counts.items()
+            if len(spellings) > 1
+        }
+        if mapping:
+            mappings[field] = mapping
+    return mappings
+
+
+def _with_canonical_spellings(
+    rows: tuple[tuple[Any, ...], ...],
+    column_names: tuple[str, ...],
+    mappings: dict[str, dict[str, str]],
+) -> tuple[tuple[Any, ...], ...]:
+    """Return the rows with each mapped field showing its representative spelling.
+
+    Only the copy handed to the worker changes. The Source Dataset, the Working Dataset, and the
+    recorded input query keep every original value.
+    """
+    if not mappings:
+        return rows
+    indexed = {column_names.index(field): mapping for field, mapping in mappings.items()}
+    rebuilt = []
+    for row in rows:
+        values = list(row)
+        for index, mapping in indexed.items():
+            value = values[index]
+            if isinstance(value, str):
+                values[index] = mapping.get(spelling_key(value), value)
+        rebuilt.append(tuple(values))
+    return tuple(rebuilt)
+
+
+def _request_with_canonical_spellings(
+    request: StatisticalRequest, mappings: dict[str, dict[str, str]]
+) -> StatisticalRequest:
+    """Rewrite request values that name a category so they match the grouped spelling."""
+    if not mappings:
+        return request
+
+    def canonical(field: str | None, value: Any) -> Any:
+        mapping = mappings.get(field or "")
+        if mapping is None or not isinstance(value, str):
+            return value
+        return mapping.get(spelling_key(value), value)
+
+    updates: dict[str, Any] = {}
+    if request.group_order:
+        rewritten = tuple(canonical(request.group_field, v) for v in request.group_order)
+        if rewritten != request.group_order:
+            updates["group_order"] = rewritten
+    positive_class = canonical(request.y_field, request.positive_class)
+    if positive_class != request.positive_class:
+        updates["positive_class"] = positive_class
+    if not updates:
+        return request
+    return StatisticalRequest.model_validate({**request.model_dump(), **updates})
 
 
 def _validate_field_types(request: StatisticalRequest, profiles: dict[str, FieldProfile]) -> None:

@@ -51,6 +51,9 @@ class _OperationRule:
     note: str
     two_groups: bool = False
     one_sided: bool = False
+    # Parameters naming a field whose values are grouping keys rather than measures. Spellings
+    # that differ only by case or spaces are the same key, so they are grouped together.
+    categorical_keys: tuple[str, ...] = ()
 
 
 _TWO_GROUP_NOTE = (
@@ -70,16 +73,20 @@ _OPERATION_RULES: dict[StatisticalOperation, _OperationRule] = {
         _TWO_GROUP_NOTE,
         two_groups=True,
         one_sided=True,
+        categorical_keys=("group_field",),
     ),
     StatisticalOperation.MANN_WHITNEY: _OperationRule(
         ("value_field", "group_field", "group_order"),
         _TWO_GROUP_NOTE,
         two_groups=True,
         one_sided=True,
+        categorical_keys=("group_field",),
     ),
-    StatisticalOperation.ANOVA: _OperationRule(("value_field", "group_field"), _MULTI_GROUP_NOTE),
+    StatisticalOperation.ANOVA: _OperationRule(
+        ("value_field", "group_field"), _MULTI_GROUP_NOTE, categorical_keys=("group_field",)
+    ),
     StatisticalOperation.KRUSKAL_WALLIS: _OperationRule(
-        ("value_field", "group_field"), _MULTI_GROUP_NOTE
+        ("value_field", "group_field"), _MULTI_GROUP_NOTE, categorical_keys=("group_field",)
     ),
     StatisticalOperation.CORRELATION: _OperationRule(
         ("x_field", "y_field"),
@@ -87,7 +94,9 @@ _OPERATION_RULES: dict[StatisticalOperation, _OperationRule] = {
         one_sided=True,
     ),
     StatisticalOperation.CHI_SQUARE: _OperationRule(
-        ("x_field", "y_field"), "x_field and y_field are the two categorical fields."
+        ("x_field", "y_field"),
+        "x_field and y_field are the two categorical fields.",
+        categorical_keys=("x_field", "y_field"),
     ),
     StatisticalOperation.LINEAR_REGRESSION: _OperationRule(
         ("x_field", "y_field"),
@@ -98,8 +107,16 @@ _OPERATION_RULES: dict[StatisticalOperation, _OperationRule] = {
         ("x_field", "y_field", "positive_class"),
         "x_field is the numeric predictor, y_field is the binary outcome, and positive_class "
         "is the outcome value counted as the event.",
+        categorical_keys=("y_field",),
     ),
 }
+
+
+def categorical_key_fields(request: StatisticalRequest) -> tuple[str, ...]:
+    """Return the request's field names whose values are grouping keys, not measures."""
+    rule = _OPERATION_RULES[request.operation]
+    names = (getattr(request, parameter) for parameter in rule.categorical_keys)
+    return tuple(dict.fromkeys(name for name in names if isinstance(name, str) and name))
 
 
 def parameter_guide(operation: StatisticalOperation) -> str:
