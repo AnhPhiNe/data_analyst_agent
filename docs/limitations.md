@@ -29,8 +29,10 @@ The same question can receive a different plan, SQL, chart type, or set of repor
 | v7 | 36/36 (100%) | clear questions and clean data, written to test the latest fixes |
 | v8 (hard) | 24/36 (66.7%) | messy values, vague and multi-step questions; see Section 10 |
 | v9 | 20/36 (55.6%) | measured the post-v8 fixes; 6 failures were chart-only; see Section 10 |
-| Release suite | 103/118 (87.3%) | 40 cases on unseen datasets, measured once; see Section 12 |
-| Final holdout | 29/29 (100%) | 10 cases on two more unseen datasets, measured once; see Section 12 |
+| Release suite, earlier code | 103/118 (87.3%) | 40 cases on unseen datasets; see Section 12 |
+| Final holdout, earlier code | 29/29 (100%) | 10 cases on two more unseen datasets; see Section 12 |
+| Release suite, this code | 108/120 (90.0%) | the same 40 cases after the full-data round; see Section 13 |
+| Final holdout, this code | 30/30 (100%) | the same 10 cases after the full-data round; see Section 13 |
 
 The gap between v7 and v8 is the most useful reading of these numbers: the agent is reliable on
 clear questions over clean data and much weaker when values are inconsistent or the question is
@@ -252,8 +254,10 @@ datasets from v8, so the two scores are not directly comparable.
 
 ## 12. What the release suite showed
 
-The release suite (40 cases on nine datasets not used in development, three runs per case,
-grading version 6) was run once at commit `096ff45` on 2026-09-15. Its expectations were not
+This section records the release suite's **first** run, on an earlier state of the code. Section 13
+records what the code in this repository scores on the same suite. The release suite (40 cases on
+nine datasets not used in development, three runs per case, grading version 6) was run at commit
+`096ff45` on 2026-09-15. Its expectations were not
 changed afterwards. 118 runs were graded; 2 runs ended in provider errors after retries (9 retries
 in total) and are reported separately. 103 of 118 runs passed (87.3%; 95% Wilson interval about
 80–92%).
@@ -393,3 +397,61 @@ One observation, not fixed: two runs of the completion-rate question also report
 median, minimum, maximum, and standard deviation, twenty claims where four were asked for. The
 numbers were correct; the answer was simply longer than the question. Under the agreed stop rule no
 further code change was made after this measurement.
+
+## 13. What this code measures
+
+Sections 10 and 12 describe earlier states of the code. This section describes what is in the
+repository now, measured after the full-data round removed automatic sampling, gave statistics their
+own full read path, added real execution deadlines, and recorded SQL provenance per output.
+
+Both suites were re-run at that state with their expectations unchanged. The release suite passed
+108 of 120 runs (90.0%; 95% Wilson interval about 83–94%) with no provider errors, and the final
+holdout passed 30 of 30 with every gate met.
+
+| Section 17.4 gate (threshold) | Release | Met | Final holdout | Met |
+|---|---|---|---|---|
+| Calculation accuracy (≥95%) | 161/177 (91.0%) | no | 66/66 | yes |
+| Schema grounding (100%) | 157/157 | yes | 42/42 | yes |
+| Unsupported-claim rate (≤2%) | 0/292 | yes | 0/115 | yes |
+| Tool execution success (≥95%) | 74/75 (98.7%) | yes | 21/21 | yes |
+| Chart validity (≥95%) | 56/60 (93.3%) | no | 18/18 | yes |
+| Evidence completeness (100%) | 292/292 | yes | 115/115 | yes |
+| Clarification recall (≥90%) | 30/30 | yes | 6/6 | yes |
+| End-to-end success (≥85%) | 108/120 (90.0%) | yes | 30/30 | yes |
+
+Two gates remain unmet on the release suite, both within four points of their threshold. Tool
+execution success, which the earlier code missed, is now met. The two suites together used 578,570
+prompt tokens and 83,453 output tokens; no cost is stated because no verified price was supplied to
+the runner.
+
+**The twelve remaining release failures.** Every one was read by hand, and each is confined to a
+single dataset:
+
+- Counting rows after removing exact duplicates returned 1 instead of 666, in all 3 runs: the claim
+  asserted the result's row count rather than the value inside that row.
+- A month-by-month revenue question over mixed date formats reported one grand total instead of a
+  figure per month, in all 3 runs.
+- A clearly worded ranking question stopped at `awaiting_semantic_review` in all 3 runs instead of
+  answering, so the evaluation, which has nobody to confirm the proposal, recorded no answer.
+- One run named the winning batch without its defect rate; one run reported a raw defect count
+  instead of the rate, and for the wrong group; one run exhausted its SQL repair budget on a
+  `50.0kg` conversion error.
+
+Under the rule this project uses — fix only a failure class seen on two or more datasets — none
+of these qualifies, so none was fixed. Fixing them individually would tune the code to these cases.
+
+**A later round was measured and rejected.** After the measurement above, a semantic-correctness
+round added a typed metric contract and an AST verifier for metric meaning. Offline it was green
+(615 tests, 90.70% coverage, strict mypy). Measured live it scored 92 of 120 with four of eight
+gates, and the two cases it was written to fix still failed all 3 runs. The main cause was
+verification that was too strict rather than model error: the rate check required a bare aggregate
+on each side of the division, so correct SQL such as `CAST(SUM(a) AS DOUBLE) / CAST(SUM(b) AS
+DOUBLE)` was rejected although it executed and returned the right numbers. Because a rejection
+consumed the repair budget, each one failed a whole run and took its chart with it, which is why
+chart validity fell without the renderer changing. That round is preserved on its own branch and is
+not part of this code. The lesson is recorded here: a rule that can only reject needs a corpus of
+correct inputs, in the shapes models actually produce, that it must let through.
+
+**The final holdout is no longer an unobserved set.** It was measured once as intended, then run
+again by each later round, at least three times in total. Its 30/30 is reported here as a
+confirmation and must not be used to decide a release. A future release decision needs a new set.

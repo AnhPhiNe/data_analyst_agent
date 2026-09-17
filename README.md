@@ -11,13 +11,13 @@ used automatically by the MVP.
 ## Status
 
 The MVP scope in [Spec.md](./Spec.md) is implemented, and 13 of the 14 acceptance criteria in Spec
-Section 21 are met. Criterion 11 is reported with both measurements: the 40-case release suite missed
-three of the eight quality gates (calculation accuracy 88.1%, tool execution 94.7%, chart validity
-91.5%), while the 10-case final holdout that measured the fixes afterwards met all eight on 29
-graded runs. Criterion 12 remains open, because Docker is not installed on the development machine,
-so the image has never been built; the check target that would verify it is included, and a clean
-virtual-environment check was run instead. Automated tests do not call a model. Evidence for every
-claim is in
+Section 21 are met. Criterion 11 is reported with both measurements of this code: the 40-case
+release suite missed two of the eight quality gates (calculation accuracy 91.0%, chart validity
+93.3%), while the 10-case final holdout met all eight on 30 graded runs. Criterion 12 remains open,
+because Docker is not installed on the development machine, so the image has never been built; the
+check target that would verify it is included, the repository's CI workflow builds both image
+targets once the repository is pushed to a remote, and a clean virtual-environment check was run
+instead. Automated tests do not call a model. Evidence for every claim is in
 [docs/mvp-acceptance.md](./docs/mvp-acceptance.md), and known weaknesses are in
 [docs/limitations.md](./docs/limitations.md).
 
@@ -82,8 +82,8 @@ in pandas and SciPy and committed before the first run. Every case runs 3 times 
 | v7 | 36/36 (100%) | admissions (Vietnamese), farm harvest; clear questions, clean data |
 | v8 | 24/36 (66.7%) | hard set: inconsistent spellings, numbers stored as text, vague and multi-step questions |
 | v9 | 20/36 (55.6%) | hotel bookings (Vietnamese), SaaS subscriptions; measured three fixes made after v8 |
-| Release | 103/118 (87.3%) | 40 cases on nine unseen datasets, questions written outside the repository, measured once |
-| Final holdout | 29/29 (100%) | 10 cases on two more unseen datasets, measuring the post-release fixes; all eight gates met |
+| Release | 108/120 (90.0%) | 40 cases on nine unseen datasets, questions written outside the repository; the earlier code scored 103/118 |
+| Final holdout | 30/30 (100%) | 10 cases on two more unseen datasets; all eight gates met |
 
 v7 and v8 bracket the realistic range: reliable on clear questions over clean data, much weaker on
 inconsistent values and vague requests. v9 confirmed that inconsistent spellings are now handled
@@ -91,11 +91,12 @@ and found new weak points: pooled multi-step answers, table-qualified field ids 
 for one-row results (six v9 failures were chart-only, with correct numbers). The samples are small
 (36 runs per set), so treat each score as a range, not a precise rate.
 
-The release suite is the headline measurement: 103 of 118 graded runs passed (95% interval about
-80–92%), with 2 provider errors reported separately. Five gates were met; calculation accuracy,
-tool execution success, and chart validity were not. Its expectations were never edited, and a
-strict re-check of output names reads calculation accuracy as 85.8% rather than 88.1%. Every run was
-also read by hand.
+The release suite is the headline measurement. Its 40 cases have been run twice, on two states of
+the code, with the expectations never edited between runs. The code in this repository scored 108 of
+120 (90.0%, 95% interval about 83–94%) with no provider errors: six of the eight gates were met,
+and calculation accuracy (91.0%) and chart validity (93.3%) were not. An earlier state of the code
+scored 103 of 118 and missed three gates; on that earlier run a strict re-check of output names read
+calculation accuracy as 85.8% rather than 88.1%. Every run of both was read by hand.
 
 The final holdout then measured the fixes made after that run, on two datasets written outside the
 repository: 29 of 29 graded runs passed and all eight gates were met, with one run lost to a provider

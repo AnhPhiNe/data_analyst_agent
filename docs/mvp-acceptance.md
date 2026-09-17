@@ -67,15 +67,19 @@ implementation is measured again.
 - Live evaluation is done: 109 committed cases (10 development, 15 first holdout, 2 contaminated,
   and 12 or 10 in each of holdout sets v3 to v9), each run 3 times with provider failures reported
   separately. Holdout expectations were never changed after a run. The 40-case release suite
-  was then measured once: 103/118 graded runs passed (see the verification record).
+  was then measured on two states of the code with its expectations unchanged: 103/118 graded runs
+  passed on the earlier state, and 108/120 on the code in this repository (see the verification
+  record and `docs/limitations.md` Section 13).
 - Section 17.4 quality gates were all met on the post-fix holdout v7 (36/36, every check 100%), and
   still are when re-graded with grading version 5, which gives each gate its own denominator.
   Earlier holdout sets (v3–v6) are development evidence after the fixes derived from them; their
-  denominators are recorded above. The release suite did not meet calculation accuracy, tool
-  execution success, or chart validity (`docs/limitations.md` Section 12). The 10-case final holdout
-  met all eight gates on 29 graded runs, which confirms the post-release fixes but does not replace
-  the release suite's larger sample; criterion 11 is therefore recorded as met on the final holdout
-  and not met on the release suite, with both results stated.
+  denominators are recorded above. On the code in this repository the release suite meets six of
+  the eight gates, missing calculation accuracy (161/177, 91.0%) and chart validity (56/60, 93.3%);
+  tool execution success, which the earlier code missed, is now met at 74/75 (`docs/limitations.md`
+  Section 13). The 10-case final holdout met all eight gates on 30 graded runs, which confirms the
+  round but does not replace the release suite's larger sample, and it has now been run enough times
+  that it is no longer an unobserved set. Criterion 11 is therefore recorded as met on the final
+  holdout and not met on the release suite, with both results stated.
 - Review semantic correctness and filter use in addition to deterministic number/evidence checks.
   A model-produced mapping makes a decision inspectable; it does not prove the meaning is correct.
 - Milestone 6 hardening tests are in `tests/test_hardening.py` and `tests/test_settings.py`
@@ -438,3 +442,12 @@ the outstanding Must-tier flows and reliability gates.
   Expectations were not edited. Two runs of one question also reported median, minimum, maximum, and
   standard deviation, which is correct but longer than asked; it is recorded as an observation, not
   fixed, under the agreed stop rule.
+- Branch decision (2026-09-17). MVP closing continues on `mvp-close`, cut from the full-data
+  checkpoint `8548f8d`, whose measurement is recorded in `docs/limitations.md` Section 13 and
+  `docs/implementation-acceptance.md`. The later semantic-correctness round, implemented by another
+  coding agent, is preserved unchanged on branch `codex/semantic-correctness` at `4ca72b7` and is
+  not part of this code: offline it passed 615 tests at 90.70% coverage, but measured live it scored
+  92/120 against 108/120, met four gates instead of six, and did not fix either of the two cases it
+  targeted. The cause was diagnosed from the executed SQL stored in that run's session checkpoints,
+  not from its report. Verified on `mvp-close` at commit `bb0b832`: 516 tests passed, 2 skipped,
+  branch-inclusive coverage 90.94%, Ruff, formatting, strict mypy, and `pip check` all pass.
