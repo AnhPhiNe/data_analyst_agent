@@ -510,3 +510,38 @@ def test_perfect_linear_fit_fails_instead_of_reporting_invalid_inference() -> No
                 y_field="y",
             ),
         )
+
+
+# Rank tests check similar spread instead, and that check carries no group name.
+@pytest.mark.parametrize("operation", [StatisticalOperation.ANOVA, StatisticalOperation.T_TEST])
+def test_assumption_names_read_the_group_value_not_its_encoding(
+    operation: StatisticalOperation,
+) -> None:
+    """A caveat names its group the way the data spells it, in any script.
+
+    Group labels are encoded with their type so values of different types cannot collide. That
+    encoding is storage, not prose: shown raw it turns 'Quan 1' into an escape sequence, which is
+    unreadable in every language that is not plain ASCII.
+    """
+    groups = ["Quan 1", "Thu Duc", "Go Vap"]
+    frame = pd.DataFrame(
+        {
+            "value": [3.0, 4.0, 5.0, 6.5, 2.0, 2.5, 3.5, 4.0, 7.0, 7.5, 8.0, 9.5],
+            "group": [groups[index // 4] for index in range(12)],
+        }
+    )
+    request = StatisticalRequest(
+        operation=operation,
+        value_field="value",
+        group_field="group",
+        group_order=("Quan 1", "Thu Duc") if operation is StatisticalOperation.T_TEST else (),
+    )
+    if operation is StatisticalOperation.T_TEST:
+        frame = frame[frame["group"] != "Go Vap"]
+
+    result = analyze(frame, request)
+
+    normality = [check.name for check in result.assumptions if check.name.startswith("normality")]
+    expected = groups[:2] if operation is StatisticalOperation.T_TEST else groups
+    assert sorted(normality) == sorted(f"normality:{group}" for group in expected)
+    assert not any("str:" in name for name in normality)

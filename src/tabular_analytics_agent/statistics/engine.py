@@ -198,7 +198,8 @@ def _t_test(frame: pd.DataFrame, request: StatisticalRequest) -> dict[str, Any]:
         p_value=float(test.pvalue),
         effect=effect,
         assumptions=tuple(
-            _normality_check(values, name=f"normality:{name}") for name, values in groups.items()
+            _normality_check(values, name=f"normality:{display_group_label(name)}")
+            for name, values in groups.items()
         ),
     )
 
@@ -264,7 +265,10 @@ def _anova(frame: pd.DataFrame, request: StatisticalRequest) -> dict[str, Any]:
     eta = 0.0 if total == 0 else float(between / total)
     effect = StatisticalEstimate(metric="eta_squared", value=eta)
     assumptions = [
-        *(_normality_check(values, name=f"normality:{name}") for name, values in groups.items()),
+        *(
+            _normality_check(values, name=f"normality:{display_group_label(name)}")
+            for name, values in groups.items()
+        ),
         _variance_check(groups),
     ]
     return _tested_payload(

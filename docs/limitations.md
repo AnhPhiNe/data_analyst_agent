@@ -482,6 +482,14 @@ three measures was meant instead of choosing one. Three findings came out of it:
   become its own group. This is fixed, with regression tests; the fix is described in Section 5.
 - A SQL average did not say how many rows it skipped for missing values, as described in Section 5.
   Recorded, not fixed.
+- A grouped comparison printed each group's assumption caveat with the group name still in its
+  stored form, so `Quận 1` read as `str:"Quận 1"`. Every non-ASCII group label was affected,
+  in any language. This is fixed, with regression tests.
+- A comparison of two named groups is refused when the field holds more than two values, because
+  the two-group tests require the whole field to have exactly two. `group_order` already names the
+  two groups to compare but is only used to order them, so "is A different from B" cannot be
+  answered for a field with more categories. Recorded, not fixed: a wider question over every
+  group, which runs ANOVA or Kruskal-Wallis, is answered correctly.
 - After the clarification question above was answered with one measure, the analysis still computed
   all of them: fourteen claims where four were asked for. The numbers were right and the question
   was answered, but the answer was wider than the question. This is the same behaviour the final
