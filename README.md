@@ -10,14 +10,14 @@ used automatically by the MVP.
 
 ## Status
 
-The MVP scope in [Spec.md](./Spec.md) is implemented, and 13 of the 14 acceptance criteria in Spec
-Section 21 are met. Criterion 11 is reported with both measurements of this code: the 40-case
+The MVP scope in [Spec.md](./Spec.md) is implemented, and all 14 acceptance criteria in Spec
+Section 21 are addressed. Criterion 12 is met: the repository's CI workflow builds both the
+`runtime` and the `check` image in a clean Linux environment, and the `check` image runs linting,
+formatting, strict type checking, and the full test suite inside itself; the first run on GitHub
+Actions passed both. Criterion 11 is reported with both measurements of this code: the 40-case
 release suite missed two of the eight quality gates (calculation accuracy 91.0%, chart validity
-93.3%), while the 10-case final holdout met all eight on 30 graded runs. Criterion 12 remains open,
-because Docker is not installed on the development machine, so the image has never been built; the
-check target that would verify it is included, the repository's CI workflow builds both image
-targets once the repository is pushed to a remote, and a clean virtual-environment check was run
-instead. Automated tests do not call a model. Evidence for every claim is in
+93.3%), while the 10-case final holdout met all eight on 30 graded runs. Automated tests do not
+call a model. Evidence for every claim is in
 [docs/mvp-acceptance.md](./docs/mvp-acceptance.md), and known weaknesses are in
 [docs/limitations.md](./docs/limitations.md).
 

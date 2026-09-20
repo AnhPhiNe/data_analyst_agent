@@ -47,7 +47,7 @@ implementation is measured again.
 | No automatic sampling or partial success | New `ToolAction.inputs`, result, evidence, trail, verification, and export carry `sampled=false`, null sampling fields, `partial=false`, `truncated=false`; timeout has no fallback | Passed: metadata and timeout regressions |
 | Hard timeout and cleanup | Read and Python calculation run in a terminable serializable worker; parent owns DuckDB/temp files; Windows uses `spawn` | Passed: spawned-worker marker/PID cleanup regression |
 | Legacy safety | Sampled or incomplete historical evidence is marked legacy/unverified and requires rerun before current publish/export | Passed: publication/export regression |
-| Runtime packaging | `.streamlit/config.toml` is included in runtime image | Docker unavailable on this host; inspect Dockerfile, build later |
+| Runtime packaging | `.streamlit/config.toml` is included in runtime image | Both image targets build in CI on a clean Linux runner |
 
 ## Release work still required
 
@@ -85,10 +85,12 @@ implementation is measured again.
 - Milestone 6 hardening tests are in `tests/test_hardening.py` and `tests/test_settings.py`
   (see the verification record). The Section 14.4 option that sends no row samples is implemented
   as `TABULAR_AGENT_SEND_SAMPLE_VALUES=false`.
-- Docker packaging is added (`Dockerfile` with runtime and check targets, `.dockerignore`, and
-  pinned `constraints.txt`), but the image has not been built: Docker is not installed on the
-  development machine. The clean-environment check of the documented setup is in the
-  verification record.
+- Docker packaging is complete and verified (criterion 12). The `Dockerfile` builds a `runtime`
+  image and a `check` image from pinned `constraints.txt`, with a `.dockerignore`. Docker is not
+  installed on the development machine, so the build is verified by the repository's CI workflow
+  instead: on the first push to GitHub the `docker` job built both targets on a clean Ubuntu runner,
+  and the `check` image ran Ruff, formatting, strict mypy, and the full test suite inside itself.
+  Both the `test` and the `docker` job passed (https://github.com/AnhPhiNe/data_analyst_agent/actions/runs/35497609765).
 - Documented limitations (`docs/limitations.md`), the portfolio README, and the architecture and
   agent workflow diagrams (`docs/architecture.md`) are written, and an MIT `LICENSE` file matches
   the license declared in `pyproject.toml`. By the user's decision, screenshots, a demo video,
