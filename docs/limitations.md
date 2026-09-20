@@ -137,6 +137,11 @@ Profile.
 - The Data Overview and explorer are descriptive. They run no significance test, show at most 20
   groups, filter on at most 3 fields, and never produce Verified Insights.
 
+- A box plot is available as a chart type and can be chosen with "Change chart type" over a
+  verified result that has the raw values it needs. The model does not yet propose a box plot on its
+  own; wiring it into the chart prompt changes model behaviour and is deferred until it can be
+  measured on a fresh holdout.
+
 ## 8. Deployment model
 
 - Streamlit runs as a single-user local application with no authentication or multi-user access

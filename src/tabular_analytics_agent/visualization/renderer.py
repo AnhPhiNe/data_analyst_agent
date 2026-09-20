@@ -35,6 +35,7 @@ SUPPORTED_ARTIFACT_TYPES = (
     ArtifactType.BAR,
     ArtifactType.LINE,
     ArtifactType.SCATTER,
+    ArtifactType.BOX_PLOT,
 )
 _SUPPORTED_TYPES = frozenset(SUPPORTED_ARTIFACT_TYPES)
 _NUMERIC_TYPE_MARKERS = (
@@ -262,6 +263,12 @@ def retarget_chart_intent(
             for name in dict.fromkeys((*intent.y_fields, *numeric))
             if name in numeric and name != x_field
         )
+    elif artifact_type is ArtifactType.BOX_PLOT:
+        # The value is numeric; an optional categorical x splits the distribution into boxes.
+        y_field = first((*intent.y_fields, *numeric), numeric)
+        y_fields = (y_field,) if y_field else ()
+        labels = [name for name in names if name not in numeric]
+        x_field = first((intent.x_field, *labels), labels, skip=y_field)
     return ChartIntent.model_validate(
         {
             **intent.model_dump(),
@@ -303,6 +310,7 @@ def render_chart(
         ArtifactType.BAR: _render_bar,
         ArtifactType.LINE: _render_line,
         ArtifactType.SCATTER: _render_scatter,
+        ArtifactType.BOX_PLOT: _render_box,
     }
     figure = renderers[intent.artifact_type](intent, rows)
     _apply_layout(figure, intent)
@@ -337,6 +345,10 @@ def _structural_errors(intent: ChartIntent) -> tuple[str, ...]:
         not intent.x_field or len(intent.y_fields) != 1 or intent.x_field == intent.y_fields[0]
     ):
         errors.append("Scatter requires distinct x and y fields")
+    elif chart_type is ArtifactType.BOX_PLOT and (
+        len(intent.y_fields) != 1 or intent.color_field or intent.x_field == intent.y_fields[0]
+    ):
+        errors.append("Box plot requires one y field, an optional distinct x group, and no color")
     return tuple(errors)
 
 
@@ -353,6 +365,8 @@ def _type_errors(intent: ChartIntent, column_types: dict[str, str]) -> tuple[str
         numeric_fields = tuple(
             field for field in (intent.x_field, *intent.y_fields) if field is not None
         )
+    elif intent.artifact_type is ArtifactType.BOX_PLOT:
+        numeric_fields = intent.y_fields
     invalid_numeric = [field for field in numeric_fields if not _is_numeric(column_types[field])]
     if invalid_numeric:
         errors.append("Numeric encodings required for: " + ", ".join(invalid_numeric))
@@ -415,10 +429,16 @@ def _readability_errors(intent: ChartIntent, result: QueryResult) -> tuple[str, 
                 "Bar chart requires one verified row per x and color key; aggregate the query first"
             )
     if (
-        intent.artifact_type in {ArtifactType.LINE, ArtifactType.SCATTER}
+        intent.artifact_type in {ArtifactType.LINE, ArtifactType.SCATTER, ArtifactType.BOX_PLOT}
         and result.row_count > _MAX_POINT_ROWS
     ):
         errors.append(f"Chart exceeds the {_MAX_POINT_ROWS}-point limit")
+    if (
+        intent.artifact_type is ArtifactType.BOX_PLOT
+        and intent.x_field
+        and len(set(values[intent.x_field])) > _MAX_BAR_CATEGORIES
+    ):
+        errors.append(f"Box plot exceeds the {_MAX_BAR_CATEGORIES}-group limit")
     if intent.color_field and len(set(values[intent.color_field])) > _MAX_COLOR_GROUPS:
         errors.append(f"Color encoding exceeds the {_MAX_COLOR_GROUPS}-group limit")
     return tuple(errors)
@@ -473,6 +493,18 @@ def _render_line(intent: ChartIntent, rows: list[dict[str, Any]]) -> go.Figure:
 
 def _render_scatter(intent: ChartIntent, rows: list[dict[str, Any]]) -> go.Figure:
     return _render_xy(intent, rows, lambda **kwargs: go.Scatter(mode="markers", **kwargs))
+
+
+def _render_box(intent: ChartIntent, rows: list[dict[str, Any]]) -> go.Figure:
+    value_field = intent.y_fields[0]
+    y_values = [row[value_field] for row in rows]
+    name = intent.labels.get(value_field, value_field)
+    if intent.x_field:
+        figure = go.Figure(go.Box(y=y_values, x=[row[intent.x_field] for row in rows], name=name))
+        # The x values are group labels, not a continuous axis.
+        figure.update_xaxes(type="category")
+        return figure
+    return go.Figure(go.Box(y=y_values, name=name))
 
 
 def _render_xy(

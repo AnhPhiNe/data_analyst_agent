@@ -46,9 +46,9 @@ environment status.
   returned for display or model context.
 - **Verified Insights.** Every conclusion links to its evidence: the exact query or test, source
   fields, filters, and values. Claims that fail a gate are shown as unsupported.
-- **Dashboard and export.** Validated Plotly charts can be pinned, and a candidate can be shown as
-  another chart type over the same verified result without another model call. Results export to CSV
-  and JSON.
+- **Dashboard and export.** Validated Plotly charts can be pinned. The chart vocabulary is KPI,
+  table, bar, line, scatter, histogram, and box plot, and a candidate can be shown as another of
+  these over the same verified result without another model call. Results export to CSV and JSON.
 - **Durable sessions.** Checkpointed with LangGraph and SQLite; sessions survive restarts and can be
   deleted.
 

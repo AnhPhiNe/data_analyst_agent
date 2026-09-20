@@ -19,11 +19,13 @@ from tabular_analytics_agent.domain import (
     VerificationStatus,
 )
 from tabular_analytics_agent.visualization import (
+    SUPPORTED_ARTIFACT_TYPES,
     ChartRenderResult,
     ChartValidationError,
     exact_number_format,
     make_query_result_reference,
     render_chart,
+    retarget_chart_intent,
     validate_chart_intent,
 )
 
@@ -113,6 +115,7 @@ def confirmed_revenue_annotation(*, meaning: str = "Gross sales") -> SemanticAnn
         (ArtifactType.BAR, "month", ("revenue",), "bar"),
         (ArtifactType.LINE, "month", ("revenue",), "scatter"),
         (ArtifactType.SCATTER, "quantity", ("revenue",), "scatter"),
+        (ArtifactType.BOX_PLOT, "region", ("revenue",), "box"),
     ],
 )
 def test_supported_charts_render_json_safe_plotly_specs(
@@ -481,3 +484,76 @@ def test_bar_requires_query_to_produce_unique_aggregate_keys() -> None:
 
     with pytest.raises(ChartValidationError, match="aggregate the query first"):
         render_chart(candidate, result, verified_action(result))
+
+
+def test_box_plot_shows_a_distribution_per_group_from_raw_rows() -> None:
+    """A box plot draws the value field's spread, split by an optional categorical group.
+
+    Like a histogram, it consumes the verified result's rows directly rather than an aggregate,
+    so it belongs on the agent's supported set and pairs with the group-comparison statistics.
+    """
+    result = sales_result()
+    grouped = render_chart(
+        intent(result, ArtifactType.BOX_PLOT, x_field="region", y_fields=("revenue",)),
+        result,
+        verified_action(result),
+    )
+    trace = grouped.plotly_spec["data"][0]
+    assert trace["type"] == "box"
+    assert list(trace["y"]) == [100.0, 150.0, 125.0]
+    assert list(trace["x"]) == ["North", "South", "North"]
+
+    ungrouped = render_chart(
+        intent(result, ArtifactType.BOX_PLOT, y_fields=("revenue",)),
+        result,
+        verified_action(result),
+    )
+    assert ungrouped.plotly_spec["data"][0]["type"] == "box"
+    assert (
+        "x" not in ungrouped.plotly_spec["data"][0] or ungrouped.plotly_spec["data"][0]["x"] is None
+    )
+
+
+def test_box_plot_requires_a_single_numeric_value_field() -> None:
+    result = sales_result()
+    action = verified_action(result)
+
+    with pytest.raises(ChartValidationError, match=r"[Nn]umeric"):
+        render_chart(
+            intent(result, ArtifactType.BOX_PLOT, x_field="revenue", y_fields=("region",)),
+            result,
+            action,
+        )
+    two_values = validate_chart_intent(
+        intent(result, ArtifactType.BOX_PLOT, x_field="region", y_fields=("revenue", "quantity")),
+        result,
+        action,
+    )
+    assert two_values.status is VerificationStatus.FAILED
+
+
+def test_box_plot_is_a_supported_retarget_target() -> None:
+    result = sales_result()
+    assert ArtifactType.BOX_PLOT in SUPPORTED_ARTIFACT_TYPES
+    bar = intent(result, ArtifactType.BAR, x_field="region", y_fields=("revenue",))
+
+    retargeted = retarget_chart_intent(bar, result, ArtifactType.BOX_PLOT)
+
+    assert retargeted.artifact_type is ArtifactType.BOX_PLOT
+    assert retargeted.y_fields == ("revenue",)
+    assert retargeted.x_field == "region"
+    render_chart(retargeted, result, verified_action(result))
+
+
+def test_stacked_bar_is_no_longer_a_chart_type() -> None:
+    """The unused enum value was removed; the supported set is the agent's chart vocabulary."""
+    assert "stacked_bar" not in {member.value for member in ArtifactType}
+    assert set(SUPPORTED_ARTIFACT_TYPES) == {
+        ArtifactType.KPI,
+        ArtifactType.TABLE,
+        ArtifactType.HISTOGRAM,
+        ArtifactType.BAR,
+        ArtifactType.LINE,
+        ArtifactType.SCATTER,
+        ArtifactType.BOX_PLOT,
+    }

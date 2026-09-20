@@ -101,7 +101,6 @@ class ArtifactType(StrEnum):
     LINE = "line"
     SCATTER = "scatter"
     HEATMAP = "heatmap"
-    STACKED_BAR = "stacked_bar"
     MISSING_VALUES = "missing_values"
 
 
