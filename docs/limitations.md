@@ -422,9 +422,16 @@ further code change was made after this measurement.
 
 ## 13. What this code measures
 
-Sections 10 and 12 describe earlier states of the code. This section describes what is in the
-repository now, measured after the full-data round removed automatic sampling, gave statistics their
-own full read path, added real execution deadlines, and recorded SQL provenance per output.
+Sections 10 and 12 describe earlier states of the code. This section describes commit `8548f8d`,
+measured after the full-data round removed automatic sampling, gave statistics their own full read
+path, added real execution deadlines, and recorded SQL provenance per output.
+
+Three code commits landed after that measurement and have not been measured live, because each was
+checked against the suites and cannot reach what they grade. Grouping a statistical key field by
+spelling applies only where the profiler flagged a field, and no release or final case runs a
+statistical test over a flagged field. Printing a group's assumption caveat by its value changes
+only a displayed name, which no gate grades. The box plot is not offered to the model, so no
+proposed chart can use it, and the `stacked_bar` value it replaced was referenced nowhere.
 
 Both suites were re-run at that state with their expectations unchanged. The release suite passed
 108 of 120 runs (90.0%; 95% Wilson interval about 83–94%) with no provider errors, and the final
