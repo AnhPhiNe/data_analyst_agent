@@ -16,6 +16,7 @@ from tabular_analytics_agent.data import (
     QueryResult,
     TabularDataCore,
     quote_identifier,
+    remaining_seconds,
 )
 from tabular_analytics_agent.domain import (
     ActionStatus,
@@ -91,7 +92,7 @@ class StatisticalTool:
         timeout_seconds: float | None = None,
     ) -> StatisticalToolOutput:
         started = time.perf_counter()
-        effective_timeout = _effective_timeout(self._data_core, timeout_seconds)
+        effective_timeout = self._data_core.limits.effective_timeout(timeout_seconds)
         if handle.dataset != profile.dataset:
             raise StatisticalAnalysisError(
                 "DatasetHandle and DataProfile must describe the same Source Dataset"
@@ -104,7 +105,7 @@ class StatisticalTool:
 
         quoted_fields = ", ".join(quote_identifier(field) for field in request.source_fields)
         extraction_sql = f"SELECT {quoted_fields} FROM {quote_identifier(handle.table_name)}"
-        remaining = _remaining_seconds(started, effective_timeout)
+        remaining = remaining_seconds(started, effective_timeout)
         if remaining <= 0:
             raise StatisticalTimeoutError("Statistical analysis exceeded its execution deadline")
         full_read = self._data_core.read_full(
@@ -390,19 +391,6 @@ def _verify_statistical_result(
         else VerificationStatus.FAILED
     )
     return VerificationResult(status=status, checks=checks)
-
-
-def _effective_timeout(data_core: TabularDataCore, timeout_seconds: float | None) -> float:
-    if timeout_seconds is not None and timeout_seconds <= 0:
-        raise ValueError("timeout_seconds must be positive")
-    return min(
-        timeout_seconds or data_core.limits.query_timeout_seconds,
-        data_core.limits.query_timeout_seconds,
-    )
-
-
-def _remaining_seconds(started: float, timeout_seconds: float) -> float:
-    return max(0.0, timeout_seconds - (time.perf_counter() - started))
 
 
 def _run_statistical_worker(

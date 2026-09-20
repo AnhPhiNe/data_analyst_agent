@@ -220,7 +220,7 @@ def test_statistical_tool_rejects_expired_deadline_before_read(
         operation=StatisticalOperation.DESCRIPTIVE,
         value_fields=("value",),
     )
-    monkeypatch.setattr(statistics_service, "_remaining_seconds", lambda *_args: 0.0)
+    monkeypatch.setattr(statistics_service, "remaining_seconds", lambda *_args: 0.0)
 
     with pytest.raises(StatisticalTimeoutError, match="execution deadline"):
         StatisticalTool(core).execute(

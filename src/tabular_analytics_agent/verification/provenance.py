@@ -20,6 +20,16 @@ _FULL_DATA_FIELDS = (
 )
 
 
+EvidenceResult = QueryResult | StatisticalResult
+
+
+def result_reference(result: EvidenceResult) -> str:
+    """Return the stable reference string a Tool Action stores for a result."""
+    if isinstance(result, QueryResult):
+        return f"query-result:{result.query_id}"
+    return f"statistical-result:{result.result_id}"
+
+
 def statistical_full_data_status(result: StatisticalResult) -> tuple[bool, str]:
     """Return whether a statistical result explicitly satisfies the MVP full-data contract."""
     missing = [name for name in _FULL_DATA_FIELDS if getattr(result, name, None) is None]

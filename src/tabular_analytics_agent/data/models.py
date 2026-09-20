@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from pathlib import Path
 from typing import Annotated, Literal
 from uuid import UUID
@@ -26,6 +27,17 @@ class DataCoreLimits(DataModel):
     query_timeout_seconds: PositiveInt = 30
     duckdb_memory_limit_mb: PositiveInt = 512
     profile_top_values: PositiveInt = 5
+
+    def effective_timeout(self, requested_seconds: float | None) -> float:
+        """Clamp a requested timeout to the configured query budget, never above it."""
+        if requested_seconds is not None and requested_seconds <= 0:
+            raise ValueError("timeout_seconds must be positive")
+        return min(requested_seconds or self.query_timeout_seconds, self.query_timeout_seconds)
+
+
+def remaining_seconds(started: float, timeout_seconds: float) -> float:
+    """Return the remaining monotonic deadline budget, never as a negative timeout."""
+    return max(0.0, timeout_seconds - (time.perf_counter() - started))
 
 
 class UploadInspection(DataModel):

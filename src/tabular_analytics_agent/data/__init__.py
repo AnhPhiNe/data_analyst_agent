@@ -20,6 +20,7 @@ from tabular_analytics_agent.data.models import (
     QueryInspection,
     QueryResult,
     UploadInspection,
+    remaining_seconds,
 )
 from tabular_analytics_agent.data.sql_policy import (
     ROW_COUNT_DEPENDENCY,
@@ -54,5 +55,6 @@ __all__ = [
     "analyze_read_only_sql",
     "generated_alias_function",
     "quote_identifier",
+    "remaining_seconds",
     "replace_column_references",
 ]

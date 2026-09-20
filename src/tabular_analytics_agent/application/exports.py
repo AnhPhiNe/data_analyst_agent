@@ -28,14 +28,15 @@ from tabular_analytics_agent.domain import (
 )
 from tabular_analytics_agent.statistics import StatisticalResult
 from tabular_analytics_agent.verification.provenance import (
+    EvidenceResult,
     query_provenance_status,
+    result_reference,
     statistical_action_status,
 )
 
 EXPORT_SCHEMA_VERSION: Final[str] = "1"
 EXPORT_TYPE: Final[str] = "verified_insights"
 
-EvidenceResult = QueryResult | StatisticalResult
 _FORMULA_PREFIXES: Final = frozenset({"=", "+", "-", "@"})
 
 
@@ -165,7 +166,7 @@ def export_verified_insights_json(request: ExportRequest) -> bytes:
     counts plus full statistical estimates and parameters.
     """
     results = evidence_results(request)
-    refs = {_result_reference(result) for result in results}
+    refs = {result_reference(result) for result in results}
     dataset = request.profile.dataset
     payload: dict[str, Any] = {
         "schema_version": EXPORT_SCHEMA_VERSION,
@@ -225,14 +226,8 @@ def export_query_result_csv(
     return output.getvalue().encode("utf-8-sig")
 
 
-def _result_reference(result: EvidenceResult) -> str:
-    if isinstance(result, QueryResult):
-        return f"query-result:{result.query_id}"
-    return f"statistical-result:{result.result_id}"
-
-
 def _result_metadata(result: EvidenceResult) -> dict[str, Any]:
-    reference = {"result_ref": _result_reference(result)}
+    reference = {"result_ref": result_reference(result)}
     if isinstance(result, QueryResult):
         return {
             **reference,

@@ -32,8 +32,10 @@ from tabular_analytics_agent.statistics import (
     display_group_label,
 )
 from tabular_analytics_agent.verification.provenance import (
+    EvidenceResult,
     query_claim_status,
     query_provenance_status,
+    result_reference,
     statistical_action_status,
     statistical_full_data_status,
 )
@@ -42,7 +44,6 @@ from tabular_analytics_agent.verification.query_evidence import (
 )
 
 InsightPublication = VerifiedInsight | UnsupportedClaim
-EvidenceResult = QueryResult | StatisticalResult
 
 
 def available_evidence_values(result: EvidenceResult) -> tuple[EvidenceValue, ...]:
@@ -141,7 +142,7 @@ def publish_insight(
         if isinstance(result, QueryResult)
         else action.working_dataset_version
     )
-    result_reference_matches = action.output_ref == _result_reference(result)
+    result_reference_matches = action.output_ref == result_reference(result)
     if isinstance(result, QueryResult):
         provenance_passed, provenance_message = query_provenance_status(result)
         claimed_metrics = tuple(
@@ -361,12 +362,6 @@ def _result_caveats(result: EvidenceResult) -> tuple[str, ...]:
         if check.status is not AssumptionStatus.PASSED
     )
     return (*result.warnings, *assumption_caveats)
-
-
-def _result_reference(result: EvidenceResult) -> str:
-    if isinstance(result, QueryResult):
-        return f"query-result:{result.query_id}"
-    return f"statistical-result:{result.result_id}"
 
 
 def _evaluate_assertion(

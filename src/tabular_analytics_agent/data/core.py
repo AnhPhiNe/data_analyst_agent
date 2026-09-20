@@ -42,6 +42,7 @@ from tabular_analytics_agent.data.models import (
     QueryInspection,
     QueryResult,
     UploadInspection,
+    remaining_seconds,
 )
 from tabular_analytics_agent.data.sql_policy import analyze_read_only_sql, quote_identifier
 from tabular_analytics_agent.domain import (
@@ -170,12 +171,7 @@ class TabularDataCore:
         return self._limits
 
     def _effective_timeout(self, timeout_seconds: float | None) -> float:
-        if timeout_seconds is not None and timeout_seconds <= 0:
-            raise ValueError("timeout_seconds must be positive")
-        return min(
-            timeout_seconds or self._limits.query_timeout_seconds,
-            self._limits.query_timeout_seconds,
-        )
+        return self._limits.effective_timeout(timeout_seconds)
 
     def inspect(self, upload_path: Path) -> UploadInspection:
         """Validate an upload and return facts required before ingestion."""
@@ -289,7 +285,7 @@ class TabularDataCore:
         started = time.perf_counter()
         effective_timeout = self._effective_timeout(timeout_seconds)
         self._verify_handle(handle)
-        remaining = _remaining_seconds(started, effective_timeout)
+        remaining = remaining_seconds(started, effective_timeout)
         if remaining <= 0:
             raise QueryTimeoutError(
                 f"Profiling exceeded the effective {effective_timeout}-second timeout"
@@ -353,7 +349,7 @@ class TabularDataCore:
         effective_timeout = self._effective_timeout(timeout_seconds)
         self._verify_handle(handle)
         analysis = analyze_read_only_sql(sql, allowed_table=handle.table_name)
-        remaining = _remaining_seconds(started, effective_timeout)
+        remaining = remaining_seconds(started, effective_timeout)
         if remaining <= 0:
             raise QueryTimeoutError(
                 f"Query inspection exceeded the effective {effective_timeout}-second timeout"
@@ -401,7 +397,7 @@ class TabularDataCore:
         """Execute one validated read-only query against the session dataset."""
         started = time.perf_counter()
         effective_timeout = self._effective_timeout(timeout_seconds)
-        remaining = _remaining_seconds(started, effective_timeout)
+        remaining = remaining_seconds(started, effective_timeout)
         if remaining <= 0:
             raise QueryTimeoutError(
                 f"Query exceeded the effective {effective_timeout}-second timeout"
@@ -412,7 +408,7 @@ class TabularDataCore:
             timeout_seconds=remaining,
         )
         normalized_sql = inspection.normalized_sql
-        remaining = _remaining_seconds(started, effective_timeout)
+        remaining = remaining_seconds(started, effective_timeout)
         if remaining <= 0:
             raise QueryTimeoutError(
                 f"Query exceeded the effective {effective_timeout}-second timeout"
@@ -487,7 +483,7 @@ class TabularDataCore:
         """
         started = time.perf_counter()
         effective_timeout = self._effective_timeout(timeout_seconds)
-        remaining = _remaining_seconds(started, effective_timeout)
+        remaining = remaining_seconds(started, effective_timeout)
         if remaining <= 0:
             raise QueryTimeoutError(
                 f"Full-data read exceeded the effective {effective_timeout}-second timeout"
@@ -497,7 +493,7 @@ class TabularDataCore:
             sql,
             timeout_seconds=remaining,
         )
-        remaining = _remaining_seconds(started, effective_timeout)
+        remaining = remaining_seconds(started, effective_timeout)
         if remaining <= 0:
             raise QueryTimeoutError(
                 f"Full-data read exceeded the effective {effective_timeout}-second timeout"
@@ -1095,11 +1091,6 @@ def _require_row(row: tuple[Any, ...] | None) -> tuple[Any, ...]:
     if row is None:
         raise DatasetIntegrityError("Internal analytical query returned no result row")
     return row
-
-
-def _remaining_seconds(started: float, timeout_seconds: float) -> float:
-    """Return the remaining monotonic deadline budget, never as a negative timeout."""
-    return max(0.0, timeout_seconds - (time.perf_counter() - started))
 
 
 def _normalize_rows_with_deadline(
