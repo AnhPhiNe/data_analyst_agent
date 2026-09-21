@@ -11,6 +11,10 @@ so a number a user sees always traces back to a query or a statistical test, not
 Statistical calculations run on all rows in the approved analysis scope; the MVP never samples
 automatically.
 
+**▶ Live demo:** <https://tabular-analyst-agent.streamlit.app/> — deployed on Streamlit Community
+Cloud. It runs on a free Gemini tier, so analysis may be rate-limited; the deterministic parts
+(upload, Data Profile, Data Overview) work regardless.
+
 - **Stack:** Python 3.12 · LangGraph · DuckDB · NumPy/SciPy · sqlglot · Plotly · Streamlit ·
   Pydantic v2 · Gemini (`gemini-3.5-flash-lite`)
 - **Quality:** ~530 automated tests (none call a model), branch coverage ≥ 90%, strict mypy, Ruff,
@@ -18,7 +22,8 @@ automatically.
 
 ## Screenshots
 
-_Screenshots and a short demo video will be added here._
+Try it live at <https://tabular-analyst-agent.streamlit.app/>. Screenshots and a short demo video
+will be added here.
 
 <!--
 Save images to docs/images/ then uncomment and adjust the paths below.
