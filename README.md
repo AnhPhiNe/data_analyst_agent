@@ -166,19 +166,22 @@ chart validation are deterministic, so the same evidence always yields the same 
 
 ## Evaluation
 
-The agent is measured with an offline **evaluation runner** against golden cases on held-out
-datasets. Numerical correctness is graded deterministically; natural-language quality is reviewed by
-hand against a rubric.
+The agent is measured with an **evaluation runner** that calls the real Gemini model against golden
+cases and grades its output with deterministic code; natural-language quality is reviewed by hand
+against a rubric. (The automated unit tests are separate and never call a model.)
 
 ### How it is measured
 
 - **Independent ground truth.** Every case's expected values are computed separately in pandas and
   SciPy and committed **before** the first live run, so results cannot be fitted to the model's
   output.
-- **Held-out data.** Each set uses datasets unseen by earlier sets. The release suite's questions
-  were written outside the repository, without access to the code.
-- **Measured once, not tuned.** A suite is run and its expectations are never edited afterwards.
-  Each case runs three times against `gemini-3.5-flash-lite` to expose run-to-run variance.
+- **Held-out data.** Each set introduces datasets not used by earlier sets, and the release suite's
+  questions were written outside the repository, without access to the code. Those datasets were
+  unseen when the suite was first built; the numbers below come from a later re-run of the same
+  cases (see Results).
+- **Expectations frozen, not tuned.** A suite's expected values are never edited after they are
+  first committed, even when the suite is re-run on a new code state. Each case runs three times
+  against `gemini-3.5-flash-lite` to expose run-to-run variance.
 - **Read by hand.** In addition to automatic grading, every stored run was inspected manually to
   confirm the filters, units, and conclusions were right — not just the numbers.
 
@@ -197,8 +200,10 @@ hand against a rubric.
 
 ### Results
 
-Measured rates on the release suite — 40 cases on nine unseen datasets, three runs each, measured
-once, with provider-error runs reported separately:
+Measured rates on the release suite at the full-data snapshot (commit `8548f8d`) — 40 cases on nine
+datasets, three runs each, with provider-error runs reported separately. This is the benchmark's
+second run: the same cases were first measured on an earlier code state (103/118), and the expected
+values were unchanged between the two runs.
 
 | Metric | Release suite |
 |---|---|
@@ -212,9 +217,11 @@ once, with provider-error runs reported separately:
 | End-to-end success | 108/120 (90.0%) |
 
 The 95% Wilson interval on the end-to-end rate is roughly 83–94% on this sample. A 10-case final
-holdout on two further unseen datasets passed 30/30 graded runs. The quality bars we set for
-ourselves, the runs that fell short of them, and why each was left unfixed are documented in full in
-[docs/limitations.md](./docs/limitations.md) and [docs/mvp-acceptance.md](./docs/mvp-acceptance.md).
+holdout passed 30/30 at the same snapshot; that set has since been re-run by later work, so its
+perfect score is a confirmation on a now-observed baseline, not a fresh unobserved measurement. The
+quality bars we set for ourselves, the runs that fell short of them, and why each was left unfixed
+are documented in full in [docs/limitations.md](./docs/limitations.md) and
+[docs/mvp-acceptance.md](./docs/mvp-acceptance.md).
 
 ### Development history
 
