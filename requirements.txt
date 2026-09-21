@@ -1,0 +1,5 @@
+# Streamlit Community Cloud installs dependencies from this file.
+# It installs this repository's package (src/tabular_analytics_agent) together with its runtime
+# dependencies, pinned to the exact versions the test suite passed with.
+-c constraints.txt
+.

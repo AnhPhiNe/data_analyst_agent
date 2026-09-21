@@ -1109,14 +1109,30 @@ def render_upload(application: LocalAnalysisApplication) -> None:
         st.rerun()
 
 
+def _apply_streamlit_cloud_secrets() -> None:
+    """Copy secrets set in the Streamlit Cloud UI into the environment the app reads from.
+
+    Streamlit Cloud exposes secrets through ``st.secrets``, not the process environment, while the
+    application reads ``os.environ``. Locally, with no secrets file, ``st.secrets`` raises and this
+    does nothing, so `.env` keeps working.
+    """
+    try:
+        for key in ("GOOGLE_API_KEY", "TABULAR_AGENT_MODEL", "TABULAR_AGENT_DATA_DIR"):
+            if key not in os.environ and key in st.secrets:
+                os.environ[key] = str(st.secrets[key])
+    except Exception:
+        return
+
+
 def main() -> None:
+    _apply_streamlit_cloud_secrets()
     data_root = os.getenv("TABULAR_AGENT_DATA_DIR", ".data")
     model_id = os.getenv("TABULAR_AGENT_MODEL", DEFAULT_GEMINI_MODEL)
     try:
         application = build_application(data_root, model_id)
     except ModelConfigurationError as exc:
         st.error(str(exc))
-        st.caption("Add GOOGLE_API_KEY to .env, then restart Streamlit.")
+        st.caption("Add GOOGLE_API_KEY to .env locally, or to Secrets on Streamlit Cloud.")
         st.stop()
     except ApplicationError as exc:
         st.error(str(exc))
