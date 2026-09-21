@@ -233,8 +233,8 @@ Holdout scores across development, which show where the agent is reliable and wh
 | Final holdout | 30/30 | 10 cases on two more unseen datasets |
 
 v7 and v8 bracket the realistic range: reliable on clear questions over clean data, weaker on
-inconsistent values and vague requests. Each development set is small (36 runs), so each score is a
-range, not a precise rate.
+inconsistent values and vague requests. Each development set is small (30–36 runs), so each score is
+a range, not a precise rate.
 
 ## Quick start
 
